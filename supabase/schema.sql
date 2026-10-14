@@ -35,14 +35,17 @@ end $$;
 
 -- Only the server service role receives the minimum session privileges.
 grant usage on schema auth to service_role;
-grant select,delete on auth.sessions to service_role;
+grant select on auth.sessions to service_role;
 create or replace function public.clinic_session_active(session_uuid uuid,user_uuid uuid)
 returns boolean language sql stable security invoker set search_path='' as $$
  select exists(select 1 from auth.sessions where id=session_uuid and user_id=user_uuid and (not_after is null or not_after>now()));
 $$;
 create or replace function public.clinic_revoke_sessions(user_uuid uuid)
-returns void language sql security invoker set search_path='' as $$
+returns void language sql security definer set search_path='' as $$
  delete from auth.sessions where user_id=user_uuid;
 $$;
 revoke all on function public.clinic_compare_and_swap(bigint,jsonb),public.clinic_lookup_slot(text),public.clinic_session_active(uuid,uuid),public.clinic_revoke_sessions(uuid) from public,anon,authenticated;
 grant execute on function public.clinic_compare_and_swap(bigint,jsonb),public.clinic_lookup_slot(text),public.clinic_session_active(uuid,uuid),public.clinic_revoke_sessions(uuid) to service_role;
+
+alter function public.clinic_revoke_sessions(uuid) owner to postgres;
+revoke delete on auth.sessions from service_role;

@@ -1,3 +1,4 @@
+import {Buffer} from 'node:buffer';
 import * as perms from './permissions.js';
 import * as cases from './cases.js';
 function site(value,fail){

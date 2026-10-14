@@ -28,6 +28,15 @@ function createService(adapter) {
   }
   if(['siteSave','userSave','patientSave','patientDelete','dataClear'].includes(action)){await adapter.mutate(s=>management.mutate(s,uid,input,core));return {ok:true};}
   if(action==='userPassword'){perms.requirePermission(core.role(await adapter.read(),uid),'users.manage');if(!input.uid||typeof input.password!=='string'||input.password.length<6||input.password.length>128)core.fail('كلمة السر من 6 إلى 128 حرفاً');if(!(await adapter.read()).roles?.[input.uid])core.fail('المستخدم غير موجود',404);await adapter.updateUser(input.uid,input.password);return {ok:true};}
+  if(action==='userCredentials'){
+   const state=await adapter.read();perms.requirePermission(core.role(state,uid),'users.manage');const old=state.roles?.[input.uid];if(!old)core.fail('المستخدم غير موجود',404);
+   const username=String(input.username||'').trim().toLowerCase(),password=input.password||'';
+   if(!/^[a-z0-9._-]{3,64}$/.test(username)||typeof password!=='string'||password&&(password.length<6||password.length>128))core.fail('راجع اسم الدخول وكلمة السر (6 إلى 128 حرفًا)');
+   if(Object.entries(state.roles).some(([id,r])=>id!==input.uid&&r.u===username))core.fail('اسم الدخول مستخدم بالفعل',409);
+   await adapter.updateCredentials(input.uid,{username,password});
+   try{await adapter.mutate(s=>{perms.requirePermission(core.role(s,uid),'users.manage');if(!s.roles[input.uid])core.fail('المستخدم حُذف أثناء التعديل',409);s=structuredClone(s);s.roles[input.uid].u=username;return s})}catch(e){await adapter.updateCredentials(input.uid,{username:old.u,password:''});throw e}
+   await adapter.revokeUserSessions(input.uid);return {ok:true,username};
+  }
   if(action==='userDelete'){await adapter.mutate(s=>{perms.requirePermission(core.role(s,uid),'users.manage');if(!s.roles?.[input.uid])core.fail('المستخدم غير موجود',404);if(input.uid===uid)core.fail('لا يمكنك حذف الحساب المستخدم حاليًا');if(s.roles[input.uid].r==='doctor'&&!Object.entries(s.roles).some(([id,r])=>id!==input.uid&&r.r==='doctor'&&r.enabled!==false))core.fail('يجب إبقاء طبيب فعال');s=structuredClone(s);delete s.roles[input.uid];return s;});await adapter.deleteUser(input.uid);return {ok:true};}
   if(action==='userCreate') {
    perms.requirePermission(core.role(await adapter.read(),uid),'users.manage');
