@@ -37,7 +37,7 @@ function queueTrack(state,list,x,clock=Date.now()){
  const avg=Math.max(1,Math.min(180,Number(state.settings?.avg)||15)),index=Math.max(0,waiting.findIndex(y=>y.id===x.id));
  const started=active&&Number.isFinite(Date.parse(active.startedAt)),remaining=started?Math.max(0,avg*60000-(clock-Date.parse(active.startedAt))):avg*60000;
  const delay=x.s==='wait'?(active?remaining:0)+index*avg*60000:0;
- return {no:x.no,s:x.s,b:x.b,v:x.v,ahead:x.s==='wait'?index+(active?1:0):0,avg,queueStarted:!!started,estimatedWaitMinutes:Math.ceil(delay/60000),expectedAt:started?(x.s==='exam'?active.startedAt:x.s==='wait'?new Date(clock+delay).toISOString():null):null};
+ return {no:x.no,s:x.s,b:x.b,v:x.v,ahead:x.s==='wait'?index+(active?1:0):0,avg,queueStarted:!!started,estimatedWaitMinutes:started?Math.ceil(delay/60000):null,expectedAt:started?(x.s==='exam'?active.startedAt:x.s==='wait'?new Date(clock+delay).toISOString():null):null};
 }
 function rebuild(state) {
  state.track={};
