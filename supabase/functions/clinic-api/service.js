@@ -24,7 +24,7 @@ function createService(adapter) {
      delete state.patients?.[p];delete state.files?.[p];delete state.complaints?.[p];
      for(const [id,n] of Object.entries(state.inbox||{}))if(n.p===p)delete state.inbox[id];
     }
-    core.rebuild(state);return state;
+    state.settings||={};state.settings.demoPurged=true;core.rebuild(state);return state;
    });return {ok:true};
   }
   if(['siteSave','userSave','patientSave','patientDelete','dataClear'].includes(action)){await adapter.mutate(s=>management.mutate(s,uid,input,core));return {ok:true};}

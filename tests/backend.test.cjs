@@ -9,6 +9,14 @@ function fixture(){let state=makeDemo().state,queue=Promise.resolve();return {
  })
 };}
 const booking=(id,phone='01275884716',b='dmn')=>({id,name:'Test',phone,b,date:core.today(),v:'exam',nt:'',s:'wait'});
+test('demo purge persists dismissal and preserves real bookings, accounts and clinic settings',async()=>{
+ const f=fixture();await assert.rejects(f.handle({action:'purgeDemo'},'demo_dmn'),{status:403});
+ await f.handle({action:'commit',puts:[{n:booking('real_booking')}],dels:[]},'demo_doctor');
+ const before=structuredClone(f.state());await f.handle({action:'purgeDemo'},'demo_doctor');
+ assert.equal(f.state().settings.demoPurged,true);assert.deepEqual(f.state().roles,before.roles);assert.deepEqual(f.state().settings.sched,before.settings.sched);
+ assert.deepEqual(Object.values(f.state().bookings).flatMap(Object.values).map(x=>x.id),['real_booking']);
+ assert.equal((await f.handle({action:'get',path:'settings'},'demo_doctor')).demoPurged,true);
+});
 test('seed provides 60 bookings, all states, both branches, 5 clinic days, 3 roles and matching tracking',()=>{
  const {state,accounts}=makeDemo(),rows=Object.values(state.bookings).flatMap(Object.values);
  assert.equal(rows.length,60);assert.equal(accounts.length,3);assert.equal(Object.keys(state.bookings).length,5);
