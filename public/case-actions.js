@@ -1,8 +1,8 @@
 function digits(s){return String(s||'').replace(/[٠-٩۰-۹]/g,function(d){var n=d.charCodeAt(0);return n>=1776?n-1776:n-1632})}
 function setStatus(message){notify(message||"")}
 function errMsg(e){return /fetch|NETWORK|Abort|TIMEOUT/i.test(e.message)?"تعذر الاتصال. حاول مجدداً.":e.message||"تعذر تنفيذ العملية"}
-async function guard(fn,ok){if(featureBusy)return"انتظر انتهاء الحفظ";featureBusy=true;try{await fn();setStatus(ok);return undefined}catch(e){return errMsg(e)}finally{featureBusy=false}}
-async function act(fn,ok){var error=await guard(fn,ok);if(error)setStatus(error);render()}
+async function guard(fn,ok){if(featureBusy)return"انتظر انتهاء الحفظ";featureBusy=true;setStatus("جارٍ الحفظ…");try{await fn();setStatus(ok);return undefined}catch(e){return errMsg(e)}finally{featureBusy=false}}
+async function act(fn,ok){var error=await guard(fn,ok);if(error){setStatus(error);return}clearAdminDraft();try{await refreshData()}catch(e){setStatus((ok||"تم الحفظ")+". تعذر تحديث العرض؛ أعد تحميل الصفحة.");render();return}render();setStatus(ok||"تم الحفظ بنجاح")}
 function cleanBk(x){return x&&x.id&&x.phone&&x.date?x:null}
 async function markRead(id){try{var updates={};updates['inbox/'+id]=null;await jpatch(updates);delete INBOX[id];updTitle();if(!busy())draw()}catch(e){setStatus(errMsg(e))}}
 async function purgeDemo(){if(!confirm("حذف البيانات التجريبية فقط؟"))return;await act(async function(){await gateway('purgeDemo',{},true);PT=null;CL=[];INBOX={}},"تم حذف البيانات التجريبية فقط")}

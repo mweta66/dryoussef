@@ -1,2 +1,2 @@
 @echo off
-start "" "https://dryoussef-clinic.vercel.app"
+start "" "https://dryoussef.vercel.app"

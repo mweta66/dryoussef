@@ -6,7 +6,7 @@ const code = fs.readFileSync('public/app.js', 'utf8');
 function clinic() {
   const elements = new Map();
   const element = id => {
-    if (!elements.has(id)) elements.set(id, { innerHTML: '', textContent: '', isConnected: true, style: {setProperty(){}}, setAttribute(){}, removeAttribute(){}, focus(){} });
+    if (!elements.has(id)) elements.set(id, { innerHTML: '', textContent: '', dataset: {}, isConnected: true, style: {setProperty(){}}, setAttribute(){}, removeAttribute(){}, focus(){} });
     return elements.get(id);
   };
   const context = vm.createContext({

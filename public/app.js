@@ -33,7 +33,7 @@ function topbar(){var t='<span class="sp"></span><button class="gb" onclick="tog
 function toggleTheme(){var r=document.documentElement,d=r.getAttribute("data-theme")==="dark"||(!r.getAttribute("data-theme")&&matchMedia("(prefers-color-scheme:dark)").matches);r.setAttribute("data-theme",d?"light":"dark");try{localStorage.setItem("clinic_theme",d?"light":"dark")}catch(e){}}
 function chk(){var p=document.getElementById("ph");document.getElementById("go").disabled=!validPhone(p.value);p.removeAttribute("aria-invalid")}
 function look(){var p=document.getElementById("ph");if(!validPhone(p.value)){p.setAttribute("aria-invalid","true");p.focus();return}lastPh=norm(p.value);document.getElementById("res").textContent="جارٍ البحث عن حجزك…";showRes()}
-function notify(message){document.getElementById("notice").textContent=message}
+function notify(message){var el=document.getElementById("notice");if(!el)return;el.textContent=message||"";el.dataset.kind=/^(تم|تمت)/.test(message||"")?"success":/تعذر|غير صحيح|NOAUTH|صلاحية|خطأ/.test(message||"")?"error":"info"}
 function go(v){location.hash=v==="patient"?"":v}
 function branches(){var h='<h2>'+ic("pin",20)+'الفروع ومواعيد العمل</h2><div class="branches">';for(var k in BR){var b=BR[k],s=sched(k);h+='<div class="br"><div><span class="ib">'+ic("pin")+'</span><b>'+esc(b.name)+'</b></div><p>'+esc(b.addr)+'</p><p>'+ic("phone",16)+' <a href="tel:'+b.tel+'">'+b.tel+'</a></p><div class="chips">'+s.chips+'</div><p>'+ic("clock",16)+' '+s.time+'</p></div>'}return h+'</div>'}
 function doctor(){var n=Object.keys(INBOX).length,h='<h2>'+ic("chart",20)+'إدارة العيادة</h2><div class="tabs">';
@@ -133,7 +133,7 @@ async function showRes(){var el=document.getElementById("res");if(!el||!lastPh)r
  var output=t+'<p class="hint">يتم تحديث الحالة تلقائياً. وقت الانتظار تقديري وقد يتغيّر.</p>';if(el.innerHTML!==output)el.innerHTML=output}
 async function doSave(){if(saving)return;var o={};FF.forEach(function(f){if(f.t==="days"){o[f.k]=[].slice.call(document.querySelectorAll(".dd")).filter(function(c){return c.checked}).map(function(c){return +c.value})}else{var value=document.getElementById("f_"+f.k).value;o[f.k]=f.t==="password"?value:value.trim()}});
  var fe=document.getElementById("fe"),r,buttons=Array.from(document.querySelectorAll(".mod button"));saving=true;buttons.forEach(function(b){b.disabled=true});try{r=await M(o)}catch(e){r=/[؀-ۿ]/.test(e.message)?e.message:"تعذر الحفظ، تأكد من الاتصال والصلاحيات"}finally{saving=false;buttons.forEach(function(b){b.disabled=false})}
- if(typeof r==="string"){fe.textContent=r;return}closeM();render()}
+ if(typeof r==="string"){fe.textContent=r;return}closeM();notify("تم الحفظ بنجاح");render()}
 function bkSave(x){return async function(o){var doc=can("bookings.edit")||(can("bookings.create")&&allBranches()),b=doc?o.b:me.br,d=o.date;
  if(!o.name||!validPhone(o.phone))return"أدخل اسم المريض ورقم موبايل صحيح (11 رقماً)";if(!/^\d{4}-\d{2}-\d{2}$/.test(d)||!BR[b]||!VT[o.v]||(o.s&&!ST[o.s]))return"اختر تاريخاً وفرعاً ونوع زيارة صحيحاً";if(!doc&&d<today())return"لا يمكن الحجز في تاريخ سابق";
  await refreshData();if(can("bookings.read"))await ensureDate(d);
@@ -162,7 +162,7 @@ function draw(){topbar();var c=document.getElementById("contacts");if(c)c.style.
 function render(){if(location.protocol==="file:"){document.getElementById("app").innerHTML='<h2>تشغيل العيادة محليًا</h2><p>لتشغيل تسجيل الدخول والحجوزات والبيانات التجريبية، افتح ملف <b dir="ltr">START-CLINIC.cmd</b> من مجلد العيادة. سيعمل الموقع تلقائيًا في المتصفح.</p><a class="btn a" href="http://127.0.0.1:4173">فتح الموقع بعد التشغيل</a><p class="sub">بيانات الدخول موجودة في ملف <b dir="ltr">.demo/guide.txt</b>. هذه نسخة تجريبية محلية.</p>';return}draw();var k=++rtok;
  if(me&&staffView()&&(location.hash!=="#admin"||me.role==="doctor"||adminAccess())){refreshData().then(function(){if(k===rtok&&!busy())draw()}).catch(function(e){if(/NOAUTH|40[13]/.test(e.message)){logout()}else notify("تعذر تحديث الحجوزات. تحقق من الاتصال وحاول مجدداً.")})}
  else if(!staffView()){loadSettings().then(function(){var b=document.getElementById("brs");if(b)b.innerHTML=branches()}).catch(function(){})}}
-function busy(){var a=document.activeElement;return writing||saving||modalOpen()||(a&&/INPUT|TEXTAREA|SELECT/.test(a.tagName))}
+function busy(){var a=document.activeElement;return featureBusy||adminDraftDirty()||writing||saving||modalOpen()||(a&&/INPUT|TEXTAREA|SELECT/.test(a.tagName))}
 window.addEventListener("hashchange",function(){dataEpoch++;rtok++;shown++;if(modalOpen()&&!saving)closeM();render()});
 async function restoreSession(){if(location.protocol==="file:"){render();return}if(!AUTH){me=null;render();return}try{var role=await jget("roles/"+AUTH.uid,true);if(!role||(!["doctor","sec","nurse","staff"].includes(role.r)))throw new Error("NOAUTH");me={u:role.u||"",role:role.r,br:role.br,scope:role.scope,permissions:role.permissions};if(me.role==="doctor"){openAdmin();return}render()}catch(e){logout();notify("انتهت الجلسة أو تعذر التحقق منها. سجّل الدخول مجدداً.")}}
 me=null;
@@ -230,7 +230,7 @@ document.addEventListener("click",unlockAudio);
 function beep(){try{unlockAudio();if(!actx||actx.state!=="running")return;[880,1175].forEach(function(f,i){var o=actx.createOscillator(),g=actx.createGain(),t=actx.currentTime+i*.22;o.frequency.value=f;o.connect(g);g.connect(actx.destination);g.gain.setValueAtTime(.0001,t);g.gain.exponentialRampToValueAtTime(.3,t+.03);g.gain.exponentialRampToValueAtTime(.0001,t+.2);o.start(t);o.stop(t+.22)})}catch(e){}}
 function cleanInbox(k,x){if(!ID.test(k)||!x||typeof x!=="object"||!/^01[0125]\d{8}$/.test(String(x.p))||!/^\d{4}-\d{2}-\d{2}$/.test(String(x.d)))return null;return{p:x.p,n:String(x.n||"").slice(0,80),by:String(x.by||"").slice(0,30),at:String(x.at||"").slice(0,40),d:x.d}}
 function noteNew(c){window.__lastNote=c.p;beep();setStatus("شكوى جديدة من الممرضة: "+(c.n||c.p),"ok")}
-function refreshInboxView(){updTitle();if(staffView()&&me&&!modalOpen()){var a=document.activeElement;if(!(a&&/INPUT|TEXTAREA|SELECT/.test(a.tagName)))draw()}}
+function refreshInboxView(){updTitle();if(staffView()&&me&&!busy()){var a=document.activeElement;if(!(a&&/INPUT|TEXTAREA|SELECT/.test(a.tagName)))draw()}}
 function applyInbox(path,data,isPatch){
  if(path==="/"){var next={};if(data&&typeof data==="object")for(var k in data){var c=cleanInbox(k,data[k]);if(c)next[k]=c}
   if(isPatch){Object.keys(next).forEach(function(k){if(!INBOX[k])noteNew(next[k])});Object.assign(INBOX,next)}
