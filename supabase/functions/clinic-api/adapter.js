@@ -28,6 +28,8 @@ export function supabaseAdapter(url,secret,fetcher=fetch){
   createUser:async(u,p)=>{const data=await call('/auth/v1/admin/users',{method:'POST',body:JSON.stringify({email:u+'@clinic.app',password:p,email_confirm:true})});return data.id},
   deleteUser:async uid=>{await rpc('clinic_revoke_sessions',{user_uuid:uid});await call('/auth/v1/admin/users/'+encodeURIComponent(uid),{method:'DELETE'})},
   updateUser:async(uid,password)=>{await call('/auth/v1/admin/users/'+encodeURIComponent(uid),{method:'PUT',body:JSON.stringify({password})});await rpc('clinic_revoke_sessions',{user_uuid:uid})},
+  updateCredentials:async(uid,{username,password})=>{await call('/auth/v1/admin/users/'+encodeURIComponent(uid),{method:'PUT',body:JSON.stringify({email:username+'@clinic.app',email_confirm:true,...(password?{password}:{})})})},
+  revokeUserSessions:async uid=>{await rpc('clinic_revoke_sessions',{user_uuid:uid})},
   verify:async token=>{
    const user=await call('/auth/v1/user',{method:'GET'},token);
    let session;try{session=JSON.parse(atob(token.split('.')[1].replace(/-/g,'+').replace(/_/g,'/'))).session_id}catch{}

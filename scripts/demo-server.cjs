@@ -24,6 +24,8 @@ const handle=createService({
   list.push({uid,u,salt,hash:scryptSync(p,salt,32).toString('hex')});fs.writeFileSync(file,JSON.stringify(list));return uid;
  },
  updateUser:async(uid,password)=>{const file=path.join(demo,'accounts.json'),accounts=JSON.parse(fs.readFileSync(file,'utf8')),account=accounts.find(a=>a.uid===uid);if(!account)throw new Error('Account missing');account.salt=randomBytes(16).toString('hex');account.hash=scryptSync(password,account.salt,32).toString('hex');delete account.password;fs.writeFileSync(file,JSON.stringify(accounts));for(const [token,s] of sessions)if(s.uid===uid)sessions.delete(token);},
+ updateCredentials:async(uid,{username,password})=>{const file=path.join(demo,'accounts.json'),accounts=JSON.parse(fs.readFileSync(file,'utf8')),account=accounts.find(a=>a.uid===uid);if(!account)throw Error('Account missing');if(accounts.some(a=>a.uid!==uid&&a.u===username))throw Error('Username already exists');account.u=username;if(password){account.salt=randomBytes(16).toString('hex');account.hash=scryptSync(password,account.salt,32).toString('hex');delete account.password}fs.writeFileSync(file,JSON.stringify(accounts));},
+ revokeUserSessions:async uid=>{for(const [token,s]of sessions)if(s.uid===uid)sessions.delete(token)},
  deleteUser:async uid=>{const file=path.join(demo,'accounts.json');fs.writeFileSync(file,JSON.stringify(JSON.parse(fs.readFileSync(file,'utf8')).filter(x=>x.uid!==uid)));}
 });
 function json(res,status,data){res.writeHead(status,{'Content-Type':'application/json; charset=utf-8','Cache-Control':'no-store'});res.end(JSON.stringify(data));}
