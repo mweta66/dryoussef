@@ -1,5 +1,5 @@
 const {test}=require('node:test'),assert=require('node:assert/strict');
-const core=require('../functions/core.cjs'),{createService}=require('../functions/service.cjs'),{makeDemo}=require('../scripts/demo-data.cjs');
+const core=require('../server/core.cjs'),{createService}=require('../server/service.cjs'),{makeDemo}=require('../scripts/demo-data.cjs');
 function fixture(){let state=makeDemo().state,queue=Promise.resolve();return {
  state:()=>state,
  handle:createService({
@@ -72,8 +72,4 @@ test('server rechecks revoked roles on every operation',async()=>{
  const f=fixture();await f.handle({action:'patch',updates:{'roles/demo_dmn':null}},'demo_doctor');
  await assert.rejects(f.handle({action:'get',path:'bookings/'+core.today()},'demo_dmn'),{status:403});
 });
-test('secure database rules deny direct client booking, role and track access',()=>{
- const rules=require('../database.rules.json').rules;
- assert.equal(rules['.read'],false);assert.equal(rules['.write'],false);
- assert.deepEqual(Object.keys(rules).sort(),['.read','.write','settings']);
-});
+test('Supabase tables and privileged RPCs deny direct browser access',()=>{const sql=require('node:fs').readFileSync('supabase/schema.sql','utf8');assert.match(sql,/alter table public.clinic_state enable row level security/);assert.match(sql,/revoke all on public.clinic_state, public.clinic_lookup_limits from public, anon, authenticated/);assert.match(sql,/security invoker/g);assert.doesNotMatch(sql,/security definer/i)});

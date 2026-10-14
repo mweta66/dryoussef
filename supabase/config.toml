@@ -1,0 +1,7 @@
+project_id = "dr-youssef-clinic"
+
+[functions.clinic-api]
+entrypoint = "./functions/clinic-api/index.js"
+# The handler verifies each protected request with Auth and auth.sessions.
+# Settings and minimal queue lookup are intentionally public.
+verify_jwt = false

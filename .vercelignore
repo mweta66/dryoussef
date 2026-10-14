@@ -1,0 +1,10 @@
+.private
+.demo
+backups
+work
+node_modules
+.env*
+supabase
+tests
+server
+scripts

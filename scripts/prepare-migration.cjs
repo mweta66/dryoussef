@@ -1,6 +1,6 @@
 // Works on a user-supplied local export only. Does not connect to Firebase.
 const fs=require('node:fs'),path=require('node:path'),crypto=require('node:crypto');
-const core=require('../functions/core.cjs');
+const core=require('../server/core.cjs');
 const args=process.argv.slice(2);
 if(args.length!==2)throw new Error('Usage: node scripts/prepare-migration.cjs INPUT.json OUTPUT.json');
 const [input,output]=args.map(x=>path.resolve(x));

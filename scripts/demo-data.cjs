@@ -1,5 +1,5 @@
 const {randomBytes,scryptSync}=require('node:crypto');
-const core=require('../functions/core.cjs');
+const core=require('../server/core.cjs');
 function makeDemo() {
  const state={roles:{},settings:{avg:15,sched:{dmn:{d:[0,4],f:'14:00',t:'18:00'},alex:{d:[1,2,3,6],f:'14:00',t:'18:00'}}},bookings:{},sequences:{}};
  const accounts=[];

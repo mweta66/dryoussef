@@ -1,0 +1,9 @@
+.demo/
+.private/
+backups/
+node_modules/
+**/node_modules/
+.env*
+*.log
+supabase/.temp/
+.vercel/

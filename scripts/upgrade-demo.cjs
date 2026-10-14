@@ -1,6 +1,6 @@
 // Local files only; preserve existing accounts and bookings.
 const fs=require('node:fs'),path=require('node:path'),{randomBytes,scryptSync}=require('node:crypto');
-const core=require('../functions/core.cjs'),cases=require('../functions/cases.cjs');
+const core=require('../server/core.cjs'),cases=require('../server/cases.cjs');
 const dir=path.resolve(__dirname,'../.demo'),file=path.join(dir,'state.json'),accountFile=path.join(dir,'accounts.json');
 const state=JSON.parse(fs.readFileSync(file)),accounts=JSON.parse(fs.readFileSync(accountFile));
 if(!accounts.some(a=>state.roles[a.uid]?.r==='nurse')){
