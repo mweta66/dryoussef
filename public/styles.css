@@ -75,3 +75,5 @@ body.modal-open{overflow:hidden}
 #notice:empty{display:none}#notice{padding:8px 18px;color:var(--bad);background:var(--card)}
 
 .admin-grid,.permission-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(240px,100%),1fr));gap:12px}.permission-grid label{display:flex;align-items:center;gap:8px;font-size:14px}.permission-grid input,input[type=checkbox]{width:auto;min-width:18px}.admin-grid input{max-width:100%}fieldset{border:1px solid var(--line);border-radius:12px;margin:16px 0;padding:12px}.tabs{flex-wrap:wrap}.acts{flex-wrap:wrap}#clinic-footer{white-space:pre-wrap;text-align:center}
+
+#notice:not(:empty){position:fixed;inset:auto 16px 18px;z-index:1000;width:max-content;max-width:calc(100% - 32px);margin:auto;padding:14px 20px;border:1px solid var(--line);border-radius:12px;box-shadow:0 6px 28px #0003;color:var(--ink);font-weight:700;white-space:pre-wrap}#notice[data-kind="success"]{border-color:#218254}#notice[data-kind="error"]{color:var(--bad)}
