@@ -60,21 +60,34 @@ var modalReturn=null,saving=false;
 function closeM(){if(saving)return;document.getElementById("modal").innerHTML="";M=null;document.body.classList.remove("modal-open");document.getElementById("app").inert=false;document.querySelector(".hero").inert=false;if(modalReturn&&modalReturn.isConnected)modalReturn.focus()}
 document.addEventListener("keydown",function(e){if(!modalOpen())return;if(e.key==="Escape"){e.preventDefault();closeM()}if(e.key==="Tab"){var a=Array.from(document.querySelectorAll(".mod input,.mod select,.mod textarea,.mod button")).filter(function(x){return !x.disabled}),first=a[0],last=a[a.length-1];if(!first)return;if(e.shiftKey&&document.activeElement===first){e.preventDefault();last.focus()}else if(!e.shiftKey&&document.activeElement===last){e.preventDefault();first.focus()}}});
 function editBk(id){var x=S.bk.filter(function(y){return y.id===id})[0];if(x)openForm("تعديل حجز",bkFields(x),bkSave(x))}
-/* ===== Firebase (REST) ===== */
-var KEY="AIzaSyBtR06QKSag_jVT9RXT0svaDvuWoeW0D10",DB="https://doctor-youssef-f1a8b-default-rtdb.europe-west1.firebasedatabase.app",DOM="@clinic.app";
+/* ===== Supabase Auth and protected API ===== */
+var DOM="@clinic.app";
 try{var theme=localStorage.getItem("clinic_theme");if(theme==="dark"||theme==="light")document.documentElement.setAttribute("data-theme",theme)}catch(e){}
 var SD=today(),AUTH=null,LOADED={all:0,dates:{}},rtok=0;
-try{AUTH=JSON.parse(sessionStorage.getItem("auth"))}catch(e){}
+try{AUTH=JSON.parse(sessionStorage.getItem("clinic_supabase_auth"))}catch(e){}
 if(!AUTH)me=null;
-function saveAuth(){try{if(AUTH)sessionStorage.setItem("auth",JSON.stringify(AUTH));else sessionStorage.removeItem("auth")}catch(e){}}
-async function gateway(action,payload,auth){var headers={"Content-Type":"application/json"};if(auth)headers.Authorization="Bearer "+await token();var r=await request(CONFIG.endpoint||"/api/clinic",{method:"POST",headers:headers,body:JSON.stringify(Object.assign({action:action},payload))}),j=await r.json();if(!r.ok)throw new Error((r.status===401||r.status===403?"NOAUTH: ":"")+(j.error||"تعذر تنفيذ العملية"));return j.data}
+function saveAuth(){try{if(AUTH)sessionStorage.setItem("clinic_supabase_auth",JSON.stringify(AUTH));else sessionStorage.removeItem("clinic_supabase_auth")}catch(e){}}
+async function gateway(action,payload,auth){if(!CONFIG.demo&&!CONFIG.endpoint)throw new Error("لم يكتمل إعداد اتصال Supabase بعد");var headers={"Content-Type":"application/json"};if(CONFIG.publishableKey)headers.apikey=CONFIG.publishableKey;if(auth)headers.Authorization="Bearer "+await token();var r=await request(CONFIG.endpoint||"/api/clinic",{method:"POST",headers:headers,body:JSON.stringify(Object.assign({action:action},payload))}),j=await r.json();if(!r.ok)throw new Error((r.status===401||r.status===403?"NOAUTH: ":"")+(j.error||"تعذر تنفيذ العملية"));return j.data}
 async function request(url,options){var controller=new AbortController(),timer=setTimeout(function(){controller.abort()},15000);try{return await fetch(url,Object.assign({},options,{signal:controller.signal,cache:"no-store"}))}finally{clearTimeout(timer)}}
-async function authCall(ep,body){if(CONFIG.demo){var local=await request("/api/auth",{method:"POST",headers:{"Content-Type":"application/json","Authorization":AUTH?"Bearer "+AUTH.idToken:""},body:JSON.stringify({ep:ep,body:body})}),result=await local.json();if(!local.ok)throw new Error(result.error||"NOAUTH");return result}var r=await request("https://identitytoolkit.googleapis.com/v1/accounts:"+ep+"?key="+KEY,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(body)});var j=await r.json();if(j.error)throw new Error(j.error.message||"ERR");return j}
-async function token(){if(!AUTH)throw new Error("NOAUTH");if(CONFIG.demo){if(Date.now()>AUTH.exp-300000){var local=await authCall("refresh",{});AUTH.idToken=local.idToken;AUTH.refresh=local.refreshToken;AUTH.exp=Date.now()+3600000;saveAuth()}return AUTH.idToken}
- if(Date.now()>AUTH.exp-300000){var r=await request("https://securetoken.googleapis.com/v1/token?key="+KEY,{method:"POST",headers:{"Content-Type":"application/x-www-form-urlencoded"},body:"grant_type=refresh_token&refresh_token="+encodeURIComponent(AUTH.refresh)});var j=await r.json();if(!j.id_token)throw new Error("NOAUTH");AUTH.idToken=j.id_token;AUTH.refresh=j.refresh_token;AUTH.exp=Date.now()+(+j.expires_in)*1000;saveAuth()}
- return AUTH.idToken}
-async function jget(path,auth){if(CONFIG.secureGateway){if(path.indexOf("track/")===0)return gateway("lookup",{phone:lastPh},false);return gateway("get",{path:path},auth)}var u=DB+"/"+path+".json";if(auth)u+="?auth="+await token();var r=await request(u);if(!r.ok)throw new Error("GET "+r.status);return r.json()}
-async function jpatch(obj){if(CONFIG.secureGateway)return gateway("patch",{updates:obj},true);var r=await request(DB+"/.json?auth="+await token(),{method:"PATCH",headers:{"Content-Type":"application/json"},body:JSON.stringify(obj)});if(!r.ok)throw new Error("WRITE "+r.status)}
+function authResult(j){return {idToken:j.access_token,refreshToken:j.refresh_token,localId:j.user?.id,expiresIn:String(j.expires_in||3600)}}
+async function authCall(ep,body){
+ if(CONFIG.demo){var local=await request('/api/auth',{method:'POST',headers:{'Content-Type':'application/json',Authorization:AUTH?'Bearer '+AUTH.idToken:''},body:JSON.stringify({ep:ep,body:body})}),result=await local.json();if(!local.ok)throw new Error(result.error||'NOAUTH');return result}
+ if(!CONFIG.supabaseUrl||!CONFIG.publishableKey)throw new Error('لم يكتمل إعداد اتصال Supabase بعد');
+ var path,method='POST',payload,headers={'Content-Type':'application/json',apikey:CONFIG.publishableKey};
+ if(ep==='signInWithPassword'){path='/token?grant_type=password';payload={email:body.email,password:body.password}}
+ else if(ep==='refresh'){path='/token?grant_type=refresh_token';payload={refresh_token:body.refresh_token}}
+ else if(ep==='update'){path='/user';method='PUT';payload={password:body.password};headers.Authorization='Bearer '+body.idToken}
+ else throw new Error('عملية دخول غير مدعومة');
+ var response=await request(CONFIG.supabaseUrl+'/auth/v1'+path,{method:method,headers:headers,body:JSON.stringify(payload)}),data=await response.json();
+ if(!response.ok)throw new Error(data.msg||data.error_description||data.message||'NOAUTH');
+ if(ep==='update'){var fresh=await authCall('refresh',{refresh_token:AUTH.refresh});return fresh}return authResult(data);
+}
+var refreshFlight=null;
+async function token(){if(!AUTH)throw new Error('NOAUTH');if(Date.now()>AUTH.exp-300000){if(!refreshFlight){var owner=AUTH;refreshFlight=authCall('refresh',{refresh_token:owner.refresh}).then(function(j){if(AUTH!==owner)throw new Error('NOAUTH');AUTH.idToken=j.idToken;AUTH.refresh=j.refreshToken;AUTH.exp=Date.now()+(+j.expiresIn)*1000;saveAuth()}).finally(function(){refreshFlight=null})}await refreshFlight}if(!AUTH)throw new Error('NOAUTH');return AUTH.idToken}
+async function signOutSupabase(accessToken){if(!CONFIG.supabaseUrl)return;try{await request(CONFIG.supabaseUrl+'/auth/v1/logout?scope=local',{method:'POST',headers:{apikey:CONFIG.publishableKey,Authorization:'Bearer '+accessToken}})}catch(e){}}
+async function jget(path,auth){if(path.indexOf('track/')===0)return gateway('lookup',{phone:lastPh},false);return gateway('get',{path:path},auth)}
+async function jpatch(updates){return gateway('patch',{updates:updates},true)}
+
 function newId(){return crypto.randomUUID().replace(/-/g,"")}
 function normSched(s){if(!s)return;["dmn","alex"].forEach(function(k){if(s[k]&&s[k].d)s[k].d=Object.keys(s[k].d).map(function(i){return +s[k].d[i]})});return s}
 async function loadSettings(){var st=await jget("settings");if(st){if(Number.isFinite(+st.avg)&&+st.avg>=1&&+st.avg<=180)S.avg=+st.avg;if(st.sched){var c=normSched(st.sched);Object.keys(BR).forEach(function(k){var s=c[k];if(s&&Array.isArray(s.d)&&s.d.length&&s.d.every(function(d){return Number.isInteger(d)&&d>=0&&d<=6})&&/^([01]\d|2[0-3]):[0-5]\d$/.test(s.f)&&/^([01]\d|2[0-3]):[0-5]\d$/.test(s.t)&&s.f<s.t)S.sched[k]=s})}}return st}
@@ -91,17 +104,7 @@ async function refreshData(){if(!me)return;if(me.role==="nurse"){await loadPatie
 }
 async function ensureDate(d){if(LOADED.all||LOADED.dates[d])return;var o=(await jget("bookings/"+d,true))||{};for(var i in o)S.bk.push(o[i]);LOADED.dates[d]=1}
 async function commit(puts,dels){if(writing)throw new Error("عملية حفظ قيد التنفيذ. انتظر لحظة.");writing=true;try{return await commitData(puts,dels)}finally{writing=false}}
-async function commitData(puts,dels){if(CONFIG.secureGateway){var result=await gateway("commit",{puts:puts,dels:dels},true);await refreshData();notify("تم حفظ الحجز بنجاح");return}var up={},g={};
- function tr(x,v){up["track/"+x.date+"/"+x.phone]=v}
- for(var a=0;a<dels.length;a++){var x=dels[a];await ensureDate(x.date)}
- for(var b=0;b<puts.length;b++){await ensureDate(puts[b].n.date);if(puts[b].o)await ensureDate(puts[b].o.date)}
- dels.forEach(function(x){up["bookings/"+x.date+"/"+x.id]=null;tr(x,null);g[x.date+"|"+x.b]=[x.date,x.b];S.bk=S.bk.filter(function(y){return y.id!==x.id})});
- puts.forEach(function(p){var n=p.n,o=p.o;
-  if(o){if(o.phone!==n.phone||o.date!==n.date)tr(o,null);if(o.date!==n.date)up["bookings/"+o.date+"/"+o.id]=null;g[o.date+"|"+o.b]=[o.date,o.b];S.bk=S.bk.filter(function(y){return y.id!==o.id})}
-  up["bookings/"+n.date+"/"+n.id]=n;g[n.date+"|"+n.b]=[n.date,n.b];S.bk.push(n)});
- Object.keys(g).forEach(function(k){var L=S.bk.filter(function(y){return y.date===g[k][0]&&y.b===g[k][1]}).sort(function(p,q){return p.no-q.no});
-  L.forEach(function(x){tr(x,{no:x.no,s:x.s,b:x.b,v:x.v,ahead:L.filter(function(y){return y.no<x.no&&(y.s==="wait"||y.s==="exam")}).length})})});
- try{await jpatch(up)}catch(e){try{await refreshData()}catch(_){}throw e}}
+async function commitData(puts,dels){await gateway("commit",{puts:puts,dels:dels},true);await refreshData();notify("تم حفظ الحجز بنجاح")}
 function modalOpen(){return !!document.getElementById("modal").innerHTML}
 function staff(){if(me)return me.role==="doctor"?doctor():me.role==="nurse"?nurse():secretary();
  return '<h2>'+ic("lock",20)+'دخول الطاقم</h2><label for="u">اسم المستخدم</label><input id="u" autocomplete="username" autocapitalize="none"><label for="pw">كلمة السر</label><input id="pw" type="password" autocomplete="current-password" onkeydown="if(event.key===\'Enter\')login()"><button class="btn" id="lb" onclick="login()">دخول</button><div class="err" id="le" role="alert"></div><p style="text-align:center"><a href="#" style="color:var(--pri)">العودة لواجهة المرضى</a></p>'}
@@ -114,7 +117,7 @@ async function login(){var u=document.getElementById("u").value.trim().toLowerCa
   me={u:r.u||u,role:r.r,br:r.br,scope:r.scope,permissions:r.permissions};try{sessionStorage.setItem("me",JSON.stringify(me))}catch(e){}
   F.d=today();SD=today();if(me.role==="doctor"){openAdmin();return}if(adminPage()){location.replace("index.html#staff");return}render()}
  catch(e){AUTH=null;me=null;saveAuth();try{sessionStorage.removeItem("me")}catch(_){}le.textContent=/NETWORK|fetch|Abort|timeout/i.test(e.message)?"تعذر الاتصال بالإنترنت":"بيانات الدخول غير صحيحة";bt.disabled=false}}
-function logout(){PT=null;SEL="";CL=[];INBOX={};gotFirst=false;document.title=TITLE0;dataEpoch++;rtok++;shown++;me=null;AUTH=null;saveAuth();try{sessionStorage.removeItem("me")}catch(e){}S.bk=[];if(adminPage()){location.replace("index.html");return}if(location.hash)go("patient");else render()}
+function logout(){var previous=AUTH;if(previous&&!CONFIG.demo)signOutSupabase(previous.idToken);PT=null;SEL="";CL=[];INBOX={};gotFirst=false;document.title=TITLE0;dataEpoch++;rtok++;shown++;me=null;AUTH=null;saveAuth();try{sessionStorage.removeItem("me")}catch(e){}S.bk=[];if(adminPage()){location.replace("index.html");return}if(location.hash)go("patient");else render()}
 function patient(){return '<p class="sub">أدخل رقم الهاتف المسجل عند الحجز لمتابعة دورك</p><label for="ph">رقم الهاتف <b>*</b></label><input id="ph" inputmode="tel" autocomplete="tel" type="tel" dir="ltr" maxlength="20" aria-describedby="phone-help" placeholder="مثال: 01xxxxxxxxx" oninput="chk()" onkeydown="if(event.key===\'Enter\')look()">'+'<button class="btn" id="go" disabled onclick="look()">'+ic("search")+' اعرف دوري</button><p class="hint" id="phone-help">استخدم رقم الهاتف المسجل عند الحجز. يقبل الأرقام العربية ورمز مصر +20.</p><div id="res" role="status" aria-live="polite" aria-atomic="true"></div><div id="brs">'+branches()+'</div>'}
 var shown=0;
 async function showRes(){var el=document.getElementById("res");if(!el||!lastPh)return;var k=++shown,x;
@@ -149,8 +152,7 @@ function users(){var h='<h2>'+ic("users",20)+'حسابات الدخول</h2><div
  U.sec.forEach(function(s){var i=esc(s.id),nm=s.r==="nurse"?"الممرضة المساعدة":"سكرتارية "+BR[s.br].name;
   h+='<div class="item"><div class="m"><b>'+nm+'</b><small dir="ltr" style="text-align:right">'+esc(s.u)+'</small></div><div class="acts">'+(s.r==="sec"?'<button class="btn sm" data-a="sb" data-id="'+i+'">'+ic("edit",14)+' الفرع</button>':'')+'<button class="btn sm" data-a="sn" data-id="'+i+'">'+ic("lock",14)+' كلمة سر جديدة</button><button class="btn sm r" data-a="sd" data-id="'+i+'">'+ic("trash",14)+' إيقاف</button></div></div>'});
  return h+'<button class="btn a" onclick="secAdd()">'+ic("plus")+' مستخدم جديد</button><p class="hint">كلمة السر الجديدة تنشئ حساباً بديلاً، والحساب القديم يتوقف عن العمل.</p>'}
-async function mkUser(u,p,br){u=u.toLowerCase();if(CONFIG.secureGateway){try{return(await gateway("userCreate",{u:u,p:p,br:br},true)).uid}catch(e){return e.message}}if(!/^[a-z0-9._-]{3,}$/.test(u))return"اسم المستخدم: 3 أحرف أو أكثر إنجليزي/أرقام فقط";if(p.length<6)return"كلمة السر 6 أحرف على الأقل";
- try{var j=await authCall("signUp",{email:u+DOM,password:p,returnSecureToken:false});await jpatch({["roles/"+j.localId]:{r:"sec",br:br,u:u}});return j.localId}catch(e){return/EXISTS/.test(e.message)?"اسم المستخدم مستخدم من قبل، اختر اسماً آخر":"تعذر إنشاء الحساب"}}
+async function mkUser(u,p,br){try{return(await gateway("userCreate",{u:u.toLowerCase(),p:p,br:br},true)).uid}catch(e){return e.message}}
 function secAdd(){openForm("مستخدم جديد",[{k:"u",l:"اسم المستخدم (إنجليزي)",v:""},{k:"p",l:"كلمة السر",t:"password"},{k:"br",l:"نوع الحساب",t:"select",o:[["dmn","سكرتارية دمنهور"],["alex","سكرتارية الإسكندرية"],["nurse","الممرضة المساعدة"]],v:"dmn"}],async function(o){var r=await mkUser(o.u,o.p,o.br);if(!/^[A-Za-z0-9]{20,}$/.test(r))return r})}
 function secBr(id){var s=U.sec.filter(function(y){return y.id===id})[0];if(!s)return;openForm("فرع "+esc(s.u),[{k:"br",l:"الفرع",t:"select",o:[["dmn","دمنهور"],["alex","الإسكندرية"]],v:s.br}],async function(o){await jpatch({["roles/"+id+"/br"]:o.br})})}
 function secNew(id){var s=U.sec.filter(function(y){return y.id===id})[0];if(!s)return;openForm("حساب بديل لـ "+esc(s.u),[{k:"u",l:"اسم المستخدم الجديد",v:""},{k:"p",l:"كلمة السر الجديدة",t:"password"}],async function(o){var r=await mkUser(o.u,o.p,s.r==="nurse"?"nurse":s.br);if(!/^[A-Za-z0-9]{20,}$/.test(r))return r;await jpatch({["roles/"+id]:null})})}

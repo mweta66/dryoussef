@@ -1,0 +1,1 @@
+window.CLINIC_CONFIG={provider:"supabase",supabaseUrl:"https://YOUR_PROJECT.supabase.co",publishableKey:"YOUR_PUBLISHABLE_KEY",endpoint:"https://YOUR_PROJECT.supabase.co/functions/v1/clinic-api",secureGateway:true,demo:false};

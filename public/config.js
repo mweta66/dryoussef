@@ -1,2 +1,1 @@
-// Enable only after deploying the gateway and database rules together.
-window.CLINIC_CONFIG = { secureGateway: false, endpoint: "/api/clinic", demo: false };
+window.CLINIC_CONFIG = {"provider":"supabase","supabaseUrl":"https://matkxrnobjdewhptybpj.supabase.co","publishableKey":"sb_publishable_NKTxefD8yjoRaRtzI1C73g_EuoWUtQB","endpoint":"https://matkxrnobjdewhptybpj.supabase.co/functions/v1/clinic-api","secureGateway":true,"demo":false};

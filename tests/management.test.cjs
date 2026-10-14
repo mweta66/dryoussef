@@ -1,5 +1,5 @@
 const {test}=require('node:test'),assert=require('node:assert/strict');
-const core=require('../functions/core.cjs'),management=require('../functions/management.cjs'),perms=require('../functions/permissions.cjs'),{makeDemo}=require('../scripts/demo-data.cjs');
+const core=require('../server/core.cjs'),management=require('../server/management.cjs'),perms=require('../server/permissions.cjs'),{makeDemo}=require('../scripts/demo-data.cjs');
 function fixture(){return makeDemo().state}
 test('granular permissions grant and revoke booking actions immediately while preserving branch boundaries',()=>{
  let s=fixture(),r={...s.roles.demo_dmn,scope:'branch',permissions:{'bookings.edit':true,'bookings.delete':true}};

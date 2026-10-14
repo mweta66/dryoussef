@@ -1,5 +1,5 @@
 const {test}=require('node:test'),assert=require('node:assert/strict');
-const core=require('../functions/core.cjs'),{makeDemo}=require('../scripts/demo-data.cjs'),{createService}=require('../functions/service.cjs');
+const core=require('../server/core.cjs'),{makeDemo}=require('../scripts/demo-data.cjs'),{createService}=require('../server/service.cjs');
 function fixture(){const state=makeDemo().state;state.roles.demo_nurse={r:'nurse',u:'nurse'};return state;}
 test('nurse can search patients and read complaints but cannot read bookings, notes or inbox',()=>{
  const s=fixture(),p=Object.values(s.bookings[core.today()])[0].phone;

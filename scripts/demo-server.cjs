@@ -1,6 +1,6 @@
 const fs=require('node:fs'),path=require('node:path'),http=require('node:http');
 const {scryptSync,timingSafeEqual,randomBytes}=require('node:crypto');
-const {createService}=require('../functions/service.cjs');
+const {createService}=require('../server/service.cjs');
 const root=path.resolve(__dirname,'../public'),demo=path.resolve(__dirname,'../.demo');
 if(!fs.existsSync(path.join(demo,'state.json')))throw new Error('Run npm run demo:seed first.');
 let queue=Promise.resolve();const sessions=new Map(),rates=new Map();

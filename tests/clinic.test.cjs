@@ -36,18 +36,7 @@ test('clinic day uses Cairo across midnight', () => {
   vm.runInContext('Date = class extends Date { constructor(){ super("2026-10-13T22:30:00Z") } }',c);
   assert.equal(c.today(),'2026-10-14');
 });
-test('queue commit updates waiting counts and removes old phone/date tracking when moving', async () => {
-  const {context:c}=clinic(); const d=c.today();
-  const old={id:'one',date:d,b:'dmn',phone:'01275884716',no:1,s:'wait',v:'exam'};
-  c.S.bk=[old,{...old,id:'two',phone:'01012345678',no:2}]; c.LOADED={all:1,dates:{}};
-  let patch; c.jpatch=async p=>{patch=p};
-  await c.commit([{o:old,n:{...old,s:'done'}}],[]);
-  assert.equal(patch['track/'+d+'/01012345678'].ahead,0);
-  await c.commit([{o:old,n:{...old,date:'2026-10-15',phone:'01112345678'}}],[]);
-  assert.equal(patch['track/'+d+'/'+old.phone],null);
-  assert.equal(patch['bookings/'+d+'/one'],null);
-  assert.equal(patch['bookings/2026-10-15/one'].phone,'01112345678');
-});
+test('booking commits go through the protected gateway and refresh from the server',async()=>{const {context:c}=clinic();let payload,refreshed=false;c.gateway=async(action,input,auth)=>{assert.equal(action,'commit');assert.equal(auth,true);payload=input};c.refreshData=async()=>{refreshed=true};const puts=[{n:{id:'one'}}];await c.commit(puts,[]);assert.equal(payload.puts,puts);assert.ok(refreshed)});
 test('booking duplicates are rejected before writing', async () => {
   const {context:c}=clinic(); c.me={role:'doctor'}; const d=c.today();
   c.S.bk=[{id:'existing',date:d,phone:'01275884716'}];
@@ -61,9 +50,4 @@ test('lookup handles malformed data and escapes remote ticket values', async () 
   c.jget=async()=>({b:'dmn',s:'wait',v:'exam',no:'<img onerror=alert(1)>'});await c.showRes();
   assert.doesNotMatch(element('res').innerHTML,/<img/);
 });
-test('Firebase config limits framing, device permissions and allowed connection origins',()=>{
-  const config=JSON.parse(fs.readFileSync('firebase.json','utf8'));
-  const headers=config.hosting.headers[0].headers;
-  assert.equal(headers.find(x=>x.key==='X-Frame-Options').value,'DENY');
-  assert.match(headers.find(x=>x.key==='Content-Security-Policy').value,/object-src 'none'/);
-});
+test('frontend contains no retired backend endpoints or keys',()=>{assert.doesNotMatch(code,/identitytoolkit|securetoken|firebasedatabase|AIza/);assert.match(code,/supabaseUrl/)});
