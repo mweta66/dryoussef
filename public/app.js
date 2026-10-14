@@ -127,10 +127,11 @@ async function showRes(){var el=document.getElementById("res");if(!el||!lastPh)r
  if(!x){el.innerHTML='<div class="err">لا يوجد حجز بهذا الرقم اليوم. تأكد من الرقم أو تواصل مع السكرتارية.</div>';return}
  if(!BR[x.b]||!ST[x.s]||!VT[x.v]||!Number.isFinite(+x.no)){el.textContent="تعذر عرض بيانات الحجز. تواصل مع السكرتارية.";return}
  var lv=x.s==="wait"||x.s==="exam",a=lv?Math.max(0,Math.floor(+x.ahead||0)):0,st=ST[x.s]||ST.wait;
- var rows=[["ترتيبك في الطابور",lv?a+1:"-"],["عدد الحالات أمامك",lv?a:"-"],["الانتظار التقريبي (دقيقة)",x.s==="wait"?(x.estimatedWaitMinutes===undefined?a*S.avg:x.estimatedWaitMinutes):"-"],["نوع الزيارة",VT[x.v]],["الفرع",BR[x.b].name],["العنوان",BR[x.b].addr]];
- if(lv)rows.splice(3,0,["التوقيت المتوقع للكشف",x.s==="exam"?"جاري الكشف الآن":x.queueStarted&&x.expectedAt?new Intl.DateTimeFormat("ar-EG",{timeZone:"Africa/Cairo",hour:"numeric",minute:"2-digit"}).format(new Date(x.expectedAt)):"يبدأ حساب التوقيت عند بدء أول كشف"],["متوسط الكشف بالدقائق",x.avg||S.avg]);
+ var begun=!!x.queueStarted,pending="الطبيب لم يبدأ الكشف بعد";
+ var rows=[["ترتيبك في الطابور",lv?(begun?a+1:pending):"-"],["عدد الحالات أمامك",lv?(begun?a:pending):"-"],["الانتظار التقريبي (دقيقة)",x.s==="wait"?(begun?x.estimatedWaitMinutes:pending):"-"],["نوع الزيارة",VT[x.v]],["الفرع",BR[x.b].name],["العنوان",BR[x.b].addr]];
+ if(lv)rows.splice(3,0,["التوقيت المتوقع للكشف",x.s==="exam"?"جاري الكشف الآن":x.queueStarted&&x.expectedAt?new Intl.DateTimeFormat("ar-EG",{timeZone:"Africa/Cairo",hour:"numeric",minute:"2-digit"}).format(new Date(x.expectedAt)):pending],["متوسط الكشف بالدقائق",x.avg||S.avg]);
  var t=(x.v==="emergency"&&lv?'<div class="near">'+(x.s==='exam'?'دور الطوارئ الآن، الكشف جارٍ.':'حجز طوارئ: أولوية بعد الحالة الجاري كشفها.')+'</div>':'')+'<div class="box"><div class="ticket"><small>رقم تذكرتك</small><div class="no">'+esc(x.no)+'</div><span class="badge '+st[1]+'">'+st[0]+'</span></div><table>'+rows.map(function(q){return"<tr><th scope=\"row\">"+q[0]+"</th><td>"+esc(q[1])+"</td></tr>"}).join("")+'</table></div>';
- if(x.s==="wait"&&a<=2)t+='<div class="near">'+ic("bell")+' دورك قرب، يرجى التواجد في العيادة.</div>';
+ if(x.s==="wait"&&begun&&a<=2)t+='<div class="near">'+ic("bell")+' دورك قرب، يرجى التواجد في العيادة.</div>';
  if(x.s==="exam")t+='<div class="near">'+ic("check")+' دورك الآن، تفضل بالدخول.</div>';
  var output=t+'<p class="hint">يتم تحديث الحالة تلقائياً. وقت الانتظار تقديري وقد يتغيّر.</p>';if(el.innerHTML!==output)el.innerHTML=output}
 async function doSave(){if(saving)return;var o={};FF.forEach(function(f){if(f.t==="days"){o[f.k]=[].slice.call(document.querySelectorAll(".dd")).filter(function(c){return c.checked}).map(function(c){return +c.value})}else{var value=document.getElementById("f_"+f.k).value;o[f.k]=f.t==="password"?value:value.trim()}});

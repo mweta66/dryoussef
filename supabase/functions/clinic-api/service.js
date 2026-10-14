@@ -24,6 +24,12 @@ function createService(adapter) {
      delete state.patients?.[p];delete state.files?.[p];delete state.complaints?.[p];
      for(const [id,n] of Object.entries(state.inbox||{}))if(n.p===p)delete state.inbox[id];
     }
+    // Clear counters for queues emptied of synthetic bookings; preserve real tickets.
+    for(const key of Object.keys(state.sequences||{})){
+     const d=key.slice(0,10),b=key.slice(11);
+     if(!Object.values(original.bookings?.[d]||{}).some(x=>x.b===b&&phones.has(x.phone)))continue;
+     if(!Object.values(state.bookings?.[d]||{}).some(x=>x.b===b))delete state.sequences[key];
+    }
     state.settings||={};state.settings.demoPurged=true;core.rebuild(state);return state;
    });return {ok:true};
   }
