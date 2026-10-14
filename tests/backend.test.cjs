@@ -9,6 +9,12 @@ function fixture(){let state=makeDemo().state,queue=Promise.resolve();return {
  })
 };}
 const booking=(id,phone='01275884716',b='dmn')=>({id,name:'Test',phone,b,date:core.today(),v:'exam',nt:'',s:'wait'});
+test('purging an entirely synthetic day restarts its first real ticket at one',async()=>{
+ const f=fixture(),d=core.today();f.state().sequences={[d+'_dmn']:99};
+ await f.handle({action:'purgeDemo'},'demo_doctor');
+ await f.handle({action:'commit',puts:[{n:booking('first_real')}],dels:[]},'demo_doctor');
+ assert.equal(f.state().bookings[d].first_real.no,1);
+});
 test('demo purge persists dismissal and preserves real bookings, accounts and clinic settings',async()=>{
  const f=fixture();await assert.rejects(f.handle({action:'purgeDemo'},'demo_dmn'),{status:403});
  await f.handle({action:'commit',puts:[{n:booking('real_booking')}],dels:[]},'demo_doctor');
