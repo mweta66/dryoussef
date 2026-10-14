@@ -1,0 +1,11 @@
+function digits(s){return String(s||'').replace(/[٠-٩۰-۹]/g,function(d){var n=d.charCodeAt(0);return n>=1776?n-1776:n-1632})}
+function setStatus(message){notify(message||"")}
+function errMsg(e){return /fetch|NETWORK|Abort|TIMEOUT/i.test(e.message)?"تعذر الاتصال. حاول مجدداً.":e.message||"تعذر تنفيذ العملية"}
+async function guard(fn,ok){if(featureBusy)return"انتظر انتهاء الحفظ";featureBusy=true;try{await fn();setStatus(ok);return undefined}catch(e){return errMsg(e)}finally{featureBusy=false}}
+async function act(fn,ok){var error=await guard(fn,ok);if(error)setStatus(error);render()}
+function cleanBk(x){return x&&x.id&&x.phone&&x.date?x:null}
+async function markRead(id){try{var updates={};updates['inbox/'+id]=null;await jpatch(updates);delete INBOX[id];updTitle();if(!busy())draw()}catch(e){setStatus(errMsg(e))}}
+async function purgeDemo(){if(!confirm("حذف البيانات التجريبية فقط؟"))return;await act(async function(){await gateway('purgeDemo',{},true);PT=null;CL=[];INBOX={}},"تم حذف البيانات التجريبية فقط")}
+document.addEventListener('click',function(e){var b=e.target.closest&&e.target.closest('[data-a]');if(!b)return;var id=b.dataset.id;var actions={sb:secBr,sn:secNew,sd:secDel};if(actions[b.dataset.a])actions[b.dataset.a](id)});
+setInterval(async function(){if(location.protocol==='file:'||!CONFIG.secureGateway||document.hidden||!navigator.onLine||!me||!can('notifications.read'))return;var current=me;try{var next=await jget('inbox',true);if(me!==current)return;applyInbox('/',next,false)}catch(e){if(/NOAUTH/.test(e.message))logout()}},2000);
+async function exportAdminData(){if(!me||me.role!=='doctor')return;var error=await guard(async function(){var paths=['bookings','settings','roles','patients','files','complaints'],values=await Promise.all(paths.map(function(path){return jget(path,true)})),data={exportedAt:new Date().toISOString()};paths.forEach(function(path,i){data[path]=values[i]});var url=URL.createObjectURL(new Blob([JSON.stringify(data,null,2)],{type:'application/json'})),a=document.createElement('a');a.href=url;a.download='clinic-backup-'+today()+'.json';a.click();setTimeout(function(){URL.revokeObjectURL(url)},1000)},'تم تنزيل نسخة بيانات العيادة');if(error)setStatus(error)}

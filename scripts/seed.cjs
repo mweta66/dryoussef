@@ -1,0 +1,12 @@
+const fs=require('node:fs'),path=require('node:path');
+const {makeDemo}=require('./demo-data.cjs');
+if(process.argv.length>2)throw new Error('Seed accepts no remote target. Local demo only.');
+const dir=path.resolve(__dirname,'../.demo');
+fs.mkdirSync(dir,{recursive:true});
+const {state,accounts,baseline}=makeDemo();
+fs.writeFileSync(path.join(dir,'state.json'),JSON.stringify(state,null,2));
+fs.writeFileSync(path.join(dir,'accounts.json'),JSON.stringify(accounts,null,2));
+const samples=Object.values(state.bookings[baseline]).filter(x=>x.s==='wait');
+fs.writeFileSync(path.join(dir,'guide.txt'),'LOCAL DEMO ONLY\n'+accounts.map(x=>x.u+' / '+x.password).join('\n')+'\n\nToday tracking examples:\n'+samples.map(x=>x.phone).join('\n')+'\n');
+require('./upgrade-demo.cjs');
+console.log('Local credentials: .demo/guide.txt. No network requests.');
