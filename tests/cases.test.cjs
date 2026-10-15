@@ -26,11 +26,11 @@ test('medical writes validate real dates, patient membership and text limits; do
  assert.throws(()=>core.patch(s,'demo_doctor',{['files/'+p]:{n:'x'.repeat(5001)}}));
  const next=core.patch(s,'demo_doctor',{['files/'+p]:{n:'Private note'}});assert.equal(core.read(next,'demo_doctor','files/'+p).n,'Private note');
 });
-test('new bookings index patients and doctor can create a nurse account',async()=>{
+test('new bookings index patients and admin can create a nurse account',async()=>{
  let s=fixture();const n={id:'fresh_patient',name:'New patient',phone:'01275884716',date:core.today(),b:'dmn',s:'wait',v:'exam',nt:''};
  s=core.commit(s,'demo_doctor',[{n}],[]).state;assert.equal(s.patients[n.phone].n,n.name);
  const handler=createService({read:async()=>s,mutate:async fn=>{s=fn(s)},createUser:async()=> 'new_nurse',deleteUser:async()=>{},limit:async()=>{}});
- await handler({action:'userCreate',u:'nurse-two',p:'password123',br:'nurse'},'demo_doctor');assert.equal(s.roles.new_nurse.r,'nurse');
+ await handler({action:'userCreate',u:'nurse-two',p:'password123',br:'nurse'},'demo_admin');assert.equal(s.roles.new_nurse.r,'nurse');
  await assert.rejects(handler({action:'userCreate',u:'nurse-three',p:'password123',br:'nurse'},'demo_nurse'),{status:403});
- await handler({action:'purgeDemo'},'demo_doctor');assert.ok(s.bookings[n.date][n.id]);assert.ok(s.patients[n.phone]);
+ await handler({action:'purgeDemo'},'demo_admin');assert.ok(s.bookings[n.date][n.id]);assert.ok(s.patients[n.phone]);
 });

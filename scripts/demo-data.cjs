@@ -3,7 +3,7 @@ const core=require('../server/core.cjs');
 function makeDemo() {
  const state={roles:{},settings:{avg:15,sched:{dmn:{d:[0,4],f:'14:00',t:'18:00'},alex:{d:[1,2,3,6],f:'14:00',t:'18:00'}}},bookings:{},sequences:{}};
  const accounts=[];
- for(const [uid,u,r,br] of [['demo_doctor','doctor','doctor',null],['demo_dmn','sec-dmn','sec','dmn'],['demo_alex','sec-alex','sec','alex']]){
+ for(const [uid,u,r,br] of [['demo_admin','admin','admin',null],['demo_doctor','doctor','doctor',null],['demo_dmn','sec-dmn','sec','dmn'],['demo_alex','sec-alex','sec','alex']]){
   const password=randomBytes(12).toString('base64url'),salt=randomBytes(16).toString('hex');
   state.roles[uid]={u,r,...(br?{br}:{})};
   accounts.push({uid,u,password,salt,hash:scryptSync(password,salt,32).toString('hex')});

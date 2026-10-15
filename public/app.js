@@ -1,6 +1,6 @@
 function adminPage(){return /(?:^|\/)admin\.html$/.test(String(location.pathname||""))}
 function staffView(){return location.hash==="#staff"||location.hash==="#admin"}
-function openAdmin(){if(!me||me.role!=="doctor")return;if(!adminPage()){location.replace("admin.html#admin");return}if(location.hash!=="#admin")location.hash="admin";else render()}
+function openAdmin(){if(!me||me.role!=="admin")return;if(!adminPage()){location.replace("admin.html#admin");return}if(location.hash!=="#admin")location.hash="admin";else render()}
 var PT=null,PTt=0,SEL="",QS="",CL=[],INBOX={},gotFirst=false,actx=null,TITLE0=document.title,featureBusy=false;
 var ID=/^[A-Za-z0-9_-]{1,128}$/;
 var CONFIG=window.CLINIC_CONFIG||{};
@@ -28,11 +28,11 @@ function dup(ph,d,id){return S.bk.some(function(x){return x.date===d&&norm(x.pho
 function queueOrder(a,b){function rank(x){return x.s==='exam'?0:x.s==='wait'?(x.v==='emergency'?1:2):3}return rank(a)-rank(b)||a.no-b.no}function ahead(x){return S.bk.filter(function(y){return y.b===x.b&&y.date===x.date&&['wait','exam'].includes(y.s)&&queueOrder(y,x)<0}).length}
 function sched(b){var s=S.sched[b];return {chips:s.d.slice().sort().map(function(i){return '<span class="chip">'+DAYS[i]+'</span>'}).join(""),time:"من "+t12(s.f)+" إلى "+t12(s.t)}}
 function topbar(){var t='<span class="sp"></span><button class="gb" onclick="toggleTheme()" aria-label="الوضع الليلي">'+ic("moon",16)+'</button>';
- if(me&&me.role==="doctor")t+='<button class="gb" onclick="openAdmin()">'+ic("gear",16)+' الإدارة</button><button class="gb" onclick="go(\'patient\')">واجهة المرضى</button>';t+=me?'<button class="gb" onclick="logout()">'+ic("lock",16)+' خروج</button>':'<button class="gb" onclick="go(\'staff\')">'+ic("lock",16)+' دخول الطاقم</button>';
+ if(me&&me.role==="admin")t+='<button class="gb" onclick="openAdmin()">'+ic("gear",16)+' الإدارة</button><button class="gb" onclick="go(\'patient\')">واجهة المرضى</button>';t+=me?'<button class="gb" onclick="logout()">'+ic("lock",16)+' خروج</button>':'<button class="gb" onclick="go(\'staff\')">'+ic("lock",16)+' دخول الطاقم</button>';
  document.getElementById("topbar").innerHTML=t}
 function toggleTheme(){var r=document.documentElement,d=r.getAttribute("data-theme")==="dark"||(!r.getAttribute("data-theme")&&matchMedia("(prefers-color-scheme:dark)").matches);r.setAttribute("data-theme",d?"light":"dark");try{localStorage.setItem("clinic_theme",d?"light":"dark")}catch(e){}}
 function chk(){var p=document.getElementById("ph");document.getElementById("go").disabled=!validPhone(p.value);p.removeAttribute("aria-invalid")}
-function look(){var p=document.getElementById("ph");if(!validPhone(p.value)){p.setAttribute("aria-invalid","true");p.focus();return}lastPh=norm(p.value);document.getElementById("res").textContent="جارٍ البحث عن حجزك…";showRes()}
+function look(){var p=document.getElementById("ph");if(!validPhone(p.value)){p.setAttribute("aria-invalid","true");p.focus();return}lastPh=norm(p.value);lastDate=document.getElementById("lookup_date")?.value||today();document.getElementById("res").textContent="جارٍ البحث عن حجزك…";showRes()}
 function notify(message){var el=document.getElementById("notice");if(!el)return;el.textContent=message||"";el.dataset.kind=/^(تم|تمت)/.test(message||"")?"success":/تعذر|غير صحيح|NOAUTH|صلاحية|خطأ/.test(message||"")?"error":"info"}
 function go(v){location.hash=v==="patient"?"":v}
 function branches(){var h='<h2>'+ic("pin",20)+'الفروع ومواعيد العمل</h2><div class="branches">';for(var k in BR){var b=BR[k],s=sched(k);h+='<div class="br"><div><span class="ib">'+ic("pin")+'</span><b>'+esc(b.name)+'</b></div><p>'+esc(b.addr)+'</p><p>'+ic("phone",16)+' <a href="tel:'+b.tel+'">'+b.tel+'</a></p><div class="chips">'+s.chips+'</div><p>'+ic("clock",16)+' '+s.time+'</p></div>'}return h+'</div>'}
@@ -86,7 +86,7 @@ async function authCall(ep,body){
 var refreshFlight=null;
 async function token(){if(!AUTH)throw new Error('NOAUTH');if(Date.now()>AUTH.exp-300000){if(!refreshFlight){var owner=AUTH;refreshFlight=authCall('refresh',{refresh_token:owner.refresh}).then(function(j){if(AUTH!==owner)throw new Error('NOAUTH');AUTH.idToken=j.idToken;AUTH.refresh=j.refreshToken;AUTH.exp=Date.now()+(+j.expiresIn)*1000;saveAuth()}).finally(function(){refreshFlight=null})}await refreshFlight}if(!AUTH)throw new Error('NOAUTH');return AUTH.idToken}
 async function signOutSupabase(accessToken){if(!CONFIG.supabaseUrl)return;try{await request(CONFIG.supabaseUrl+'/auth/v1/logout?scope=local',{method:'POST',headers:{apikey:CONFIG.publishableKey,Authorization:'Bearer '+accessToken}})}catch(e){}}
-async function jget(path,auth){if(path.indexOf('track/')===0)return gateway('lookup',{phone:lastPh},false);return gateway('get',{path:path},auth)}
+async function jget(path,auth){if(path.indexOf('track/')===0)return gateway('lookup',{phone:lastPh,date:path.split("/")[1]},false);return gateway('get',{path:path},auth)}
 async function jpatch(updates){return gateway('patch',{updates:updates},true)}
 
 function newId(){return crypto.randomUUID().replace(/-/g,"")}
@@ -114,25 +114,25 @@ async function login(){var u=document.getElementById("u").value.trim().toLowerCa
  try{var j=await authCall("signInWithPassword",{email:u+DOM,password:p,returnSecureToken:true});
   AUTH={idToken:j.idToken,refresh:j.refreshToken,uid:j.localId,exp:Date.now()+(+j.expiresIn)*1000};saveAuth();
   var r=await jget("roles/"+AUTH.uid,true);
-  if(!r||(!["doctor","sec","nurse","staff"].includes(r.r))){AUTH=null;saveAuth();le.textContent="هذا الحساب ليس له صلاحية دخول";bt.disabled=false;return}
+  if(!r||(!["admin","doctor","sec","nurse","staff"].includes(r.r))){AUTH=null;saveAuth();le.textContent="هذا الحساب ليس له صلاحية دخول";bt.disabled=false;return}
   me={u:r.u||u,role:r.r,br:r.br,scope:r.scope,permissions:r.permissions};try{sessionStorage.setItem("me",JSON.stringify(me))}catch(e){}
-  F.d=today();SD=today();if(me.role==="doctor"){openAdmin();return}if(adminPage()){location.replace("index.html#staff");return}render()}
+  F.d=today();SD=today();if(me.role==="admin"){openAdmin();return}if(adminPage()){location.replace("index.html#staff");return}render()}
  catch(e){AUTH=null;me=null;saveAuth();try{sessionStorage.removeItem("me")}catch(_){}le.textContent=/NETWORK|fetch|Abort|timeout/i.test(e.message)?"تعذر الاتصال بالإنترنت":"بيانات الدخول غير صحيحة";bt.disabled=false}}
 function logout(){var previous=AUTH;if(previous&&!CONFIG.demo)signOutSupabase(previous.idToken);PT=null;SEL="";CL=[];INBOX={};gotFirst=false;document.title=TITLE0;dataEpoch++;rtok++;shown++;me=null;AUTH=null;saveAuth();try{sessionStorage.removeItem("me")}catch(e){}S.bk=[];if(adminPage()){location.replace("index.html");return}if(location.hash)go("patient");else render()}
-function patient(){return '<p class="sub">أدخل رقم الهاتف المسجل عند الحجز لمتابعة دورك</p><label for="ph">رقم الهاتف <b>*</b></label><input id="ph" inputmode="tel" autocomplete="tel" type="tel" dir="ltr" maxlength="20" aria-describedby="phone-help" placeholder="مثال: 01xxxxxxxxx" oninput="chk()" onkeydown="if(event.key===\'Enter\')look()">'+'<button class="btn" id="go" disabled onclick="look()">'+ic("search")+' اعرف دوري</button><p class="hint" id="phone-help">استخدم رقم الهاتف المسجل عند الحجز. يقبل الأرقام العربية ورمز مصر +20.</p><div id="res" role="status" aria-live="polite" aria-atomic="true"></div><div id="brs">'+branches()+'</div>'}
-var shown=0;
+function patient(){return '<p class="sub">أدخل رقم الهاتف المسجل عند الحجز لمتابعة دورك</p><label for="ph">رقم الهاتف <b>*</b></label><input id="ph" inputmode="tel" autocomplete="tel" type="tel" dir="ltr" maxlength="20" aria-describedby="phone-help" placeholder="مثال: 01xxxxxxxxx" oninput="chk()" onkeydown="if(event.key===\'Enter\')look()">'+'<label for="lookup_date">تاريخ الحجز</label><input id="lookup_date" type="date" value="'+esc(lastDate||today())+'" onchange="if(lastPh)look()"><button class="btn" id="go" disabled onclick="look()">'+ic("search")+' اعرف دوري</button><p class="hint" id="phone-help">استخدم رقم الهاتف المسجل عند الحجز. يقبل الأرقام العربية ورمز مصر +20.</p><div id="res" role="status" aria-live="polite" aria-atomic="true"></div><div id="brs">'+branches()+'</div>'}
+var shown=0,lastDate=today();
 async function showRes(){var el=document.getElementById("res");if(!el||!lastPh)return;var k=++shown,x;
- try{x=await jget("track/"+today()+"/"+norm(lastPh))}catch(e){if(k===shown&&el.isConnected)el.textContent=/[\u0600-\u06ff]/.test(e.message)?e.message:"تعذر الاتصال، تأكد من الإنترنت وحاول مرة أخرى.";return}
+ try{x=await jget("track/"+lastDate+"/"+norm(lastPh))}catch(e){if(k===shown&&el.isConnected)el.textContent=/[\u0600-\u06ff]/.test(e.message)?e.message:"تعذر الاتصال، تأكد من الإنترنت وحاول مرة أخرى.";return}
  if(k!==shown||!el.isConnected)return;
- if(!x){el.innerHTML='<div class="err">لا يوجد حجز بهذا الرقم اليوم. تأكد من الرقم أو تواصل مع السكرتارية.</div>';return}
+ if(!x){el.innerHTML='<div class="err">لا يوجد حجز بهذا الرقم في اليوم المحدد. تأكد من الرقم أو تواصل مع السكرتارية.</div>';return}
  if(!BR[x.b]||!ST[x.s]||!VT[x.v]||!Number.isFinite(+x.no)){el.textContent="تعذر عرض بيانات الحجز. تواصل مع السكرتارية.";return}
  var lv=x.s==="wait"||x.s==="exam",a=lv?Math.max(0,Math.floor(+x.ahead||0)):0,st=ST[x.s]||ST.wait;
- var begun=!!x.queueStarted,pending="الطبيب لم يبدأ الكشف بعد";
+ var begun=!!x.queueStarted,pending=x.sessionStatus==="ended"?"انتهت جلسة الكشف لهذا اليوم":x.sessionStatus==="paused"?"الكشف متوقف مؤقتًا":lastDate!==today()?"لا يوجد كشف مباشر لهذا اليوم":"الطبيب لم يبدأ الكشف بعد";
  var rows=[["ترتيبك في الطابور",lv?(begun?a+1:pending):"-"],["عدد الحالات أمامك",lv?(begun?a:pending):"-"],["الانتظار التقريبي (دقيقة)",x.s==="wait"?(begun?x.estimatedWaitMinutes:pending):"-"],["نوع الزيارة",VT[x.v]],["الفرع",BR[x.b].name],["العنوان",BR[x.b].addr]];
- if(lv)rows.splice(3,0,["التوقيت المتوقع للكشف",x.s==="exam"?"جاري الكشف الآن":x.queueStarted&&x.expectedAt?new Intl.DateTimeFormat("ar-EG",{timeZone:"Africa/Cairo",hour:"numeric",minute:"2-digit"}).format(new Date(x.expectedAt)):pending],["متوسط الكشف بالدقائق",x.avg||S.avg]);
+ if(lv)rows.splice(3,0,["التوقيت المتوقع للكشف",x.s==="exam"&&begun?"جاري الكشف الآن":x.queueStarted&&x.expectedAt?new Intl.DateTimeFormat("ar-EG",{timeZone:"Africa/Cairo",hour:"numeric",minute:"2-digit"}).format(new Date(x.expectedAt)):pending],["متوسط الكشف بالدقائق",x.avg||S.avg]);
  var t=(x.v==="emergency"&&lv?'<div class="near">'+(x.s==='exam'?'دور الطوارئ الآن، الكشف جارٍ.':'حجز طوارئ: أولوية بعد الحالة الجاري كشفها.')+'</div>':'')+'<div class="box"><div class="ticket"><small>رقم تذكرتك</small><div class="no">'+esc(x.no)+'</div><span class="badge '+st[1]+'">'+st[0]+'</span></div><table>'+rows.map(function(q){return"<tr><th scope=\"row\">"+q[0]+"</th><td>"+esc(q[1])+"</td></tr>"}).join("")+'</table></div>';
  if(x.s==="wait"&&begun&&a<=2)t+='<div class="near">'+ic("bell")+' دورك قرب، يرجى التواجد في العيادة.</div>';
- if(x.s==="exam")t+='<div class="near">'+ic("check")+' دورك الآن، تفضل بالدخول.</div>';
+ if(x.s==="exam"&&begun)t+='<div class="near">'+ic("check")+' دورك الآن، تفضل بالدخول.</div>';
  var output=t+'<p class="hint">يتم تحديث الحالة تلقائياً. وقت الانتظار تقديري وقد يتغيّر.</p>';if(el.innerHTML!==output)el.innerHTML=output}
 async function doSave(){if(saving)return;var o={};FF.forEach(function(f){if(f.t==="days"){o[f.k]=[].slice.call(document.querySelectorAll(".dd")).filter(function(c){return c.checked}).map(function(c){return +c.value})}else{var value=document.getElementById("f_"+f.k).value;o[f.k]=f.t==="password"?value:value.trim()}});
  var fe=document.getElementById("fe"),r,buttons=Array.from(document.querySelectorAll(".mod button"));saving=true;buttons.forEach(function(b){b.disabled=true});try{r=await M(o)}catch(e){r=/[؀-ۿ]/.test(e.message)?e.message:"تعذر الحفظ، تأكد من الاتصال والصلاحيات"}finally{saving=false;buttons.forEach(function(b){b.disabled=false})}
@@ -143,7 +143,7 @@ function bkSave(x){return async function(o){var doc=can("bookings.edit")||(can("
  if(can("bookings.read")&&dup(o.phone,d,x.id))return"هذا الرقم لديه حجز بالفعل في هذا اليوم، ولا يُسمح بحجزين في نفس اليوم";
  if(x.id){var n=Object.assign({},x,{name:o.name,phone:norm(o.phone),v:o.v,nt:o.nt,b:b,date:d});if(o.s)n.s=o.s;if(x.b!==b||x.date!==d)n.no=nextNo(b,d);await commit([{n:n,o:x}],[])}
  else await commit([{n:{id:newId(),no:nextNo(b,d),name:o.name,phone:norm(o.phone),v:o.v,nt:o.nt,s:o.v==="emergency"?"exam":"wait",b:b,date:d},o:null}],[])}}
-async function delBk(id){if(!confirm("حذف هذا الحجز نهائياً؟"))return;var x=S.bk.filter(function(y){return y.id===id})[0];if(!x)return;try{await commit([],[x])}catch(e){alert("تعذر الحذف")}render()}
+async function delBk(id){if(!confirm("حذف هذا الحجز؟ يمكنك استرجاعه من تبويب الحجوزات المحذوفة."))return;var x=S.bk.filter(function(y){return y.id===id})[0];if(!x)return;try{await commit([],[x])}catch(e){alert("تعذر الحذف")}render()}
 async function setS(id,s){var x=S.bk.filter(function(y){return y.id===id})[0];if(!x)return;try{await commit([{n:Object.assign({},x,{s:s}),o:x}],[])}catch(e){notify(e.message||"تعذر تحديث الحالة")}render()}
 async function purge(m){if(!confirm(m===1?"حذف كل حجوزات الأيام السابقة؟":"حذف كل الحجوزات نهائياً؟"))return;var d=today();
  try{var all=(await jget("bookings",true))||{},L=[];for(var k in all)for(var i in all[k])if(m===2||all[k][i].date<d)L.push(all[k][i]);S.bk=L.slice();LOADED={all:1,dates:{}};
@@ -161,13 +161,13 @@ function secBr(id){var s=U.sec.filter(function(y){return y.id===id})[0];if(!s)re
 function secNew(id){var s=U.sec.filter(function(y){return y.id===id})[0];if(!s)return;openForm("حساب بديل لـ "+esc(s.u),[{k:"u",l:"اسم المستخدم الجديد",v:""},{k:"p",l:"كلمة السر الجديدة",t:"password"}],async function(o){var r=await mkUser(o.u,o.p,s.r==="nurse"?"nurse":s.br);if(!/^[A-Za-z0-9]{20,}$/.test(r))return r;await jpatch({["roles/"+id]:null})})}
 async function secDel(id){if(!confirm("إيقاف هذا المستخدم؟ لن يستطيع الدخول بعد الآن."))return;try{await jpatch({["roles/"+id]:null})}catch(e){alert("تعذر التنفيذ")}render()}
 function editSched(k){var s=S.sched[k];openForm("مواعيد "+BR[k].name,[{k:"d",l:"أيام العمل",t:"days",v:s.d},{k:"f",l:"من الساعة",t:"time",v:s.f},{k:"t",l:"إلى الساعة",t:"time",v:s.t}],async function(o){if(!o.d.length)return"اختر يوماً واحداً على الأقل";if(!o.f||!o.t||o.f>=o.t)return"وقت النهاية يجب أن يكون بعد البداية";await jpatch({["settings/sched/"+k]:{d:o.d,f:o.f,t:o.t}});S.sched[k]={d:o.d,f:o.f,t:o.t}})}
-function draw(){topbar();var c=document.getElementById("contacts");if(c)c.style.display=staffView()?"none":"";var el=document.getElementById("app");if(location.hash==="#admin"&&me&&me.role!=="doctor"&&!adminAccess()){el.innerHTML='<h2>صفحة الإدارة خاصة بالطبيب</h2><button class="btn" onclick="go(\'staff\')">العودة إلى حسابي</button>';return}if(staffView()){el.innerHTML=staff();return}el.innerHTML=patient();showRes()}
+function draw(){topbar();var c=document.getElementById("contacts");if(c)c.style.display=staffView()?"none":"";var el=document.getElementById("app");if(location.hash==="#admin"&&me&&me.role!=="admin"&&!adminAccess()){el.innerHTML='<h2>صفحة الإدارة خاصة بمدير النظام</h2><button class="btn" onclick="go(\'staff\')">العودة إلى حسابي</button>';return}if(staffView()){el.innerHTML=staff();return}el.innerHTML=patient();showRes()}
 function render(){if(location.protocol==="file:"){document.getElementById("app").innerHTML='<h2>تشغيل العيادة محليًا</h2><p>لتشغيل تسجيل الدخول والحجوزات والبيانات التجريبية، افتح ملف <b dir="ltr">START-CLINIC.cmd</b> من مجلد العيادة. سيعمل الموقع تلقائيًا في المتصفح.</p><a class="btn a" href="http://127.0.0.1:4173">فتح الموقع بعد التشغيل</a><p class="sub">بيانات الدخول موجودة في ملف <b dir="ltr">.demo/guide.txt</b>. هذه نسخة تجريبية محلية.</p>';return}draw();if(typeof refreshingData!=="undefined"&&refreshingData)return;var k=++rtok;
  if(me&&staffView()&&(location.hash!=="#admin"||me.role==="doctor"||adminAccess())){refreshData().then(function(){if(k===rtok&&!busy())draw()}).catch(function(e){if(/NOAUTH|40[13]/.test(e.message)){logout()}else notify("تعذر تحديث الحجوزات. تحقق من الاتصال وحاول مجدداً.")})}
  else if(!staffView()){loadSettings().then(function(){var b=document.getElementById("brs");if(b)b.innerHTML=branches()}).catch(function(){})}}
 function busy(){var a=document.activeElement;return featureBusy||adminDraftDirty()||writing||saving||modalOpen()||(a&&/INPUT|TEXTAREA|SELECT/.test(a.tagName))}
 window.addEventListener("hashchange",function(){dataEpoch++;rtok++;shown++;if(modalOpen()&&!saving)closeM();render()});
-async function restoreSession(){if(location.protocol==="file:"){render();return}if(!AUTH){me=null;render();return}try{var role=await jget("roles/"+AUTH.uid,true);if(!role||(!["doctor","sec","nurse","staff"].includes(role.r)))throw new Error("NOAUTH");me={u:role.u||"",role:role.r,br:role.br,scope:role.scope,permissions:role.permissions};if(me.role==="doctor"){openAdmin();return}render()}catch(e){logout();notify("انتهت الجلسة أو تعذر التحقق منها. سجّل الدخول مجدداً.")}}
+async function restoreSession(){if(location.protocol==="file:"){render();return}if(!AUTH){me=null;render();return}try{var role=await jget("roles/"+AUTH.uid,true);if(!role||(!["admin","doctor","sec","nurse","staff"].includes(role.r)))throw new Error("NOAUTH");me={u:role.u||"",role:role.r,br:role.br,scope:role.scope,permissions:role.permissions};if(me.role==="admin"){openAdmin();return}if(adminPage()){location.replace("index.html#staff");return}render()}catch(e){logout();notify("انتهت الجلسة أو تعذر التحقق منها. سجّل الدخول مجدداً.")}}
 me=null;
 restoreSession();
 setInterval(function(){if(location.protocol==="file:")return;if(document.hidden||!navigator.onLine||saving||writing)return;if(staffView()){if(me&&!busy())render()}else{showRes();loadSettings().then(function(){var b=document.getElementById("brs");if(b&&!busy())b.innerHTML=branches()}).catch(function(){})}},15000);

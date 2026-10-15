@@ -25,6 +25,7 @@ function mutate(original,uid,input,core){
  if(input.action==='userSave'){
   perms.requirePermission(r,'users.manage');if(!s.roles[input.uid])core.fail('المستخدم غير موجود',404);
   const next=perms.validateRole(input.role,core.fail);if(next.u!==s.roles[input.uid].u)core.fail('اسم الدخول ثابت؛ يمكنك تعديل الاسم الظاهر');
+  if(s.roles[input.uid].r==='admin'&&(next.r!=='admin'||next.enabled===false)&&!Object.entries(s.roles).some(([id,x])=>id!==input.uid&&x.r==='admin'&&x.enabled!==false))core.fail('يجب إبقاء حساب مدير فعال واحد على الأقل');
   if(s.roles[input.uid].r==='doctor'&&(next.r!=='doctor'||next.enabled===false)&&!Object.entries(s.roles).some(([id,x])=>id!==input.uid&&x.r==='doctor'&&x.enabled!==false))core.fail('يجب إبقاء حساب طبيب فعال واحد على الأقل');
   s.roles[input.uid]=next;return s;
  }
@@ -40,13 +41,13 @@ function mutate(original,uid,input,core){
  if(input.action==='patientDelete'){
   perms.requirePermission(r,'patients.delete');const p=core.phone(input.phone);if(!/^01[0125]\d{8}$/.test(p))core.fail('هاتف غير صحيح');
   for(const rows of Object.values(s.bookings||{}))for(const [id,x] of Object.entries(rows))if(x.phone===p)delete rows[id];
+  for(const [id,x] of Object.entries(s.deletedBookings||{}))if(x.booking.phone===p)delete s.deletedBookings[id];
   for(const kind of ['patients','files','complaints'])delete s[kind]?.[p];for(const [id,x] of Object.entries(s.inbox||{}))if(x.p===p)delete s.inbox[id];core.rebuild(s);return s;
  }
  if(input.action==='dataClear'){
   perms.requirePermission(r,'data.delete');if(input.confirmation!=='DELETE_CLINIC_DATA')core.fail('تأكيد الحذف مطلوب');
-  for(const kind of ['bookings','patients','files','complaints','inbox','track'])s[kind]={};return s;
+  for(const kind of ['bookings','patients','files','complaints','inbox','track','deletedBookings','sessions'])s[kind]={};return s;
  }
  core.fail('عملية غير مسموحة',403);
 }
-const api={mutate,site};
 export {mutate,site};
