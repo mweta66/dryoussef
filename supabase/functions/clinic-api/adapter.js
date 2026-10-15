@@ -3,11 +3,11 @@ export function supabaseAdapter(url,secret,fetcher=fetch){
  if(!url||!secret)throw Error('Supabase server configuration is missing');
  const base=url.replace(/\/$/,'');
  async function call(path,options={},token=secret){
-  const safeRead=!options.method||options.method==='GET'||path==='/rest/v1/rpc/clinic_session_active';
+  const safeRead=!options.method||options.method==='GET'||['clinic_session_active','clinic_read_slice','clinic_read_day','clinic_health_metadata'].some(name=>path==='/rest/v1/rpc/'+name);
   let response;
-  for(let attempt=0;attempt<(safeRead?3:1);attempt++){
-   try{response=await fetcher(base+path,{...options,signal:AbortSignal.timeout(10000),headers:{apikey:secret,Authorization:'Bearer '+token,'Content-Type':'application/json',...options.headers}})}catch(e){if(safeRead&&attempt<2){await new Promise(r=>setTimeout(r,250*(attempt+1)));continue}const err=new Error('انقطع الاتصال مؤقتًا. حاول مجددًا بعد لحظة.');err.status=503;throw err}
-   if(!safeRead||![429,502,503,504].includes(response.status)||attempt===2)break;
+  for(let attempt=0;attempt<(safeRead?2:1);attempt++){
+   try{response=await fetcher(base+path,{...options,signal:AbortSignal.timeout(safeRead?4500:10000),headers:{apikey:secret,Authorization:'Bearer '+token,'Content-Type':'application/json',...options.headers}})}catch(e){if(safeRead&&attempt<1){await new Promise(r=>setTimeout(r,250));continue}const err=new Error('انقطع الاتصال مؤقتًا. حاول مجددًا بعد لحظة.');err.status=503;throw err}
+   if(!safeRead||![429,502,503,504].includes(response.status)||attempt===1)break;
    await response.body?.cancel();await new Promise(r=>setTimeout(r,350*(attempt+1)));
   }
   const data=await response.json().catch(()=>null);if(!response.ok){
@@ -23,8 +23,14 @@ export function supabaseAdapter(url,secret,fetcher=fetch){
  const snapshot=async()=>{const data=await call('/rest/v1/clinic_state?id=eq.true&select=version,payload');if(!data?.[0])throw Error('Clinic schema is not initialized');return data[0]};
  return {
   read:async()=> (await snapshot()).payload,
+  readFields:async(fields,day=null,entity=null)=>rpc('clinic_read_slice',{fields,selected_day:day,entity}),
+  readDay:async day=>rpc('clinic_read_day',{selected_day:day}),
+  readLookup:async(p,day)=>rpc('clinic_read_day',{selected_day:day,patient_phone:p}),
+  systemHealth:async()=>rpc('clinic_health_metadata',{}),
+  latestBackup:async()=>{const rows=await call('/rest/v1/clinic_backups?select=created_at,version,payload,checksum&order=created_at.desc&limit=1');return rows?.[0]||null},
+  recordError:async x=>call('/rest/v1/clinic_diagnostics',{method:'POST',body:JSON.stringify(x)}),
   mutate:async fn=>{for(let attempt=0;attempt<8;attempt++){const current=await snapshot(),next=fn(structuredClone(current.payload));if(await rpc('clinic_compare_and_swap',{expected_version:current.version,next_payload:next}))return;await new Promise(r=>setTimeout(r,20*(attempt+1)))}const e=new Error('تحديث متزامن. أعد المحاولة.');e.status=409;throw e},
-  limit:async client=>{const key=createHash('sha256').update(client+'|'+Math.floor(Date.now()/60000)).digest('hex');if(!await rpc('clinic_lookup_slot',{rate_key:key})){const e=new Error('طلبات كثيرة. حاول بعد دقيقة.');e.status=429;throw e}},
+  limit:async(client,p='')=>{const minute=Math.floor(Date.now()/60000),hash=x=>createHash('sha256').update(x).digest('hex');if(!await rpc('clinic_lookup_budget',{ip_key:hash('ip|'+client+'|'+minute),patient_key:hash('patient|'+client+'|'+p+'|'+minute)})){const e=new Error('طلبات كثيرة. حاول بعد دقيقة.');e.status=429;throw e}},
   createUser:async(u,p)=>{const data=await call('/auth/v1/admin/users',{method:'POST',body:JSON.stringify({email:u+'@clinic.app',password:p,email_confirm:true})});return data.id},
   deleteUser:async uid=>{await rpc('clinic_revoke_sessions',{user_uuid:uid});await call('/auth/v1/admin/users/'+encodeURIComponent(uid),{method:'DELETE'})},
   updateUser:async(uid,password)=>{await call('/auth/v1/admin/users/'+encodeURIComponent(uid),{method:'PUT',body:JSON.stringify({password})});await rpc('clinic_revoke_sessions',{user_uuid:uid})},

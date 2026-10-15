@@ -16,7 +16,7 @@ const handle=createService({
   const run=queue.then(()=>{const next=fn(read());const temp=path.join(demo,'state.tmp');fs.writeFileSync(temp,JSON.stringify(next));fs.renameSync(temp,path.join(demo,'state.json'));});
   queue=run.catch(()=>{});return run;
  },
- limit:async key=>limit('lookup:'+key),
+ limit:async(key,p)=>{limit('lookup-ip:'+key,300);limit('lookup-phone:'+key+':'+p,20)},
  createUser:async(u,p)=>{
   const file=path.join(demo,'accounts.json'),list=JSON.parse(fs.readFileSync(file,'utf8'));
   if(list.some(x=>x.u===u)){const e=new Error('اسم المستخدم موجود');e.status=409;throw e;}
@@ -62,7 +62,7 @@ const server=http.createServer(async(req,res)=>{
     }
     return json(res,400,{error:'Unsupported action'});
    }
-   const publicAction=input.action==='lookup'||input.action==='get'&&input.path==='settings';
+   const publicAction=input.action==='lookup'||input.action==='publicQueue'||input.action==='get'&&input.path==='settings';
    if(!publicAction&&(!active||active.exp<Date.now()))return json(res,401,{error:'NOAUTH'});
    return json(res,200,{data:await handle(input,active?.uid,req.socket.remoteAddress)});
   }

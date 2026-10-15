@@ -18,7 +18,7 @@ function date(d) {
 function id(s) { if(typeof s!=='string'||! /^[A-Za-z0-9_-]{1,128}$/.test(s))fail('معرّف غير صحيح');return s; }
 function role(state,uid,doctor=false) {
  const r=state.roles?.[uid];
- if(!r||r.enabled===false||!['doctor','sec','nurse','staff'].includes(r.r))fail('NOAUTH',403);
+ if(!r||r.enabled===false||!['admin','doctor','sec','nurse','staff'].includes(r.r))fail('NOAUTH',403);
  if(doctor&&r.r!=='doctor')fail('غير مصرح بهذه العملية',403);
  return r;
 }
@@ -32,22 +32,24 @@ function booking(n) {
  return {id:id(n.id),name,phone:p,b:n.b,v:n.v,s:n.s||'wait',date:date(n.date),nt};
 }
 function queueOrder(a,b){const rank=x=>x.s==='exam'?0:x.s==='wait'?(x.v==='emergency'?1:2):3;return rank(a)-rank(b)||a.no-b.no;}
-function queueTrack(state,list,x,clock=Date.now()){
- const ordered=list.filter(y=>y.b===x.b).sort(queueOrder),active=ordered.find(y=>y.s==='exam'),waiting=ordered.filter(y=>y.s==='wait');
- const avg=Math.max(1,Math.min(180,Number(state.settings?.avg)||15)),index=Math.max(0,waiting.findIndex(y=>y.id===x.id));
- const started=active&&Number.isFinite(Date.parse(active.startedAt)),remaining=started?Math.max(0,avg*60000-(clock-Date.parse(active.startedAt))):avg*60000;
+function queueTrack(state,list,x,clock=Date.now(),prepared){
+ const ordered=prepared?.ordered||list.filter(y=>y.b===x.b).sort(queueOrder),active=prepared?prepared.active:ordered.find(y=>y.s==='exam'),waiting=prepared?.waiting||ordered.filter(y=>y.s==='wait');
+ const avg=Math.max(1,Math.min(180,Number(state.settings?.avg)||15)),index=Math.max(0,prepared?prepared.positions.get(x.id)??0:waiting.findIndex(y=>y.id===x.id));
+ const session=state.sessions?.[x.date+'_'+x.b],blocked=session&&session.status!=='running';
+ const started=!blocked&&active&&(prepared?prepared.isToday:x.date===today(new Date(clock)))&&Number.isFinite(Date.parse(active.startedAt)),remaining=started?Math.max(0,avg*60000-(clock-Date.parse(active.startedAt))):avg*60000;
  const delay=x.s==='wait'?(active?remaining:0)+index*avg*60000:0;
- return {no:x.no,s:x.s,b:x.b,v:x.v,ahead:x.s==='wait'?index+(active?1:0):0,avg,queueStarted:!!started,estimatedWaitMinutes:started?Math.ceil(delay/60000):null,expectedAt:started?(x.s==='exam'?active.startedAt:x.s==='wait'?new Date(clock+delay).toISOString():null):null};
+ return {date:x.date,no:x.no,s:x.s,b:x.b,v:x.v,sessionStatus:session?.status||'not_started',ahead:x.s==='wait'?index+(active?1:0):0,avg,queueStarted:!!started,estimatedWaitMinutes:started?Math.ceil(delay/60000):null,expectedAt:started?(x.s==='exam'?active.startedAt:x.s==='wait'?new Date(clock+delay).toISOString():null):null};
 }
 function rebuild(state) {
- state.track={};
+ state.track={};const clock=Date.now(),currentDay=today(new Date(clock));
  for(const [d,rows] of Object.entries(state.bookings||{})){
   const list=Object.values(rows||{});
   for(const b of BRANCHES) {
    const q=list.filter(x=>x.b===b).sort(queueOrder);
+   const waiting=q.filter(x=>x.s==='wait'),prepared={ordered:q,active:q.find(x=>x.s==='exam'),waiting,positions:new Map(waiting.map((x,i)=>[x.id,i])),isToday:d===currentDay};
    for(const x of q){
     state.track[d]||={};
-    state.track[d][x.phone]=queueTrack(state,list,x);
+    state.track[d][x.phone]=queueTrack(state,list,x,clock,prepared);
    }
   }
  }
@@ -67,6 +69,7 @@ function commit(state, uid, puts, dels, now=today()) {
   if(deleteOnly)perms.requirePermission(r,'bookings.delete');
   if((live.rev||0)!==(old.rev||0))fail('الحجز عُدّل في جلسة أخرى. أعد التحميل.',409);
   if(live.s==='exam')advance.add(live.date+'_'+live.b);
+  if(deleteOnly){state.deletedBookings||={};state.deletedBookings[live.id]={booking:structuredClone(live),deletedAt:new Date().toISOString(),deletedBy:uid};}
   delete state.bookings[old.date][old.id];return live;
  };
  dels.forEach(x=>remove(x,true));
@@ -75,14 +78,18 @@ function commit(state, uid, puts, dels, now=today()) {
   const old=p.o?remove(p.o,false):null;
   if(!perms.can(r,'notes.edit'))n.nt=old?.nt||'';
   if(!old)perms.requirePermission(r,'bookings.create');
-  if(!old&&r.r!=='doctor'&&n.date<now)fail('لا يمكن الحجز في تاريخ سابق');
+  if(!old&&!['doctor','admin'].includes(r.r)&&n.date<now)fail('لا يمكن الحجز في تاريخ سابق');
   if(old&&['name','phone','v','nt','date','b'].some(k=>n[k]!==old[k]))perms.requirePermission(r,'bookings.edit');
   const otherActive=Object.values(state.bookings[n.date]||{}).find(x=>x.b===n.b&&x.s==='exam');
-  if(n.v==='emergency'&&(!old||old.v!=='emergency'||old.date!==n.date)){perms.requirePermission(r,'bookings.status');if(n.date!==now)fail('حجز الطوارئ متاح لليوم الحالي فقط');n.s=otherActive?'wait':'exam';}
+  const sessionKey=n.date+'_'+n.b,session=state.sessions?.[sessionKey];
+  if(n.v==='emergency'&&(!old||old.v!=='emergency'||old.date!==n.date)){perms.requirePermission(r,'bookings.status');if(n.date!==now)fail('حجز الطوارئ متاح لليوم الحالي فقط');n.s=otherActive||!session||session.status!=='running'?'wait':'exam';}
+  if(n.s==='exam'&&!session)perms.requirePermission(r,'sessions.manage');
+  if(n.s==='exam'&&session&&session.status!=='running')fail('جلسة الكشف متوقفة؛ اطلب من الطبيب بدء العيادة أولًا',409);
   if(!old&&n.s!=='wait')perms.requirePermission(r,'bookings.status');
   if(n.s==='exam'&&otherActive)fail('يوجد كشف جاري بالفعل. أنهِ الحالة الحالية أولًا.',409);
   if(n.s==='exam'&&old?.s!=='exam'&&n.date!==now)fail('بدء الكشف متاح لليوم الحالي فقط');
   if(n.s==='exam')n.startedAt=old?.s==='exam'&&old.startedAt?old.startedAt:new Date().toISOString();else if(old?.startedAt)n.startedAt=old.startedAt;
+  if(n.s==='exam'){state.sessions||={};state.sessions[sessionKey]||={status:'running',startedAt:n.startedAt};state.sessions[sessionKey].startedAt||=n.startedAt;}
   if(old&&n.s!==old.s)perms.requirePermission(r,'bookings.status');
   if(old&&n.s===old.s)perms.requirePermission(r,'bookings.edit');
   for(const rows of Object.values(state.bookings))if(rows?.[n.id])fail('معرّف الحجز موجود بالفعل',409);
@@ -97,16 +104,19 @@ function commit(state, uid, puts, dels, now=today()) {
   rows[n.id]=n;
   if(old?.s==='exam'&&n.s==='wait'&&old.date===n.date&&old.b===n.b)advance.delete(old.date+'_'+old.b);
  }
- for(const key of advance){const d=key.slice(0,10),b=key.slice(11);if(d!==now)continue;const list=Object.values(state.bookings[d]||{}).filter(x=>x.b===b);if(list.some(x=>x.s==='exam'))continue;const next=list.filter(x=>x.s==='wait').sort(queueOrder)[0];if(next){next.s='exam';next.startedAt=new Date().toISOString();next.rev=(next.rev||0)+1;}}
+ for(const key of advance){const d=key.slice(0,10),b=key.slice(11);if(d!==now||state.sessions?.[key]&&state.sessions[key].status!=='running')continue;const list=Object.values(state.bookings[d]||{}).filter(x=>x.b===b);if(list.some(x=>x.s==='exam'))continue;const next=list.filter(x=>x.s==='wait').sort(queueOrder)[0];if(next){next.s='exam';next.startedAt=new Date().toISOString();next.rev=(next.rev||0)+1;}}
  rebuild(state);cases.indexPatients(state);return {state};
 }
 function read(state,uid,path) {
  if(path==='settings')return state.settings||null;
  const r=role(state,uid);
+ if(path==='sessions'){perms.requirePermission(r,'bookings.read');return state.sessions||{};}
+ if(path==='audit'){perms.requirePermission(r,'audit.read');return state.audit||[];}
+ if(path==='deletedBookings'){perms.requirePermission(r,'bookings.delete');return Object.fromEntries(Object.entries(state.deletedBookings||{}).filter(([,x])=>perms.allBranches(r)||x.booking.b===r.br));}
  if(path==='roles/'+uid)return perms.normalize(state.roles[uid]);
  if(path==='roles'){perms.requirePermission(r,'users.manage');return state.roles||{};}
  if(/^(patients|complaints|files|inbox)(?:\/|$)/.test(path))return cases.read(state,r,path);
- 
+
  if(/^bookings(?:\/\d{4}-\d{2}-\d{2})?$/.test(path)){
   perms.requirePermission(r,'bookings.read');const d=path.split('/')[1];if(d)date(d);
   const sanitize=rows=>Object.fromEntries(Object.entries(rows).map(([id,x])=>[id,perms.can(r,'notes.read')?x:{...x,nt:''}]));
@@ -126,7 +136,7 @@ function patch(state,uid,updates) {
  if(!updates||Array.isArray(updates)||typeof updates!=='object'||Object.keys(updates).length>10)fail('تحديث غير صحيح');
  state.settings||={};state.roles||={};
  for(const [path,value] of Object.entries(updates)){
-  if(path==='settings'||path==='settings/avg'){perms.requirePermission(r,'clinic.manage');
+  if(path==='settings'||path==='settings/avg'){perms.requirePermission(r,path==='settings/avg'?'queue.configure':'clinic.manage');
    const avg=path==='settings'?value.avg:value;
    if(!Number.isInteger(avg)||avg<1||avg>180)fail('متوسط الكشف من 1 إلى 180 دقيقة');
    state.settings.avg=avg;
@@ -134,7 +144,7 @@ function patch(state,uid,updates) {
   }else if(/^settings\/sched\/(dmn|alex)$/.test(path)){
    perms.requirePermission(r,'clinic.manage');state.settings.sched||={};state.settings.sched[path.split('/')[2]]=schedule(value);
   }else if(/^roles\/[A-Za-z0-9_-]{1,128}(?:\/br)?$/.test(path)){
-   perms.requirePermission(r,'users.manage');const [,key,field]=path.split('/');if(key===uid||state.roles[key]?.r==='doctor')fail('لا يمكن تغيير صلاحية الدكتور',403);
+   perms.requirePermission(r,'users.manage');const [,key,field]=path.split('/');if(key===uid||['doctor','admin'].includes(state.roles[key]?.r))fail('لا يمكن تغيير صلاحية الدكتور',403);
    if(field){if(!state.roles[key]||!BRANCHES.includes(value))fail('فرع غير صحيح');state.roles[key].br=value;}
    else if(value===null)delete state.roles[key];
    else{if(!['sec','nurse'].includes(value.r)||(value.r==='sec'&&!BRANCHES.includes(value.br))||!/^[a-z0-9._-]{3,64}$/.test(value.u))fail('حساب غير صحيح');state.roles[key]={r:value.r,u:value.u,...(value.r==='sec'?{br:value.br}:{})};}
