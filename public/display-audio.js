@@ -5,7 +5,7 @@
 })(typeof window!=='undefined'?window:globalThis,function(options){
  const music=options.music,chime=options.chime,changed=options.onState||(()=>{}),error=options.onError||(()=>{});
  let enabled=false,pending=false,suspended=false,destroyed=false,queue=null,ready=false,lastNumber=null,ducked=false,restoreTimer=null;
- let musicVolume=.18,chimeVolume=.65;
+ let musicVolume=.18,chimeVolume=.85;
  const clamp=x=>Math.min(1,Math.max(0,Number(x)||0));
  function volumes(){music.volume=musicVolume*(ducked?.22:1);chime.volume=chimeVolume;}
  function restore(){clearTimeout(restoreTimer);restoreTimer=null;ducked=false;volumes();}
@@ -61,7 +61,7 @@ if(typeof window!=='undefined'&&document.getElementById('display-music')){
  const button=document.getElementById('display-audio-toggle'),status=document.getElementById('display-audio-status'),musicSlider=document.getElementById('display-music-volume'),chimeSlider=document.getElementById('display-chime-volume');
  window.DisplayAudio=createClinicQueueAudio({music:document.getElementById('display-music'),chime:document.getElementById('display-chime'),onState(s){button.disabled=s.pending;musicSlider.disabled=s.pending;chimeSlider.disabled=s.pending;button.textContent=s.pending?'جارٍ تشغيل الصوت…':s.enabled?'إيقاف الصوت':'تشغيل الصوت';button.setAttribute('aria-pressed',String(s.enabled));musicSlider.value=Math.round(s.musicVolume*100);chimeSlider.value=Math.round(s.chimeVolume*100);document.getElementById('display-music-level').textContent=musicSlider.value+'%';document.getElementById('display-chime-level').textContent=chimeSlider.value+'%';},onError(message){status.textContent=message;status.dataset.error='true';}});
  let levels;try{levels=JSON.parse(localStorage.getItem('clinic_display_audio_volumes'))}catch(e){}
- DisplayAudio.setVolumes(Number.isFinite(levels?.music)?levels.music:.18,Number.isFinite(levels?.chime)?levels.chime:.65);
+ DisplayAudio.setVolumes(Number.isFinite(levels?.music)?levels.music:.18,Number.isFinite(levels?.chime)?levels.chime:.85);
  button.addEventListener('click',async()=>{status.textContent='';status.dataset.error='false';if(DisplayAudio.getState().enabled){DisplayAudio.disable();status.textContent='الصوت متوقف.';}else{await DisplayAudio.enable();if(DisplayAudio.getState().enabled&&!status.textContent)status.textContent='الموسيقى مستمرة، والتنبيه يعمل عند دخول رقم جديد للكشف.';}});
  function saveLevels(){DisplayAudio.setVolumes(Number(musicSlider.value)/100,Number(chimeSlider.value)/100);try{localStorage.setItem('clinic_display_audio_volumes',JSON.stringify({music:Number(musicSlider.value)/100,chime:Number(chimeSlider.value)/100}))}catch(e){}}
  musicSlider.addEventListener('input',saveLevels);chimeSlider.addEventListener('input',saveLevels);
