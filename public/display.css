@@ -6,3 +6,5 @@ html:has(.queue-display){height:100%;overflow:hidden}.queue-display{height:100vh
 
 .display-current h2,.display-next-title h2{line-height:1.5}
 @media(max-height:450px){.display-wrap{gap:3px}.display-header p{line-height:1.15}.display-header h1{margin:0;line-height:1.2}.display-audio-panel[open]{display:grid;grid-template-columns:1fr 2fr;column-gap:10px;align-items:center}.display-audio-panel[open] .display-audio-levels{margin:0;gap:8px}.display-audio-panel[open] .hint{grid-column:1/-1;line-height:1.15}.display-audio-levels input{height:12px;margin:0}.display-grid .card{padding:5px}.display-current{gap:2px}.current{font-size:min(40cqh,calc(115cqw / var(--ticket-digits,2)))}.display-next{gap:2px}.display-count{padding:2px 6px}.waiting{gap:2px}.waiting span{font-size:min(4vw,8cqh);padding:0;line-height:1.2}}
+
+.waiting{grid-template-columns:minmax(0,1fr);grid-template-rows:minmax(0,1fr)}.waiting span{font-size:clamp(20px,min(18vw,35cqh),360px);line-height:1.2}
