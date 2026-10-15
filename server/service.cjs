@@ -1,6 +1,7 @@
 const perms=require('./permissions.cjs'),management=require('./management.cjs');
 const core=require('./core.cjs');
 const features=require('./clinic-features.cjs');
+const imports=require('./data-import.cjs');
 function createService(baseAdapter) {
  return async function handle(input,uid,client='local') {
   const {action}=input||{};
@@ -8,7 +9,9 @@ function createService(baseAdapter) {
    const next=fn(original);next.audit=[...(next.audit||[]),{at:new Date().toISOString(),actor:uid,actorName:original.roles?.[uid]?.displayName||original.roles?.[uid]?.u,action,target:input.uid,paths:action==='patch'?Object.keys(input.updates||{}).map(p=>p.split('/')[0]):undefined}].slice(-2000);return next;
   })};
   const readFields=(fields,day=null,entity=null)=>adapter.readFields?adapter.readFields(fields,day,entity):adapter.read();
-  if(action==='exportData'){const s=await adapter.read();perms.requirePermission(core.role(s,uid),'data.export');return {exportedAt:new Date().toISOString(),bookings:s.bookings||{},settings:s.settings||{},roles:s.roles||{},patients:s.patients||{},files:s.files||{},complaints:s.complaints||{},inbox:s.inbox||{}};}
+  if(action==='importPreview'){const plan=imports.prepare(await adapter.read(),uid,input.data,input.options);return {summary:plan.summary,token:plan.token};}
+  if(action==='importApply'){if(input.confirmation!=='IMPORT_CLINIC_DATA'||typeof input.previewToken!=='string')core.fail('راجع المعاينة وأكد الاستيراد أولًا');let summary;await adapter.mutate(s=>{const plan=imports.prepare(s,uid,input.data,input.options);if(plan.token!==input.previewToken)core.fail('تغيرت بيانات العيادة أو الملف منذ المعاينة؛ أعد المعاينة أولًا',409);summary=plan.summary;return plan.state;});return {ok:true,summary};}
+  if(action==='exportData'){const s=await adapter.read();perms.requirePermission(core.role(s,uid),'data.export');return {format:'clinic-backup',schemaVersion:1,exportedAt:new Date().toISOString(),bookings:s.bookings||{},settings:s.settings||{},roles:s.roles||{},patients:s.patients||{},files:s.files||{},complaints:s.complaints||{},inbox:s.inbox||{}};}
   if(action==='lookup'){
    const d=input.date===undefined?core.today():core.date(input.date),p=core.phone(input.phone);if(!/^01[0125]\d{8}$/.test(p))return null;await adapter.limit(client,p);return core.lookup(await (adapter.readLookup?adapter.readLookup(p,d):adapter.read()),p,d);
   }
