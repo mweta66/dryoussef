@@ -1,14 +1,26 @@
 const perms=require('./permissions.cjs'),management=require('./management.cjs');
 const core=require('./core.cjs');
+const features=require('./clinic-features.cjs');
 function createService(baseAdapter) {
  return async function handle(input,uid,client='local') {
   const {action}=input||{};
   const adapter={...baseAdapter,mutate:fn=>baseAdapter.mutate(original=>{
    const next=fn(original);next.audit=[...(next.audit||[]),{at:new Date().toISOString(),actor:uid,actorName:original.roles?.[uid]?.displayName||original.roles?.[uid]?.u,action,target:input.uid,paths:action==='patch'?Object.keys(input.updates||{}).map(p=>p.split('/')[0]):undefined}].slice(-2000);return next;
   })};
+  const readFields=(fields,day=null,entity=null)=>adapter.readFields?adapter.readFields(fields,day,entity):adapter.read();
   if(action==='exportData'){const s=await adapter.read();perms.requirePermission(core.role(s,uid),'data.export');return {exportedAt:new Date().toISOString(),bookings:s.bookings||{},settings:s.settings||{},roles:s.roles||{},patients:s.patients||{},files:s.files||{},complaints:s.complaints||{},inbox:s.inbox||{}};}
   if(action==='lookup'){
-   await adapter.limit(client);const d=input.date===undefined?core.today():core.date(input.date);return core.lookup(await adapter.read(),input.phone,d);
+   const d=input.date===undefined?core.today():core.date(input.date),p=core.phone(input.phone);if(!/^01[0125]\d{8}$/.test(p))return null;await adapter.limit(client,p);return core.lookup(await (adapter.readLookup?adapter.readLookup(p,d):adapter.read()),p,d);
+  }
+  if(action==='publicQueue'){const d=core.date(input.date||core.today());if(!['dmn','alex'].includes(input.branch))core.fail('اختر الفرع');await adapter.limit?.(client,'display:'+input.branch);return features.publicQueue(await (adapter.readDay?adapter.readDay(d):adapter.read()),input.branch,d);}
+  if(action==='followups'){const s=await readFields(['roles','bookings','patients','followupFiles','followups']);return features.followups(s,core.role(s,uid));}
+  if(action==='followupContact'){await adapter.mutate(s=>features.contact(s,uid,input));return {ok:true};}
+  if(action==='systemHealth'||action==='backupDownload'){const s=await readFields(['roles']);perms.requirePermission(core.role(s,uid),'data.export');if(action==='systemHealth')return adapter.systemHealth?adapter.systemHealth():{lastBackup:null,retentionDays:14,errors:[]};const backup=await adapter.latestBackup?.();if(!backup)core.fail('لا توجد نسخة آلية بعد',404);return backup;}
+  if(action==='workspace'){
+   const d=input.date?core.date(input.date):null,fields=['roles','settings','sessions','inbox','bookings'];if(input.tab==='cases')fields.push('patients');if(input.tab==='audit')fields.push('audit');if(input.tab==='deleted')fields.push('deletedBookings');if(input.tab==='followups')fields.push('patients','followupFiles','followups');const s=await readFields(fields,input.tab==='followups'?null:d),r=core.role(s,uid),result={role:perms.normalize(r),settings:s.settings||{},sessions:{},bookings:null};
+   if(perms.can(r,'bookings.read')){result.bookings=core.read(s,uid,d?'bookings/'+d:'bookings');result.sessions=s.sessions||{};}
+   if(input.tab==='users'&&perms.can(r,'users.manage'))result.roles=core.read(s,uid,'roles');if(input.tab==='cases'&&perms.can(r,'patients.read'))result.patients=core.read(s,uid,'patients');
+   if(perms.can(r,'notifications.read'))result.inbox=s.inbox||{};if(input.tab==='audit'&&perms.can(r,'audit.read'))result.audit=s.audit||[];if(input.tab==='deleted'&&perms.can(r,'bookings.delete'))result.deletedBookings=core.read(s,uid,'deletedBookings');if(input.tab==='followups'&&perms.can(r,'followups.read'))result.followups=features.followups(s,r);return result;
   }
   if(action==='sessionSet'){
    await adapter.mutate(original=>{const s=structuredClone(original),r=core.role(s,uid);perms.requirePermission(r,'sessions.manage');const d=core.date(input.date),b=input.branch;
@@ -32,7 +44,7 @@ function createService(baseAdapter) {
    const bookings=Object.values(s.bookings||{}).flatMap(Object.values).filter(x=>x.date>=from&&x.date<=to&&(b==='all'||x.b===b)).sort((a,z)=>a.date.localeCompare(z.date)||a.b.localeCompare(z.b)||a.no-z.no).map(({id,name,phone,date,b,no,v,s,startedAt})=>({id,name,phone,date,b,no,v,s,startedAt}));
    const phones=new Set(bookings.map(x=>x.phone));return {from,to,branch:b,generatedAt:new Date().toISOString(),site:s.settings?.site||{},avg:s.settings?.avg||15,bookings,files:perms.can(r,'notes.read')?Object.fromEntries(Object.entries(s.files||{}).filter(([p])=>phones.has(p))):{},complaints:perms.can(r,'complaints.read')?Object.fromEntries(Object.entries(s.complaints||{}).filter(([p])=>phones.has(p))):{}};
   }
-  if(action==='get')return core.read(await adapter.read(),uid,input.path);
+  if(action==='get'){const root=String(input.path||'').split('/')[0],entity=['files','complaints'].includes(root)?input.path.split('/')[1]||null:null,fields=root==='settings'?['settings']:root==='patients'?['roles','patients']:['roles',root],d=root==='bookings'&&input.path.split('/')[1]?core.date(input.path.split('/')[1]):null;return core.read(await readFields(fields,d,entity),uid,input.path);}
   if(action==='commit') {
    let result;
    await adapter.mutate(state=>{result=core.commit(state,uid,input.puts,input.dels);return result.state});

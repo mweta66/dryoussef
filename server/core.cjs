@@ -32,23 +32,24 @@ function booking(n) {
  return {id:id(n.id),name,phone:p,b:n.b,v:n.v,s:n.s||'wait',date:date(n.date),nt};
 }
 function queueOrder(a,b){const rank=x=>x.s==='exam'?0:x.s==='wait'?(x.v==='emergency'?1:2):3;return rank(a)-rank(b)||a.no-b.no;}
-function queueTrack(state,list,x,clock=Date.now()){
- const ordered=list.filter(y=>y.b===x.b).sort(queueOrder),active=ordered.find(y=>y.s==='exam'),waiting=ordered.filter(y=>y.s==='wait');
- const avg=Math.max(1,Math.min(180,Number(state.settings?.avg)||15)),index=Math.max(0,waiting.findIndex(y=>y.id===x.id));
+function queueTrack(state,list,x,clock=Date.now(),prepared){
+ const ordered=prepared?.ordered||list.filter(y=>y.b===x.b).sort(queueOrder),active=prepared?prepared.active:ordered.find(y=>y.s==='exam'),waiting=prepared?.waiting||ordered.filter(y=>y.s==='wait');
+ const avg=Math.max(1,Math.min(180,Number(state.settings?.avg)||15)),index=Math.max(0,prepared?prepared.positions.get(x.id)??0:waiting.findIndex(y=>y.id===x.id));
  const session=state.sessions?.[x.date+'_'+x.b],blocked=session&&session.status!=='running';
- const started=!blocked&&active&&x.date===today(new Date(clock))&&Number.isFinite(Date.parse(active.startedAt)),remaining=started?Math.max(0,avg*60000-(clock-Date.parse(active.startedAt))):avg*60000;
+ const started=!blocked&&active&&(prepared?prepared.isToday:x.date===today(new Date(clock)))&&Number.isFinite(Date.parse(active.startedAt)),remaining=started?Math.max(0,avg*60000-(clock-Date.parse(active.startedAt))):avg*60000;
  const delay=x.s==='wait'?(active?remaining:0)+index*avg*60000:0;
  return {date:x.date,no:x.no,s:x.s,b:x.b,v:x.v,sessionStatus:session?.status||'not_started',ahead:x.s==='wait'?index+(active?1:0):0,avg,queueStarted:!!started,estimatedWaitMinutes:started?Math.ceil(delay/60000):null,expectedAt:started?(x.s==='exam'?active.startedAt:x.s==='wait'?new Date(clock+delay).toISOString():null):null};
 }
 function rebuild(state) {
- state.track={};
+ state.track={};const clock=Date.now(),currentDay=today(new Date(clock));
  for(const [d,rows] of Object.entries(state.bookings||{})){
   const list=Object.values(rows||{});
   for(const b of BRANCHES) {
    const q=list.filter(x=>x.b===b).sort(queueOrder);
+   const waiting=q.filter(x=>x.s==='wait'),prepared={ordered:q,active:q.find(x=>x.s==='exam'),waiting,positions:new Map(waiting.map((x,i)=>[x.id,i])),isToday:d===currentDay};
    for(const x of q){
     state.track[d]||={};
-    state.track[d][x.phone]=queueTrack(state,list,x);
+    state.track[d][x.phone]=queueTrack(state,list,x,clock,prepared);
    }
   }
  }
