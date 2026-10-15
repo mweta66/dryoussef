@@ -74,7 +74,7 @@ function createService(baseAdapter) {
    });return {ok:true};
   }
   if(['siteSave','userSave','patientSave','patientDelete','dataClear'].includes(action)){await adapter.mutate(s=>management.mutate(s,uid,input,core));return {ok:true};}
-  if(action==='userPassword'){perms.requirePermission(core.role(await adapter.read(),uid),'users.manage');if(!input.uid||typeof input.password!=='string'||input.password.length<6||input.password.length>128)core.fail('كلمة السر من 6 إلى 128 حرفاً');if(!(await adapter.read()).roles?.[input.uid])core.fail('المستخدم غير موجود',404);await adapter.updateUser(input.uid,input.password);return {ok:true};}
+  if(action==='userPassword'){const state=await adapter.read();perms.requirePermission(core.role(state,uid),'users.manage');if(!input.uid||typeof input.password!=='string'||input.password.length<6||input.password.length>128)core.fail('كلمة السر من 6 إلى 128 حرفاً');const target=state.roles?.[input.uid];if(!target)core.fail('المستخدم غير موجود',404);await adapter.updateUser(input.uid,input.password);return {ok:true,username:target.u,enabled:target.enabled!==false};}
   if(action==='userCredentials'){
    const state=await adapter.read();perms.requirePermission(core.role(state,uid),'users.manage');const old=state.roles?.[input.uid];if(!old)core.fail('المستخدم غير موجود',404);
    const username=String(input.username||'').trim().toLowerCase(),password=input.password||'';

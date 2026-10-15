@@ -54,7 +54,7 @@ function openForm(title,fields,fn){var h='<div class="ov" onclick="if(event.targ
   if(f.t==="select")h+='<select id="f_'+f.k+'">'+f.o.map(function(o){return'<option value="'+o[0]+'"'+(o[0]==v?' selected':'')+'>'+o[1]+'</option>'}).join("")+'</select>';
   else if(f.t==="area")h+='<textarea id="f_'+f.k+'" rows="2">'+esc(v)+'</textarea>';
   else if(f.t==="days")h+='<div class="days">'+DAYS.map(function(n,i){return'<label><input type="checkbox" class="dd" value="'+i+'"'+(v.indexOf(i)>=0?' checked':'')+'>'+n+'</label>'}).join("")+'</div>';
-  else h+='<input id="f_'+f.k+'" type="'+(f.t||"text")+'" value="'+esc(v)+'">'});
+  else h+='<input id="f_'+f.k+'" type="'+(f.t||"text")+'" '+(f.t==="password"?'autocomplete="new-password"':'autocapitalize="none"')+' value="'+esc(v)+'">'});
  h+='<div id="fe" class="err" role="alert"></div><div class="acts" style="margin-top:14px"><button class="btn sm" onclick="doSave()">حفظ</button><button class="btn sm x" onclick="closeM()">إلغاء</button></div></div></div>';
  modalReturn=document.activeElement;M=fn;FF=fields;document.getElementById("modal").innerHTML=h;document.body.classList.add("modal-open");document.getElementById("app").inert=true;document.querySelector(".hero").inert=true;document.querySelector(".mod input,.mod select,.mod button").focus()}
 var modalReturn=null,saving=false;
@@ -80,7 +80,7 @@ async function authCall(ep,body){
  else if(ep==='update'){path='/user';method='PUT';payload={password:body.password};headers.Authorization='Bearer '+body.idToken}
  else throw new Error('عملية دخول غير مدعومة');
  var response=await request(CONFIG.supabaseUrl+'/auth/v1'+path,{method:method,headers:headers,body:JSON.stringify(payload)}),data=await response.json();
- if(!response.ok)throw new Error(data.msg||data.error_description||data.message||'NOAUTH');
+ if(!response.ok){var authError=new Error(data.msg||data.error_description||data.message||'NOAUTH');authError.status=response.status;throw authError;}
  if(ep==='update'){var fresh=await authCall('refresh',{refresh_token:AUTH.refresh});return fresh}return authResult(data);
 }
 var refreshFlight=null;
@@ -110,14 +110,14 @@ function modalOpen(){return !!document.getElementById("modal").innerHTML}
 function staff(){if(me)return me.role==="doctor"?doctor():me.role==="nurse"?nurse():secretary();
  return '<h2>'+ic("lock",20)+'دخول الطاقم</h2><label for="u">اسم المستخدم</label><input id="u" autocomplete="username" autocapitalize="none"><label for="pw">كلمة السر</label><input id="pw" type="password" autocomplete="current-password" onkeydown="if(event.key===\'Enter\')login()"><button class="btn" id="lb" onclick="login()">دخول</button><div class="err" id="le" role="alert"></div><p style="text-align:center"><a href="#" style="color:var(--pri)">العودة لواجهة المرضى</a></p>'}
 async function login(){var u=document.getElementById("u").value.trim().toLowerCase(),p=document.getElementById("pw").value,le=document.getElementById("le"),bt=document.getElementById("lb");le.textContent="";if(!u||!p){le.textContent="اكتب اسم المستخدم وكلمة السر";return}
- bt.disabled=true;
+ bt.disabled=true;var passwordAccepted=false;
  try{var j=await authCall("signInWithPassword",{email:u+DOM,password:p,returnSecureToken:true});
   AUTH={idToken:j.idToken,refresh:j.refreshToken,uid:j.localId,exp:Date.now()+(+j.expiresIn)*1000};saveAuth();
-  var r=await jget("roles/"+AUTH.uid,true);
+  passwordAccepted=true;var r=await jget("roles/"+AUTH.uid,true);
   if(!r||(!["admin","doctor","sec","nurse","staff"].includes(r.r))){AUTH=null;saveAuth();le.textContent="هذا الحساب ليس له صلاحية دخول";bt.disabled=false;return}
   me={u:r.u||u,role:r.r,br:r.br,scope:r.scope,permissions:r.permissions};try{sessionStorage.setItem("me",JSON.stringify(me))}catch(e){}
   F.d=today();SD=today();if(me.role==="admin"){openAdmin();return}if(adminPage()){location.replace("index.html#staff");return}render()}
- catch(e){AUTH=null;me=null;saveAuth();try{sessionStorage.removeItem("me")}catch(_){}le.textContent=/NETWORK|fetch|Abort|timeout/i.test(e.message)?"تعذر الاتصال بالإنترنت":"بيانات الدخول غير صحيحة";bt.disabled=false}}
+ catch(e){AUTH=null;me=null;saveAuth();try{sessionStorage.removeItem("me")}catch(_){}le.textContent=passwordAccepted?(/NOAUTH/.test(e.message)?"كلمة المرور صحيحة، لكن الحساب متوقف أو غير مصرح له بالدخول. تواصل مع الأدمن.":"تم التحقق من كلمة المرور، لكن تعذر تحميل صلاحيات الحساب. حاول مجددًا بعد لحظة."):/NETWORK|fetch|Abort|timeout/i.test(e.message)?"تعذر الاتصال بالإنترنت":e.status===429?"محاولات دخول كثيرة. انتظر قليلًا ثم حاول مجددًا.":e.status>=500?"خدمة تسجيل الدخول غير متاحة مؤقتًا. حاول بعد لحظة.":"بيانات الدخول غير صحيحة";bt.disabled=false}}
 function logout(){var previous=AUTH;if(previous&&!CONFIG.demo)signOutSupabase(previous.idToken);PT=null;SEL="";CL=[];INBOX={};gotFirst=false;document.title=TITLE0;dataEpoch++;rtok++;shown++;me=null;AUTH=null;saveAuth();try{sessionStorage.removeItem("me")}catch(e){}S.bk=[];if(adminPage()){location.replace("index.html");return}if(location.hash)go("patient");else render()}
 function patient(){return '<p class="sub">أدخل رقم الهاتف المسجل عند الحجز لمتابعة دورك</p><label for="ph">رقم الهاتف <b>*</b></label><input id="ph" inputmode="tel" autocomplete="tel" type="tel" dir="ltr" maxlength="20" aria-describedby="phone-help" placeholder="مثال: 01xxxxxxxxx" oninput="chk()" onkeydown="if(event.key===\'Enter\')look()">'+'<button class="btn" id="go" disabled onclick="look()">'+ic("search")+' اعرف دوري</button><p class="hint" id="phone-help">استخدم رقم الهاتف المسجل عند الحجز. يقبل الأرقام العربية ورمز مصر +20.</p><div id="res" role="status" aria-live="polite" aria-atomic="true"></div><div id="brs">'+branches()+'</div>'}
 var shown=0,lastDate=today();
