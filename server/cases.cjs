@@ -39,7 +39,7 @@ function patch(state,r,updates,core){
   if(kind==='files'){
    perms.requirePermission(r,'notes.edit');if(key)fail('غير مصرح',403);
    if(value===null){delete state.files[ph];continue;}
-   if(typeof value?.n!=='string'||value.n.length>5000)fail('الملاحظات طويلة');const next={...state.files[ph],n:value.n,t:new Date().toISOString()};for(const k of ['allergies','chronic','diagnosis','treatment','followUp'])if(value[k]!==undefined){if(typeof value[k]!=='string'||value[k].length>2000)fail('بيانات طبية غير صحيحة');if(k==='followUp'&&value[k])core.date(value[k]);next[k]=value[k];}state.files[ph]=next;continue;
+   if(typeof value?.n!=='string'||value.n.length>5000)fail('الملاحظات طويلة');const next={...state.files[ph],n:value.n,t:new Date().toISOString()};for(const k of ['allergies','chronic','diagnosis','treatment'])if(value[k]!==undefined){if(typeof value[k]!=='string'||value[k].length>2000)fail('بيانات طبية غير صحيحة');next[k]=value[k];}state.files[ph]=next;continue;
   }
   if(kind==='complaints'){
    if(!validId(key))fail('معرّف غير صحيح');const rows=state.complaints[ph]||={},old=rows[key];

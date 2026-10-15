@@ -13,20 +13,22 @@ function createService(baseAdapter) {
   if(action==='lookup'){
    const d=input.date===undefined?core.today():core.date(input.date),p=core.phone(input.phone);if(!/^01[0125]\d{8}$/.test(p))return null;await adapter.limit(client,p);return core.lookup(await (adapter.readLookup?adapter.readLookup(p,d):adapter.read()),p,d);
   }
+  if(action==='lookupHistory'){const p=core.phone(input.phone);if(!/^01[0125]\d{8}$/.test(p))return [];await adapter.limit(client,p);const s=await(adapter.readHistory?adapter.readHistory(p):adapter.read());return Object.entries(s.bookings||{}).flatMap(([d,rows])=>Object.values(rows).filter(x=>core.phone(x.phone)===p).map(x=>({date:d,no:x.no,b:x.b,s:x.s}))).sort((a,b)=>b.date.localeCompare(a.date));}
   if(action==='publicQueue'){const d=core.date(input.date||core.today());if(!['dmn','alex'].includes(input.branch))core.fail('اختر الفرع');await adapter.limit?.(client,'display:'+input.branch);return features.publicQueue(await (adapter.readDay?adapter.readDay(d):adapter.read()),input.branch,d);}
-  if(action==='followups'){const s=await readFields(['roles','bookings','patients','followupFiles','followups']);return features.followups(s,core.role(s,uid));}
-  if(action==='followupContact'){await adapter.mutate(s=>features.contact(s,uid,input));return {ok:true};}
+  if(action==='followups'||action==='followupContact')core.fail('تم إلغاء مواعيد المتابعة',410);
   if(action==='systemHealth'||action==='backupDownload'){const s=await readFields(['roles']);perms.requirePermission(core.role(s,uid),'data.export');if(action==='systemHealth')return adapter.systemHealth?adapter.systemHealth():{lastBackup:null,retentionDays:14,errors:[]};const backup=await adapter.latestBackup?.();if(!backup)core.fail('لا توجد نسخة آلية بعد',404);return backup;}
   if(action==='workspace'){
-   const d=input.date?core.date(input.date):null,fields=['roles','settings','sessions','inbox','bookings'];if(input.tab==='cases')fields.push('patients');if(input.tab==='audit')fields.push('audit');if(input.tab==='deleted')fields.push('deletedBookings');if(input.tab==='followups')fields.push('patients','followupFiles','followups');const s=await readFields(fields,input.tab==='followups'?null:d),r=core.role(s,uid),result={role:perms.normalize(r),settings:s.settings||{},sessions:{},bookings:null};
-   if(perms.can(r,'bookings.read')){result.bookings=core.read(s,uid,d?'bookings/'+d:'bookings');result.sessions=s.sessions||{};}
+   const d=input.date?core.date(input.date):null,fields=['roles','settings','sessions','inbox','bookings'];if(input.tab==='cases')fields.push('patients');if(input.tab==='audit')fields.push('audit');if(input.tab==='deleted')fields.push('deletedBookings');const s=await readFields(fields,d),r=core.role(s,uid),result={role:perms.normalize(r),settings:s.settings||{},sessions:{},bookings:null};
+   if(perms.can(r,'bookings.read')){result.bookings=core.read(s,uid,d?'bookings/'+d:'bookings');result.sessions={...s.sessions};const present=core.presence(s,core.today());if(present)result.sessions[core.today()+'_presence']={...s.sessions?.[core.today()+'_presence'],branch:present};}
    if(input.tab==='users'&&perms.can(r,'users.manage'))result.roles=core.read(s,uid,'roles');if(input.tab==='cases'&&perms.can(r,'patients.read'))result.patients=core.read(s,uid,'patients');
-   if(perms.can(r,'notifications.read'))result.inbox=s.inbox||{};if(input.tab==='audit'&&perms.can(r,'audit.read'))result.audit=s.audit||[];if(input.tab==='deleted'&&perms.can(r,'bookings.delete'))result.deletedBookings=core.read(s,uid,'deletedBookings');if(input.tab==='followups'&&perms.can(r,'followups.read'))result.followups=features.followups(s,r);return result;
+   if(perms.can(r,'notifications.read'))result.inbox=s.inbox||{};if(input.tab==='audit'&&perms.can(r,'audit.read'))result.audit=s.audit||[];if(input.tab==='deleted'&&perms.can(r,'bookings.delete'))result.deletedBookings=core.read(s,uid,'deletedBookings');return result;
   }
+  if(action==='presenceSet'){await adapter.mutate(original=>{const s=structuredClone(original),r=core.role(s,uid);perms.requirePermission(r,'sessions.manage');const d=core.today(),b=input.branch;if(!['dmn','alex'].includes(b)||!perms.allBranches(r)&&r.br!==b)core.fail('غير مصرح لهذا الفرع',403);const previous=s.sessions?.[d+'_presence']?.branch;if(previous===b)return s;core.assertExamine({...s,sessions:Object.fromEntries(Object.entries(s.sessions||{}).filter(([key])=>key!==d+'_presence'))},d,b);s.sessions||={};s.sessions[d+'_presence']={branch:b,selectedAt:new Date().toISOString()};return s;});return {ok:true};}
   if(action==='sessionSet'){
    await adapter.mutate(original=>{const s=structuredClone(original),r=core.role(s,uid);perms.requirePermission(r,'sessions.manage');const d=core.date(input.date),b=input.branch;
     if(d!==core.today()||!['dmn','alex'].includes(b)||!['running','paused','ended'].includes(input.status))core.fail('راجع تاريخ وفرع وحالة جلسة الكشف');if(!perms.allBranches(r)&&r.br!==b)core.fail('غير مصرح',403);
     s.sessions||={};const key=d+'_'+b,old=s.sessions[key]||{},now=new Date().toISOString(),rows=Object.values(s.bookings?.[d]||{}).filter(x=>x.b===b),active=rows.find(x=>x.s==='exam');
+    if(input.status==='running'){core.assertExamine(s,d,b);s.sessions[d+'_presence']={branch:b,selectedAt:new Date().toISOString()};}
     if(old.status===input.status)return s;
     if(input.status==='running'){
      if(active&&!Number.isFinite(Date.parse(active.startedAt))){active.startedAt=now;active.rev=(active.rev||0)+1;}

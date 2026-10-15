@@ -32,10 +32,13 @@ function booking(n) {
  return {id:id(n.id),name,phone:p,b:n.b,v:n.v,s:n.s||'wait',date:date(n.date),nt};
 }
 function queueOrder(a,b){const rank=x=>x.s==='exam'?0:x.s==='wait'?(x.v==='emergency'?1:2):3;return rank(a)-rank(b)||a.no-b.no;}
+function presence(state,d){const selected=state.sessions?.[d+'_presence']?.branch;if(selected)return selected;const branches=new Set(Object.values(state.bookings?.[d]||{}).filter(x=>x.s==='exam').map(x=>x.b));for(const b of BRANCHES)if(state.sessions?.[d+'_'+b]?.status==='running')branches.add(b);return branches.size===1?[...branches][0]:null;}
+function canExamine(state,d,b){return (!presence(state,d)||presence(state,d)===b)&&!Object.values(state.bookings?.[d]||{}).some(x=>x.b!==b&&x.s==='exam')&&!Object.entries(state.sessions||{}).some(([key,x])=>key.startsWith(d+'_')&&key!==d+'_'+b&&x.status==='running');}
+function assertExamine(state,d,b){if(!canExamine(state,d,b))fail('الطبيب متواجد أو لديه جلسة كشف في الفرع الآخر. أنهِ الجلسة الحالية وحدد فرع التواجد أولًا.',409);}
 function queueTrack(state,list,x,clock=Date.now(),prepared){
  const ordered=prepared?.ordered||list.filter(y=>y.b===x.b).sort(queueOrder),active=prepared?prepared.active:ordered.find(y=>y.s==='exam'),waiting=prepared?.waiting||ordered.filter(y=>y.s==='wait');
  const avg=Math.max(1,Math.min(180,Number(state.settings?.avg)||15)),index=Math.max(0,prepared?prepared.positions.get(x.id)??0:waiting.findIndex(y=>y.id===x.id));
- const session=state.sessions?.[x.date+'_'+x.b],blocked=session&&session.status!=='running';
+ const selected=prepared?prepared.presence:presence(state,x.date),session=state.sessions?.[x.date+'_'+x.b],blocked=(session&&session.status!=='running')||(selected&&selected!==x.b);
  const started=!blocked&&active&&(prepared?prepared.isToday:x.date===today(new Date(clock)))&&Number.isFinite(Date.parse(active.startedAt)),remaining=started?Math.max(0,avg*60000-(clock-Date.parse(active.startedAt))):avg*60000;
  const delay=x.s==='wait'?(active?remaining:0)+index*avg*60000:0;
  return {date:x.date,no:x.no,s:x.s,b:x.b,v:x.v,sessionStatus:session?.status||'not_started',ahead:x.s==='wait'?index+(active?1:0):0,avg,queueStarted:!!started,estimatedWaitMinutes:started?Math.ceil(delay/60000):null,expectedAt:started?(x.s==='exam'?active.startedAt:x.s==='wait'?new Date(clock+delay).toISOString():null):null};
@@ -43,10 +46,10 @@ function queueTrack(state,list,x,clock=Date.now(),prepared){
 function rebuild(state) {
  state.track={};const clock=Date.now(),currentDay=today(new Date(clock));
  for(const [d,rows] of Object.entries(state.bookings||{})){
-  const list=Object.values(rows||{});
+  const list=Object.values(rows||{}),selected=presence(state,d);
   for(const b of BRANCHES) {
    const q=list.filter(x=>x.b===b).sort(queueOrder);
-   const waiting=q.filter(x=>x.s==='wait'),prepared={ordered:q,active:q.find(x=>x.s==='exam'),waiting,positions:new Map(waiting.map((x,i)=>[x.id,i])),isToday:d===currentDay};
+   const waiting=q.filter(x=>x.s==='wait'),prepared={presence:selected,ordered:q,active:q.find(x=>x.s==='exam'),waiting,positions:new Map(waiting.map((x,i)=>[x.id,i])),isToday:d===currentDay};
    for(const x of q){
     state.track[d]||={};
     state.track[d][x.phone]=queueTrack(state,list,x,clock,prepared);
@@ -82,14 +85,15 @@ function commit(state, uid, puts, dels, now=today()) {
   if(old&&['name','phone','v','nt','date','b'].some(k=>n[k]!==old[k]))perms.requirePermission(r,'bookings.edit');
   const otherActive=Object.values(state.bookings[n.date]||{}).find(x=>x.b===n.b&&x.s==='exam');
   const sessionKey=n.date+'_'+n.b,session=state.sessions?.[sessionKey];
-  if(n.v==='emergency'&&(!old||old.v!=='emergency'||old.date!==n.date)){perms.requirePermission(r,'bookings.status');if(n.date!==now)fail('حجز الطوارئ متاح لليوم الحالي فقط');n.s=otherActive||!session||session.status!=='running'?'wait':'exam';}
+  if(n.v==='emergency'&&(!old||old.v!=='emergency'||old.date!==n.date)){perms.requirePermission(r,'bookings.status');if(n.date!==now)fail('حجز الطوارئ متاح لليوم الحالي فقط');n.s=otherActive||!session||session.status!=='running'||!canExamine(state,n.date,n.b)?'wait':'exam';}
+  if(n.s==='exam')assertExamine(state,n.date,n.b);
   if(n.s==='exam'&&!session)perms.requirePermission(r,'sessions.manage');
   if(n.s==='exam'&&session&&session.status!=='running')fail('جلسة الكشف متوقفة؛ اطلب من الطبيب بدء العيادة أولًا',409);
   if(!old&&n.s!=='wait')perms.requirePermission(r,'bookings.status');
   if(n.s==='exam'&&otherActive)fail('يوجد كشف جاري بالفعل. أنهِ الحالة الحالية أولًا.',409);
   if(n.s==='exam'&&old?.s!=='exam'&&n.date!==now)fail('بدء الكشف متاح لليوم الحالي فقط');
   if(n.s==='exam')n.startedAt=old?.s==='exam'&&old.startedAt?old.startedAt:new Date().toISOString();else if(old?.startedAt)n.startedAt=old.startedAt;
-  if(n.s==='exam'){state.sessions||={};state.sessions[sessionKey]||={status:'running',startedAt:n.startedAt};state.sessions[sessionKey].startedAt||=n.startedAt;}
+  if(n.s==='exam'){state.sessions||={};state.sessions[n.date+'_presence']={branch:n.b};state.sessions[sessionKey]||={status:'running',startedAt:n.startedAt};state.sessions[sessionKey].startedAt||=n.startedAt;}
   if(old&&n.s!==old.s)perms.requirePermission(r,'bookings.status');
   if(old&&n.s===old.s)perms.requirePermission(r,'bookings.edit');
   for(const rows of Object.values(state.bookings))if(rows?.[n.id])fail('معرّف الحجز موجود بالفعل',409);
@@ -104,7 +108,7 @@ function commit(state, uid, puts, dels, now=today()) {
   rows[n.id]=n;
   if(old?.s==='exam'&&n.s==='wait'&&old.date===n.date&&old.b===n.b)advance.delete(old.date+'_'+old.b);
  }
- for(const key of advance){const d=key.slice(0,10),b=key.slice(11);if(d!==now||state.sessions?.[key]&&state.sessions[key].status!=='running')continue;const list=Object.values(state.bookings[d]||{}).filter(x=>x.b===b);if(list.some(x=>x.s==='exam'))continue;const next=list.filter(x=>x.s==='wait').sort(queueOrder)[0];if(next){next.s='exam';next.startedAt=new Date().toISOString();next.rev=(next.rev||0)+1;}}
+ for(const key of advance){const d=key.slice(0,10),b=key.slice(11);if(!canExamine(state,d,b)||d!==now||state.sessions?.[key]&&state.sessions[key].status!=='running')continue;const list=Object.values(state.bookings[d]||{}).filter(x=>x.b===b);if(list.some(x=>x.s==='exam'))continue;const next=list.filter(x=>x.s==='wait').sort(queueOrder)[0];if(next){next.s='exam';next.startedAt=new Date().toISOString();next.rev=(next.rev||0)+1;}}
  rebuild(state);cases.indexPatients(state);return {state};
 }
 function read(state,uid,path) {
@@ -157,6 +161,6 @@ function lookup(state,p,now=today(),clock=Date.now()) {
  const x=Object.values(state.bookings?.[now]||{}).find(x=>x.phone===p);
  if(!x)return null;return queueTrack(state,Object.values(state.bookings[now]||{}),x,clock);
 }
-export {phone,today,date,role,booking,commit,read,patch,lookup,rebuild,fail,schedule,queueOrder,queueTrack};
+export {presence,canExamine,assertExamine,phone,today,date,role,booking,commit,read,patch,lookup,rebuild,fail,schedule,queueOrder,queueTrack};
 
-const api={phone,today,date,role,booking,commit,read,patch,lookup,rebuild,fail,schedule,queueOrder,queueTrack};
+const api={presence,canExamine,assertExamine,phone,today,date,role,booking,commit,read,patch,lookup,rebuild,fail,schedule,queueOrder,queueTrack};
