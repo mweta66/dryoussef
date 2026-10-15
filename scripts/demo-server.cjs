@@ -62,7 +62,7 @@ const server=http.createServer(async(req,res)=>{
     }
     return json(res,400,{error:'Unsupported action'});
    }
-   const publicAction=input.action==='lookup'||input.action==='publicQueue'||input.action==='get'&&input.path==='settings';
+   const publicAction=input.action==='lookupHistory'||input.action==='lookup'||input.action==='publicQueue'||input.action==='get'&&input.path==='settings';
    if(!publicAction&&(!active||active.exp<Date.now()))return json(res,401,{error:'NOAUTH'});
    return json(res,200,{data:await handle(input,active?.uid,req.socket.remoteAddress)});
   }

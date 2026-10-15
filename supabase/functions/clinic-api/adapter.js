@@ -3,7 +3,7 @@ export function supabaseAdapter(url,secret,fetcher=fetch){
  if(!url||!secret)throw Error('Supabase server configuration is missing');
  const base=url.replace(/\/$/,'');
  async function call(path,options={},token=secret){
-  const safeRead=!options.method||options.method==='GET'||['clinic_session_active','clinic_read_slice','clinic_read_day','clinic_health_metadata'].some(name=>path==='/rest/v1/rpc/'+name);
+  const safeRead=!options.method||options.method==='GET'||['clinic_session_active','clinic_read_slice','clinic_read_day','clinic_patient_history','clinic_health_metadata'].some(name=>path==='/rest/v1/rpc/'+name);
   let response;
   for(let attempt=0;attempt<(safeRead?2:1);attempt++){
    try{response=await fetcher(base+path,{...options,signal:AbortSignal.timeout(safeRead?4500:10000),headers:{apikey:secret,Authorization:'Bearer '+token,'Content-Type':'application/json',...options.headers}})}catch(e){if(safeRead&&attempt<1){await new Promise(r=>setTimeout(r,250));continue}const err=new Error('انقطع الاتصال مؤقتًا. حاول مجددًا بعد لحظة.');err.status=503;throw err}
@@ -24,6 +24,7 @@ export function supabaseAdapter(url,secret,fetcher=fetch){
  return {
   read:async()=> (await snapshot()).payload,
   readFields:async(fields,day=null,entity=null)=>rpc('clinic_read_slice',{fields,selected_day:day,entity}),
+  readHistory:async p=>rpc('clinic_patient_history',{patient_phone:p}),
   readDay:async day=>rpc('clinic_read_day',{selected_day:day}),
   readLookup:async(p,day)=>rpc('clinic_read_day',{selected_day:day,patient_phone:p}),
   systemHealth:async()=>rpc('clinic_health_metadata',{}),

@@ -76,3 +76,5 @@ body.modal-open{overflow:hidden}
 #notice:not(:empty){position:fixed;inset:auto 16px 18px;z-index:1000;width:max-content;max-width:calc(100% - 32px);margin:auto;padding:14px 20px;border:1px solid var(--line);border-radius:12px;box-shadow:0 6px 28px #0003;color:var(--ink);font-weight:700;white-space:pre-wrap}#notice[data-kind="success"]{border-color:#218254}#notice[data-kind="error"]{color:var(--bad)}
 
 .btn.g,.btn.r{color:var(--statusink)}.btn.x{background:var(--secondary);color:var(--statusink)}.btn:disabled{background:var(--bar);color:var(--mut);box-shadow:none}.cbtn.em{border-color:var(--bad)}input::placeholder,textarea::placeholder{color:var(--mut);opacity:1}input[type="checkbox"]{accent-color:var(--btn)}label b{color:var(--bad)}
+
+.about-card{background:var(--card);color:var(--ink);border:1px solid var(--acc);border-inline-start:5px solid var(--acc);border-radius:20px;padding:24px;line-height:2.1;box-shadow:0 8px 24px #10223b0c;margin:0 0 24px;text-align:start}
