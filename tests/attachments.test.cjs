@@ -12,7 +12,7 @@ test('nurse uploads private report and doctor views it; lists expose no storage 
  await assert.rejects(f.handle({action:'get',path:'files/'+phone},'nurse'),{status:403});
  for(const uid of [null,'sec','restricted'])await assert.rejects(f.handle({action:'attachmentRead',phone,id:item.id},uid),e=>[401,403].includes(e.status));
  await assert.rejects(f.handle({action:'attachmentDelete',phone,id:item.id},'otherNurse'),{status:403});
- await f.handle({action:'attachmentDelete',phone,id:item.id},'nurse');assert.equal(f.storage.size,0);assert.equal((await f.handle({action:'attachmentList',phone},'doctor')).length,0);
+ await f.handle({action:'attachmentDelete',phone,id:item.id},'nurse');assert.equal(f.storage.size,1);assert.equal((await f.handle({action:'attachmentList',phone},'doctor')).length,0);
 });
 test('attachments reject disguised HTML, oversized/invalid data, missing patients, traversal and excess count',async()=>{
  const f=fixture();for(const input of [{...upload,mime:'image/svg+xml'},{...upload,data:Buffer.from('<html>not an image</html>').toString('base64')},{...upload,data:'A'.repeat(800004)},{...upload,data:'not base64'},{...upload,name:''}])await assert.rejects(f.handle(input,'nurse'),{status:400});

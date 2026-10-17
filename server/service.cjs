@@ -1,3 +1,4 @@
+const history=require('./history.cjs');
 const perms=require('./permissions.cjs'),management=require('./management.cjs');
 const core=require('./core.cjs');
 const features=require('./clinic-features.cjs');
@@ -8,8 +9,11 @@ function createService(baseAdapter) {
  return async function handle(input,uid,client='local') {
   const {action}=input||{};
   const adapter={...baseAdapter,mutate:fn=>baseAdapter.mutate(original=>{
-   const next=fn(original),touchedBranches=[...new Set((input.puts||[]).map(x=>x.n?.b).concat((input.dels||[]).map(x=>x.b)).filter(Boolean))];next.audit=[...(next.audit||[]),{at:new Date().toISOString(),actor:uid,actorName:original.roles?.[uid]?.displayName||original.roles?.[uid]?.u,action,target:input.uid,branch:input.branch||(touchedBranches.length===1?touchedBranches[0]:undefined),branches:touchedBranches,paths:action==='patch'?Object.keys(input.updates||{}).map(p=>p.split('/')[0]):undefined}].slice(-2000);return next;
+   const before=structuredClone(original);return history.record(before,fn(original),input,uid);
   })};
+  if(action==='trashList')return history.list(await adapter.read(),uid,input);
+  if(action==='trashRestore'){await adapter.mutate(s=>history.restore(s,uid,input.id));return {ok:true};}
+  if(action==='auditDetail'){const s=await adapter.read();history.admin(s,uid);const entry=(s.audit||[]).find(x=>x.id===input.id);if(!entry)core.fail('السجل غير موجود',404);return {...entry,changes:s.activityDetails?.[input.id]||[]};}
   if(action==='attachmentExport')return backup.exportImage(adapter,input,uid);
   if(['attachmentList','attachmentUpload','attachmentRead','attachmentDelete'].includes(action))return attachments.handleAttachments(adapter,input,uid);
   const readFields=(fields,day=null,entity=null)=>adapter.readFields?adapter.readFields(fields,day,entity):adapter.read();
@@ -35,7 +39,7 @@ function createService(baseAdapter) {
    if(input.tab==='users'&&perms.can(r,'users.manage'))result.roles=core.read(s,uid,'roles');if(input.tab==='cases'&&perms.can(r,'patients.read'))result.patients=core.read(s,uid,'patients');
    if(perms.can(r,'notifications.read'))result.inbox=core.read(s,uid,'inbox');if(input.tab==='audit'&&perms.can(r,'audit.read'))result.audit=s.audit||[];if(input.tab==='deleted'&&perms.can(r,'bookings.delete'))result.deletedBookings=core.read(s,uid,'deletedBookings');return result;
   }
-  if(action==='presenceSet'){await adapter.mutate(original=>{const s=structuredClone(original),r=core.role(s,uid);perms.requirePermission(r,'sessions.manage');const d=core.today(),b=input.branch;if(!core.branchIds(s,true).includes(b)||!perms.allBranches(r)&&r.br!==b)core.fail('غير مصرح لهذا الفرع',403);const previous=s.sessions?.[d+'_presence']?.branch;if(previous===b)return s;core.assertExamine({...s,sessions:Object.fromEntries(Object.entries(s.sessions||{}).filter(([key])=>key!==d+'_presence'))},d,b);s.sessions||={};s.sessions[d+'_presence']={branch:b,selectedAt:new Date().toISOString()};return s;});return {ok:true};}
+  if(action==='presenceSet'){await adapter.mutate(original=>{const s=structuredClone(original),r=core.role(s,uid);perms.requirePermission(r,'sessions.manage');const d=core.today(),b=input.branch;if(!core.branchIds(s,true).includes(b)||!perms.allBranches(r)&&r.br!==b)core.fail('غير مصرح لهذا الفرع',403);const previous=s.sessions?.[d+'_presence']?.branch;core.assertExamine({...s,sessions:Object.fromEntries(Object.entries(s.sessions||{}).filter(([key])=>key!==d+'_presence'))},d,b);s.sessions||={};s.sessions[d+'_presence']={branch:b,selectedAt:new Date().toISOString(),source:'manual'};return s;});return {ok:true};}
   if(action==='sessionSet'){
    await adapter.mutate(original=>{const s=structuredClone(original),r=core.role(s,uid);perms.requirePermission(r,'sessions.manage');const d=core.date(input.date),b=input.branch;
     if(d!==core.today()||!core.branchIds(s,true).includes(b)||!['running','paused','ended'].includes(input.status))core.fail('راجع تاريخ وفرع وحالة جلسة الكشف');if(!perms.allBranches(r)&&r.br!==b)core.fail('غير مصرح',403);
@@ -86,8 +90,8 @@ function createService(baseAdapter) {
    });return {ok:true};
   }
   if(['siteSave','userSave','patientSave','patientDelete','dataClear'].includes(action)){await adapter.mutate(s=>management.mutate(s,uid,input,core));return {ok:true,...(['patientDelete','dataClear'].includes(action)?{cleanupPending:await cleanup.drain(adapter)}:{})};}
-  if(action==='userRevokeSessions'){const state=await adapter.read();perms.requirePermission(core.role(state,uid),'users.manage');if(!state.roles?.[input.uid])core.fail('المستخدم غير موجود',404);await adapter.revokeUserSessions(input.uid);return {ok:true};}
-  if(action==='userPassword'){const state=await adapter.read();perms.requirePermission(core.role(state,uid),'users.manage');if(!input.uid||typeof input.password!=='string'||input.password.length<6||input.password.length>128)core.fail('كلمة السر من 6 إلى 128 حرفاً');const target=state.roles?.[input.uid];if(!target)core.fail('المستخدم غير موجود',404);try{await adapter.updateUser(input.uid,input.password)}catch(e){if(e.status>=500)core.fail('تعذر تأكيد نتيجة تغيير كلمة السر لحساب '+target.u+'. تحقق من تسجيل الدخول قبل إعادة المحاولة.',503);throw e}let warning='';try{await adapter.revokeUserSessions(input.uid)}catch(e){warning='تم حفظ كلمة السر، لكن تعذر إنهاء الجلسات القديمة. أعد محاولة إنهائها.'}return {ok:true,username:target.u,enabled:target.enabled!==false,warning};}
+  if(action==='userRevokeSessions'){const state=await adapter.read();perms.requirePermission(core.role(state,uid),'users.manage');if(!state.roles?.[input.uid])core.fail('المستخدم غير موجود',404);await adapter.revokeUserSessions(input.uid);await adapter.mutate(s=>structuredClone(s));return {ok:true};}
+  if(action==='userPassword'){const state=await adapter.read();perms.requirePermission(core.role(state,uid),'users.manage');if(!input.uid||typeof input.password!=='string'||input.password.length<6||input.password.length>128)core.fail('كلمة السر من 6 إلى 128 حرفاً');const target=state.roles?.[input.uid];if(!target)core.fail('المستخدم غير موجود',404);try{await adapter.updateUser(input.uid,input.password)}catch(e){if(e.status>=500)core.fail('تعذر تأكيد نتيجة تغيير كلمة السر لحساب '+target.u+'. تحقق من تسجيل الدخول قبل إعادة المحاولة.',503);throw e}let warning='';try{await adapter.revokeUserSessions(input.uid)}catch(e){warning='تم حفظ كلمة السر، لكن تعذر إنهاء الجلسات القديمة. أعد محاولة إنهائها.'}await adapter.mutate(s=>structuredClone(s));return {ok:true,username:target.u,enabled:target.enabled!==false,warning};}
   if(action==='userCredentials'){
    const state=await adapter.read();perms.requirePermission(core.role(state,uid),'users.manage');const old=state.roles?.[input.uid];if(!old)core.fail('المستخدم غير موجود',404);
    const username=String(input.username||'').trim().toLowerCase(),password=input.password||'';
@@ -100,10 +104,12 @@ function createService(baseAdapter) {
    let warning='';try{await adapter.revokeUserSessions(input.uid)}catch(e){warning='تم حفظ بيانات الدخول، لكن تعذر إنهاء الجلسات القديمة. أعد محاولة إنهائها.'}return {ok:true,username,warning};
   }
   if(action==='userDelete'){
-   await adapter.mutate(original=>{const s=structuredClone(original);perms.requirePermission(core.role(s,uid),'users.manage');const target=s.roles?.[input.uid];if(!target)core.fail('المستخدم غير موجود',404);if(input.uid===uid)core.fail('لا يمكنك حذف الحساب المستخدم حاليًا');for(const role of ['admin','doctor'])if(target.r===role&&!Object.entries(s.roles).some(([id,r])=>id!==input.uid&&r.r===role&&r.enabled!==false))core.fail('يجب إبقاء '+(role==='admin'?'مدير':'طبيب')+' فعال');s.roles[input.uid]={...target,enabled:false,deletePending:true};return s;});
-   try{await adapter.deleteUser(input.uid)}catch(e){core.fail('تم إيقاف الحساب، لكن حذف حساب الدخول لم يكتمل. أعد محاولة حذف الحساب لاستكماله.',e.status||503)}
-   await adapter.mutate(original=>{perms.requirePermission(core.role(original,uid),'users.manage');const s=structuredClone(original);if(s.roles?.[input.uid]?.deletePending)delete s.roles[input.uid];return s;});return {ok:true};
+   await adapter.mutate(original=>{const s=structuredClone(original);perms.requirePermission(core.role(s,uid),'users.manage');const target=s.roles?.[input.uid];if(!target)core.fail('المستخدم غير موجود',404);if(input.uid===uid)core.fail('لا يمكنك حذف الحساب المستخدم حاليًا');for(const role of ['admin','doctor'])if(target.r===role&&!Object.entries(s.roles).some(([id,r])=>id!==input.uid&&r.r===role&&r.enabled!==false))core.fail('يجب إبقاء '+(role==='admin'?'مدير':'طبيب')+' فعال');s.roles[input.uid]={...target,enabled:false,deletePending:false,archivedAt:new Date().toISOString()};return s;});
+   // Retain the identity so the administrator can restore access without losing credentials.
+   return {ok:true,archived:true};
   }
+  if(action==='userRestore'){await adapter.mutate(original=>{history.admin(original,uid);const s=structuredClone(original),r=s.roles?.[input.uid];if(!r?.archivedAt)core.fail('الحساب المؤرشف غير موجود',404);r.enabled=true;delete r.archivedAt;delete r.deletePending;return s;});return {ok:true};}
+
   if(action==='userCreate') {
    perms.requirePermission(core.role(await adapter.read(),uid),'users.manage');
    if(!/^[a-z0-9._-]{3,64}$/.test(input.u||'')||typeof input.p!=='string'||input.p.length<6||input.p.length>128||(!input.role&&![...core.branchIds(await adapter.read()),'nurse'].includes(input.br)))core.fail('بيانات الحساب غير صحيحة');

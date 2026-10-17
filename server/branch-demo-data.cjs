@@ -18,6 +18,6 @@ function addBranchDemo(original,uid,count=100){
  }
  s.settings.demoPurged=false;s.settings.demoDatasetVersion=3;
  s.audit.push({action:'seedFourBranchDemo',actor:uid,at:new Date().toISOString(),casesPerBranch:count});
- return core.rebuild(s);
+ return require('./realistic-demo.cjs').realisticDemo(core.rebuild(s));
 }
 module.exports={addBranchDemo};
