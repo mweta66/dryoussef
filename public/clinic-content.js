@@ -19,3 +19,7 @@ async function uploadClinicSectionImage(i,input){const id=contentDraft[i]?.id;if
 async function saveClinicSections(){await act(async()=>{await gateway('siteContentSave',{sections:contentDraft,layout:contentLayout,revision:contentDraftRevision},true);settingsTime=0;settingsCache=null;await loadSettings()},'تم حفظ أقسام الموقع');}
 var contentUserEditor=userEditor;userEditor=function(id){return contentUserEditor(id)+'<div class="acts"><button class="btn x" onclick="selectUserPermissions(true)">منح كل الصلاحيات</button><button class="btn x" onclick="selectUserPermissions(false)">سحب كل الصلاحيات</button></div><p class="hint">حساب الأدمن يملك جميع الصلاحيات. لسحبها منه غيّر دوره أولًا؛ لا يمكن إيقاف آخر أدمن فعال.</p>';};
 function selectUserPermissions(enabled){document.querySelectorAll('[data-perm]:not(:disabled)').forEach(x=>x.checked=enabled);adminDirtyTab=tab;}
+
+ACTION_NAMES.normalizeDemoNames='تحديث بيانات الحالات الافتراضية';
+var namesSettings=settings;settings=function(){return namesSettings()+(can('data.import')?'<button class="btn x" onclick="normalizeExistingDemoNames()">تحديث بيانات الحالات الافتراضية القديمة</button>':'');};
+async function normalizeExistingDemoNames(){await act(async()=>{const result=await gateway('normalizeDemoNames',{},true);PT=null;notify('تم تحديث '+result.patients+' اسم حالة و'+result.bookings+' حجز وبيانات أزواج '+result.spouses+' حالة')},'تم تحديث الأسماء الافتراضية');}

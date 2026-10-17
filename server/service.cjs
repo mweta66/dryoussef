@@ -1,3 +1,4 @@
+const demoNames=require('./demo-names.cjs');
 const history=require('./history.cjs');
 const perms=require('./permissions.cjs'),management=require('./management.cjs');
 const core=require('./core.cjs');
@@ -11,6 +12,7 @@ function createService(baseAdapter) {
   const adapter={...baseAdapter,mutate:fn=>baseAdapter.mutate(original=>{
    const before=structuredClone(original);return history.record(before,fn(original),input,uid);
   })};
+  if(action==='normalizeDemoNames'){let summary;await adapter.mutate(s=>{const result=demoNames.normalize(s,uid);summary=result.summary;return result.state;});return {ok:true,...summary};}
   if(action==='trashList')return history.list(await adapter.read(),uid,input);
   if(action==='trashRestore'){await adapter.mutate(s=>history.restore(s,uid,input.id));return {ok:true};}
   if(action==='auditDetail'){const s=await adapter.read();history.admin(s,uid,'audit.details');const entry=(s.audit||[]).find(x=>x.id===input.id);if(!entry)core.fail('السجل غير موجود',404);return {...entry,changes:s.activityDetails?.[input.id]||[]};}

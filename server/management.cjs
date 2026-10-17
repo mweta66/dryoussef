@@ -48,7 +48,8 @@ function mutate(original,uid,input,core){
   if(!/^01[0125]\d{8}$/.test(p)||!/^01[0125]\d{8}$/.test(to)||!name||name.length>120)core.fail('راجع اسم الحالة والهاتف');
   if(s.patients[p])cases.assertAccess(s,r,p);
   if(p!==to&&s.patients[to])core.fail('رقم الهاتف الجديد مستخدم لحالة أخرى',409);
-  s.patients[to]={...s.patients[p],n:name,d:s.patients[p]?.d||core.today(),...(!cases.allPatients(r)?{br:r.br}:{})};if(p!==to)delete s.patients[p];
+  const spouse={};for(const k of ['spouseName','spouseJob','spousePhone'])if(Object.hasOwn(input,k)){if(typeof input[k]!=='string'||input[k].length>120)core.fail('راجع بيانات الزوج');spouse[k]=k==='spousePhone'?core.phone(input[k]):input[k].trim();if(k==='spousePhone'&&spouse[k]&&!/^01[0125]\d{8}$/.test(spouse[k]))core.fail('رقم موبايل الزوج غير صحيح');}
+  s.patients[to]={...s.patients[p],...spouse,n:name,d:s.patients[p]?.d||core.today(),...(!cases.allPatients(r)?{br:r.br}:{})};if(p!==to)delete s.patients[p];
   for(const rows of Object.values(s.bookings||{}))for(const x of Object.values(rows))if(x.phone===p){x.phone=to;x.name=name;x.rev=(x.rev||0)+1;}
   if(p!==to)for(const kind of ['files','complaints','followups','attachments','complaintSequences'])if(s[kind]?.[p]){s[kind][to]=s[kind][p];delete s[kind][p];}
   for(const n of Object.values(s.inbox||{}))if(n.p===p){n.p=to;n.n=name;}core.rebuild(s);return s;
