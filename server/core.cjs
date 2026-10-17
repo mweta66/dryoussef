@@ -84,6 +84,7 @@ function commit(state, uid, puts, dels, now=today()) {
   if(!old)perms.requirePermission(r,'bookings.create');
   if(!old&&!['doctor','admin'].includes(r.r)&&n.date<now)fail('لا يمكن الحجز في تاريخ سابق');
   if(old&&['name','phone','v','nt','date','b'].some(k=>n[k]!==old[k]))perms.requirePermission(r,'bookings.edit');
+  const limit=branchConfig.branches(state)[n.b]?.maxBookings||0;if(limit&&(!old||old.b!==n.b||old.date!==n.date||old.s==='cx'&&n.s!=='cx')&&n.s!=='cx'&&n.v!=='emergency'&&Object.values(state.bookings[n.date]||{}).filter(x=>x.b===n.b&&x.id!==n.id&&x.s!=='cx'&&x.v!=='emergency').length>=limit)fail('اكتمل الحد اليومي للحجوزات في هذا الفرع. اختر يومًا آخر أو راجع الإدارة.',409);
   const otherActive=Object.values(state.bookings[n.date]||{}).find(x=>x.b===n.b&&x.s==='exam');
   const sessionKey=n.date+'_'+n.b,session=state.sessions?.[sessionKey];
   if(n.v==='emergency'&&(!old||old.v!=='emergency'||old.date!==n.date)){perms.requirePermission(r,'bookings.status');if(n.date!==now)fail('حجز الطوارئ متاح لليوم الحالي فقط');n.s=otherActive||!session||session.status!=='running'||!canExamine(state,n.date,n.b)?'wait':'exam';}

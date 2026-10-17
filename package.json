@@ -7,7 +7,7 @@
   },
   "scripts": {
     "test": "node --test tests/*.test.cjs",
-    "check": "node --check public/app.js && node --check public/clinic-management.js && node --check public/clinic-workspace.js && node --check server/core.cjs && node --check server/service.cjs && node --check scripts/demo-server.cjs && node --check public/clinic-enhancements.js && node --check public/clinic-live.js && node --check public/display.js && node --check public/display-audio.js && node --check public/clinic-import.js && node --check server/data-import.cjs && node --check public/clinic-branches.js && node --check public/clinic-design.js && node --check public/display-speech.js && node --check server/branches.cjs && node --check server/design-options.cjs && node --check public/clinic-theme.js && node --check public/display-recorded-speech.js && node --check public/quran-library.js && node --check server/demo-reset.cjs",
+    "check": "node scripts/check.cjs",
     "demo:seed": "node scripts/seed.cjs",
     "demo:reset": "node scripts/reset.cjs",
     "demo": "node scripts/demo-server.cjs"

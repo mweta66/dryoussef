@@ -1,0 +1,7 @@
+const core=require('./core.cjs'),branches=require('./branches.cjs'),calendar=require('./schedule.cjs');
+function review(state,branch,proposed){if(!core.branchIds(state).includes(branch))core.fail('الفرع غير موجود',404);const schedule=core.schedule(proposed),registry=branches.branches(state),schedules={...state.settings?.sched,[branch]:schedule},affected=[];
+ for(const [date,rows]of Object.entries(state.bookings||{}))if(date>=core.today()&&!calendar.availability(registry,schedules,date).scheduled.some(x=>x.id===branch)&&!calendar.availability(registry,schedules,date).flexible.includes(branch))for(const row of Object.values(rows))if(row.b===branch&&!['cx','done','no'].includes(row.s))affected.push({id:row.id,date,no:row.no,name:row.name});
+ const conflicts=[];for(let offset=0;offset<7;offset++){const date=new Date(core.today()+'T12:00:00Z');date.setUTCDate(date.getUTCDate()+offset);const day=date.toISOString().slice(0,10),available=calendar.availability(registry,schedules,day).scheduled,candidate=available.find(x=>x.id===branch);if(!candidate)continue;for(const other of available.filter(x=>x.id!==branch))if(candidate.dayOnly||other.dayOnly||candidate.slots.some(a=>other.slots.some(b=>a.f<b.t&&b.f<a.t)))conflicts.push({date:day,day:date.getUTCDay(),branch:other.id,name:registry[other.id].name});}
+ return {affectedCount:affected.length,affected:affected.slice(0,20),conflicts};
+}
+module.exports={review};

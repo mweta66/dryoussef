@@ -10,7 +10,12 @@ function limit(key,max=20){
  if(v.count>max){const e=new Error('طلبات كثيرة. حاول بعد دقيقة.');e.status=429;throw e;}
 }
 const read=()=>JSON.parse(fs.readFileSync(path.join(demo,'state.json'),'utf8'));
+const attachmentDir=path.join(demo,'attachments');
+const attachmentFile=id=>{if(!/^[0-9a-f-]{36}$/.test(id))throw Error('Invalid attachment key');return path.join(attachmentDir,id)};
 const handle=createService({
+ uploadAttachment:async(id,bytes)=>{fs.mkdirSync(attachmentDir,{recursive:true,mode:0o700});fs.writeFileSync(attachmentFile(id),bytes,{flag:'wx',mode:0o600})},
+ readAttachment:async id=>({data:fs.readFileSync(attachmentFile(id)).toString('base64')}),
+ deleteAttachment:async id=>fs.rmSync(attachmentFile(id),{force:true}),
  read:async()=>read(),
  mutate:fn=>{
   const run=queue.then(()=>{const next=fn(read());const temp=path.join(demo,'state.tmp');fs.writeFileSync(temp,JSON.stringify(next));fs.renameSync(temp,path.join(demo,'state.json'));});
@@ -29,7 +34,7 @@ const handle=createService({
  deleteUser:async uid=>{const file=path.join(demo,'accounts.json');fs.writeFileSync(file,JSON.stringify(JSON.parse(fs.readFileSync(file,'utf8')).filter(x=>x.uid!==uid)));}
 });
 function json(res,status,data){res.writeHead(status,{'Content-Type':'application/json; charset=utf-8','Cache-Control':'no-store'});res.end(JSON.stringify(data));}
-async function body(req){let text='';for await(const part of req){text+=part;if(Buffer.byteLength(text)>900000){const e=new Error('Payload too large');e.status=413;throw e;}}return JSON.parse(text);}
+async function body(req){const parts=[];let size=0;for await(const part of req){size+=part.length;if(size>900000){const e=new Error('Payload too large');e.status=413;throw e;}parts.push(part);}try{return JSON.parse(new TextDecoder('utf-8',{fatal:true}).decode(Buffer.concat(parts)))}catch{const e=Error('JSON غير صحيح');e.status=400;throw e;}}
 function session(uid){
  const token=randomBytes(32).toString('hex');sessions.set(token,{uid,exp:Date.now()+3600000});
  return {idToken:token,refreshToken:token,localId:uid,expiresIn:'3600'};
