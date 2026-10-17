@@ -1,14 +1,16 @@
 import {Buffer} from 'node:buffer';
 import * as perms from './permissions.js';
 import * as cases from './cases.js';
+import * as branchConfig from './branches.js';
+import * as designOptions from './design-options.js';
 function site(value,fail){
  if(!value||typeof value!=='object'||Array.isArray(value))fail('بيانات الموقع غير صحيحة');
- const result={};for(const k of ['doctorName','specialty','clinicName','bookingPhone','emergencyPhone','about','footer']){
-  if(value[k]!==undefined){if(typeof value[k]!=='string'||value[k].length>(['about','footer'].includes(k)?2000:160))fail('النص طويل أو غير صحيح');result[k]=value[k];}
+ const result={};for(const k of ['doctorName','specialty','clinicName','bookingPhone','emergencyPhone','about','footer','headerTitle','headerSubtitle','headerText']){
+  if(value[k]!==undefined){if(typeof value[k]!=='string'||value[k].length>(['about','footer','headerTitle','headerSubtitle','headerText'].includes(k)?2000:160))fail('النص طويل أو غير صحيح');result[k]=value[k];}
  }
  for(const k of ['bookingPhone','emergencyPhone'])if(result[k]&&!/^\+?[0-9]{7,15}$/.test(result[k]))fail('رقم الهاتف غير صحيح');
- result.branches={};for(const b of ['dmn','alex']){const x=value.branches?.[b];if(!x)continue;result.branches[b]={};for(const k of ['name','address','phone']){if(typeof x[k]!=='string'||x[k].length>300)fail('بيانات الفرع غير صحيحة');result.branches[b][k]=x[k];}if(x.phone&&!/^\+?[0-9]{7,15}$/.test(x.phone))fail('هاتف الفرع غير صحيح');}
- const d=value.design||{};result.design={};for(const k of ['primary','background','text','accent','card']){if(d[k]!==undefined){if(!/^#[0-9a-f]{6}$/i.test(d[k]))fail('لون غير صحيح');result.design[k]=d[k];}}
+ result.branches={};for(const b of Object.keys(value.branches||{})){if(!branchConfig.validId(b))fail('رمز فرع غير صحيح');const x=value.branches?.[b];if(!x)continue;result.branches[b]={};for(const k of ['name','address','phone']){if(typeof x[k]!=='string'||x[k].length>300)fail('بيانات الفرع غير صحيحة');result.branches[b][k]=x[k];}if(x.phone&&!/^\+?[0-9]{7,15}$/.test(x.phone))fail('هاتف الفرع غير صحيح');}
+ const d=value.design||{};result.design=designOptions.validate(d);for(const k of ['primary','background','text','accent','card']){if(d[k]!==undefined){if(!/^#[0-9a-f]{6}$/i.test(d[k]))fail('لون غير صحيح');result.design[k]=d[k];}}
  for(const [k,min,max] of [['radius',0,40],['width',600,1200],['fontSize',14,22]])if(d[k]!==undefined){if(!Number.isInteger(d[k])||d[k]<min||d[k]>max)fail('قيمة تصميم غير صحيحة');result.design[k]=d[k];}
  if(d.showBackground!==undefined){if(typeof d.showBackground!=='boolean')fail('خيار الخلفية غير صحيح');result.design.showBackground=d.showBackground;}
  for(const k of ['logo','doctorPhoto'])if(d[k]!==undefined){
@@ -21,10 +23,10 @@ function site(value,fail){
 }
 function mutate(original,uid,input,core){
  const s=structuredClone(original),r=core.role(s,uid);
- if(input.action==='siteSave'){perms.requirePermission(r,'site.manage');s.settings||={};s.settings.site=site(input.site,core.fail);return s;}
+ if(input.action==='siteSave'){perms.requirePermission(r,'site.manage');s.settings||={};const nextSite=site(input.site,core.fail);if(JSON.stringify(s.settings.site?.design)!==JSON.stringify(nextSite.design))s.settings.previousDesign=structuredClone(s.settings.site?.design||{});s.settings.site=nextSite;if(s.settings.branches)for(const [b,x]of Object.entries(s.settings.site.branches)){if(s.settings.branches[b])s.settings.branches[b]={...s.settings.branches[b],...x};}return s;}
  if(input.action==='userSave'){
   perms.requirePermission(r,'users.manage');if(!s.roles[input.uid])core.fail('المستخدم غير موجود',404);
-  const next=perms.validateRole(input.role,core.fail);if(next.u!==s.roles[input.uid].u)core.fail('اسم الدخول ثابت؛ يمكنك تعديل الاسم الظاهر');
+  const next=perms.validateRole(input.role,core.fail,core.branchIds(s));if(next.u!==s.roles[input.uid].u)core.fail('اسم الدخول ثابت؛ يمكنك تعديل الاسم الظاهر');
   if(s.roles[input.uid].r==='admin'&&(next.r!=='admin'||next.enabled===false)&&!Object.entries(s.roles).some(([id,x])=>id!==input.uid&&x.r==='admin'&&x.enabled!==false))core.fail('يجب إبقاء حساب مدير فعال واحد على الأقل');
   if(s.roles[input.uid].r==='doctor'&&(next.r!=='doctor'||next.enabled===false)&&!Object.entries(s.roles).some(([id,x])=>id!==input.uid&&x.r==='doctor'&&x.enabled!==false))core.fail('يجب إبقاء حساب طبيب فعال واحد على الأقل');
   s.roles[input.uid]=next;return s;
