@@ -1,3 +1,4 @@
+const {egyptianName}=require('./realistic-demo.cjs');
 const core=require('./core.cjs');
 function addBranchDemo(original,uid,count=100){
  if(core.role(original,uid).r!=='admin')core.fail('غير مصرح',403);
@@ -8,7 +9,7 @@ function addBranchDemo(original,uid,count=100){
  s.bookings||={};s.patients||={};s.files||={};s.complaints||={};s.inbox||={};s.sequences||={};
  for(const [branchIndex,b]of ids.entries())for(let i=0;i<count;i++){
   const dt=new Date(baseline+'T12:00:00Z');dt.setUTCDate(dt.getUTCDate()+i%5-2);const date=dt.toISOString().slice(0,10),serial=40001+branchIndex*count+i;
-  const phone='010000'+String(serial),id='demo-four-'+b+'-'+(i+1),name='حالة تجريبية '+s.settings.branches[b].name+' '+String(i+1).padStart(3,'0');
+  const phone='010000'+String(serial),id='demo-four-'+b+'-'+(i+1),name=egyptianName(branchIndex*count+i);
   const key=date+'_'+b,no=(s.sequences[key]||0)+1,status=date<baseline?['done','no','cx'][i%3]:'wait';
   const rows=s.bookings[date]||={};rows[id]={id,date,b,no,name,phone,v:['exam','cons','follow'][i%3],s:status,nt:'بيانات اصطناعية للاختبار فقط — لا تستخدم للتواصل أو العلاج',rev:1};s.sequences[key]=no;
   s.patients[phone]={n:name,d:date};s.files[phone]={n:'ملاحظات طبيب تجريبية: مراجعة التحاليل والسونار. ليست بيانات مريض حقيقي.',allergies:i%4===0?'حساسية تجريبية':'لا توجد بيانات مسجلة',chronic:'سجل تجريبي',diagnosis:'تشخيص تجريبي فقط',treatment:'خطة تجريبية غير مخصصة للاستخدام الطبي',t:new Date().toISOString()};
