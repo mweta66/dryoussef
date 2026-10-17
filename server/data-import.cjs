@@ -1,3 +1,4 @@
+const perms=require('./permissions.cjs');
 const {createHash}=require('node:crypto');
 const core=require('./core.cjs');
 const management=require('./management.cjs');
@@ -31,7 +32,7 @@ function normalize(input,state={},withSettings=false){
  return out;
 }
 function prepare(original,uid,input,options={}){
- if(core.role(original,uid).r!=='admin')core.fail('الاستيراد متاح لمدير النظام فقط',403);
+ perms.requirePermission(core.role(original,uid),'data.import');
  if(!object(options)||Object.keys(options).some(k=>k!=='importSettings')||options.importSettings!==undefined&&typeof options.importSettings!=='boolean')core.fail('خيارات الاستيراد غير صحيحة');
  const data=normalize(input,original,options.importSettings===true),s=structuredClone(original),summary={patients:{added:0,duplicates:0,conflicts:0},bookings:{added:0,duplicates:0,conflicts:0},files:{added:0,duplicates:0,conflicts:0},complaints:{added:0,duplicates:0,conflicts:0},renumbered:0,examsToWaiting:0,settingsChanged:false,ignored:data.ignored};
  s.patients||={};s.bookings||={};s.files||={};s.complaints||={};s.sequences||={};

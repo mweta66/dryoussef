@@ -16,7 +16,7 @@ test('custom accounts start with no permissions; disabled accounts are rejected;
  assert.throws(()=>management.mutate(fixture(),'demo_admin',{action:'userSave',uid:'demo_dmn',role:{r:'sec',u:'sec-dmn',br:'dmn',permissions:{root:true}}},core));
  assert.throws(()=>management.mutate(fixture(),'demo_admin',{action:'userSave',uid:'demo_admin',role:{r:'staff',u:'doctor'}},core));
 });
-test('admin can promote doctors but doctors cannot acquire site permissions',()=>{
+test('admin can promote doctors and explicitly revoke their site permissions',()=>{
  let s=management.mutate(fixture(),'demo_admin',{action:'userSave',uid:'demo_dmn',role:{r:'doctor',u:'sec-dmn',permissions:{'site.manage':false}}},core);
  assert.equal(perms.can(s.roles.demo_dmn,'site.manage'),false);
  assert.throws(()=>management.mutate(s,'demo_admin',{action:'userSave',uid:'demo_admin',role:{r:'staff',u:'admin'}},core));

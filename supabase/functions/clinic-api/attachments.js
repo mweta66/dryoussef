@@ -4,8 +4,7 @@ import * as cleanup from './storage-cleanup.js';
 const MAX_BYTES=600000,MAX_FILES=20,validId=id=>typeof id==='string'&&/^[0-9a-f-]{36}$/.test(id);
 function authorize(state,uid,phone,write=false){
  const role=core.role(state,uid);
- if(!['admin','doctor','nurse'].includes(role.r))core.fail('غير مصرح بمرفقات المرضى',403);
- perms.requirePermission(role,role.r==='nurse'?(write?'complaints.create':'complaints.read'):(write?'notes.edit':'notes.read'));
+ perms.requirePermission(role,write?'attachments.create':'attachments.read');
  if(!/^01[0125]\d{8}$/.test(phone)||!state.patients?.[phone])core.fail('الحالة غير موجودة',404);
  if(!perms.allBranches(role)&&!(role.r==='nurse'&&role.scope===undefined&&!role.br)&&!Object.values(state.bookings||{}).some(rows=>Object.values(rows).some(x=>x.phone===phone&&x.b===role.br)))core.fail('غير مصرح لهذا الفرع',403);
  return role;
@@ -19,20 +18,20 @@ function decodeImage(input){
  if(!match)core.fail('محتوى الصورة لا يطابق نوع الملف');return bytes;
 }
 async function handleAttachments(adapter,input,uid){
- const phone=core.phone(input.phone),write=input.action==='attachmentUpload'||input.action==='attachmentDelete';
+ const phone=core.phone(input.phone),write=input.action==='attachmentUpload';
  const state=await adapter.read(),role=authorize(state,uid,phone,write),records=state.attachments?.[phone]||{};
- if(input.action==='attachmentList')return Object.values(records).map(({key,byUid,...item})=>({...item,canDelete:role.r!=='nurse'||byUid===uid}));
+ if(input.action==='attachmentList')return Object.values(records).map(({key,byUid,...item})=>({...item,canDelete:perms.can(role,'attachments.delete')||byUid===uid&&perms.can(role,'attachments.own.delete')}));
  if(input.action==='attachmentUpload'){
   if(!adapter.uploadAttachment)core.fail('تخزين التقارير غير مهيأ',503);
 
   const bytes=decodeImage(input);if(input.category!==undefined&&!['report','lab','radiology','other'].includes(input.category))core.fail('تصنيف التقرير غير صحيح');const reportDate=core.date(input.reportDate||core.today());if(reportDate>core.today())core.fail('تاريخ التقرير لا يكون في المستقبل');let digest;
-  if(input.restoreSourceId!==undefined){if(role.r!=='admin'||!validId(input.restoreSourceId))core.fail('استعادة الصور لمدير النظام فقط',403);digest=Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256',bytes))).map(x=>x.toString(16).padStart(2,'0')).join('');const previous=Object.values(records).find(x=>(x.restoreSourceId||x.id)===input.restoreSourceId);if(previous){let same=previous.digest===digest;if(!same&&adapter.readAttachmentBytes){const original=await adapter.readAttachmentBytes(previous.key,previous.mime);same=original.data===input.data;}if(!same&&adapter.readAttachment){const original=await adapter.readAttachment(previous.key,previous.mime);same=original.data===input.data;}if(!same)core.fail('صورة الاستعادة تتعارض مع مرفق موجود',409);const {key,byUid,...item}=previous;return {...item,canDelete:true,restoredAlready:true};}}
+  if(input.restoreSourceId!==undefined){if(!perms.can(role,'data.restore')||!validId(input.restoreSourceId))core.fail('استعادة الصور لمدير النظام فقط',403);digest=Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256',bytes))).map(x=>x.toString(16).padStart(2,'0')).join('');const previous=Object.values(records).find(x=>(x.restoreSourceId||x.id)===input.restoreSourceId);if(previous){let same=previous.digest===digest;if(!same&&adapter.readAttachmentBytes){const original=await adapter.readAttachmentBytes(previous.key,previous.mime);same=original.data===input.data;}if(!same&&adapter.readAttachment){const original=await adapter.readAttachment(previous.key,previous.mime);same=original.data===input.data;}if(!same)core.fail('صورة الاستعادة تتعارض مع مرفق موجود',409);const {key,byUid,...item}=previous;return {...item,canDelete:true,restoredAlready:true};}}
   if(Object.keys(records).length>=MAX_FILES)core.fail('الحد الأقصى 20 صورة لكل حالة');
   const id=crypto.randomUUID(),record={id,key:id,name:input.name.trim(),mime:input.mime,size:bytes.length,createdAt:new Date().toISOString(),by:role.u,byUid:uid,category:input.category||'report',reportDate,...(input.restoreSourceId?{restoreSourceId:input.restoreSourceId,digest}:{})};
   await adapter.uploadAttachment(id,bytes,input.mime);
   try{await adapter.mutate(original=>{authorize(original,uid,phone,true);const s=structuredClone(original);s.attachments||={};const items=s.attachments[phone]||={};if(Object.keys(items).length>=MAX_FILES)core.fail('الحد الأقصى 20 صورة لكل حالة');items[id]=record;return s;});}
   catch(error){try{await adapter.deleteAttachment(id)}catch{}throw error;}
-  const {key,byUid,...item}=record;return {...item,canDelete:true};
+  const {key,byUid,...item}=record;return {...item,canDelete:perms.can(role,'attachments.delete')||perms.can(role,'attachments.own.delete')};
  }
  if(!validId(input.id)||!records[input.id])core.fail('الصورة غير موجودة',404);
  const item=records[input.id];if(!validId(item.key))core.fail('معرف المرفق غير صحيح',400);
@@ -41,8 +40,8 @@ async function handleAttachments(adapter,input,uid){
   return {...await adapter.readAttachment(item.key,item.mime),name:item.name,mime:item.mime};
  }
  if(input.action==='attachmentDelete'){
-  if(role.r==='nurse'&&item.byUid!==uid)core.fail('يمكن للممرضة حذف الصور التي رفعتها فقط',403);
-  await adapter.mutate(original=>{authorize(original,uid,phone,true);const s=structuredClone(original);const current=s.attachments?.[phone]?.[input.id];if(current){cleanup.enqueue(s,{[input.id]:current});delete s.attachments[phone][input.id];}return s;});
+  if(!perms.can(role,'attachments.delete')&&!(item.byUid===uid&&perms.can(role,'attachments.own.delete')))core.fail('يمكن للممرضة حذف الصور التي رفعتها فقط',403);
+  await adapter.mutate(original=>{const currentRole=authorize(original,uid,phone);const s=structuredClone(original);const current=s.attachments?.[phone]?.[input.id];if(current){if(!perms.can(currentRole,'attachments.delete')&&!(current.byUid===uid&&perms.can(currentRole,'attachments.own.delete')))core.fail('ليس لديك صلاحية حذف هذه الصورة',403);cleanup.enqueue(s,{[input.id]:current});delete s.attachments[phone][input.id];}return s;});
   return {ok:true,cleanupPending:await cleanup.drain(adapter)};
  }
  core.fail('عملية مرفقات غير مسموحة',403);

@@ -13,7 +13,7 @@ function createService(baseAdapter) {
   })};
   if(action==='trashList')return history.list(await adapter.read(),uid,input);
   if(action==='trashRestore'){await adapter.mutate(s=>history.restore(s,uid,input.id));return {ok:true};}
-  if(action==='auditDetail'){const s=await adapter.read();history.admin(s,uid);const entry=(s.audit||[]).find(x=>x.id===input.id);if(!entry)core.fail('السجل غير موجود',404);return {...entry,changes:s.activityDetails?.[input.id]||[]};}
+  if(action==='auditDetail'){const s=await adapter.read();history.admin(s,uid,'audit.details');const entry=(s.audit||[]).find(x=>x.id===input.id);if(!entry)core.fail('السجل غير موجود',404);return {...entry,changes:s.activityDetails?.[input.id]||[]};}
   if(action==='attachmentExport')return backup.exportImage(adapter,input,uid);
   if(['attachmentList','attachmentUpload','attachmentRead','attachmentDelete'].includes(action))return attachments.handleAttachments(adapter,input,uid);
   const readFields=(fields,day=null,entity=null)=>adapter.readFields?adapter.readFields(fields,day,entity):adapter.read();
@@ -89,7 +89,7 @@ function createService(baseAdapter) {
     state.settings||={};state.settings.demoPurged=true;core.rebuild(state);return state;
    });return {ok:true};
   }
-  if(['siteSave','userSave','patientSave','patientDelete','dataClear'].includes(action)){await adapter.mutate(s=>management.mutate(s,uid,input,core));return {ok:true,...(['patientDelete','dataClear'].includes(action)?{cleanupPending:await cleanup.drain(adapter)}:{})};}
+  if(['siteContentSave','siteSave','userSave','patientSave','patientDelete','dataClear'].includes(action)){await adapter.mutate(s=>management.mutate(s,uid,input,core));return {ok:true,...(['patientDelete','dataClear'].includes(action)?{cleanupPending:await cleanup.drain(adapter)}:{})};}
   if(action==='userRevokeSessions'){const state=await adapter.read();perms.requirePermission(core.role(state,uid),'users.manage');if(!state.roles?.[input.uid])core.fail('المستخدم غير موجود',404);await adapter.revokeUserSessions(input.uid);await adapter.mutate(s=>structuredClone(s));return {ok:true};}
   if(action==='userPassword'){const state=await adapter.read();perms.requirePermission(core.role(state,uid),'users.manage');if(!input.uid||typeof input.password!=='string'||input.password.length<6||input.password.length>128)core.fail('كلمة السر من 6 إلى 128 حرفاً');const target=state.roles?.[input.uid];if(!target)core.fail('المستخدم غير موجود',404);try{await adapter.updateUser(input.uid,input.password)}catch(e){if(e.status>=500)core.fail('تعذر تأكيد نتيجة تغيير كلمة السر لحساب '+target.u+'. تحقق من تسجيل الدخول قبل إعادة المحاولة.',503);throw e}let warning='';try{await adapter.revokeUserSessions(input.uid)}catch(e){warning='تم حفظ كلمة السر، لكن تعذر إنهاء الجلسات القديمة. أعد محاولة إنهائها.'}await adapter.mutate(s=>structuredClone(s));return {ok:true,username:target.u,enabled:target.enabled!==false,warning};}
   if(action==='userCredentials'){
@@ -104,7 +104,7 @@ function createService(baseAdapter) {
    let warning='';try{await adapter.revokeUserSessions(input.uid)}catch(e){warning='تم حفظ بيانات الدخول، لكن تعذر إنهاء الجلسات القديمة. أعد محاولة إنهائها.'}return {ok:true,username,warning};
   }
   if(action==='userDelete'){
-   await adapter.mutate(original=>{const s=structuredClone(original);perms.requirePermission(core.role(s,uid),'users.manage');const target=s.roles?.[input.uid];if(!target)core.fail('المستخدم غير موجود',404);if(input.uid===uid)core.fail('لا يمكنك حذف الحساب المستخدم حاليًا');for(const role of ['admin','doctor'])if(target.r===role&&!Object.entries(s.roles).some(([id,r])=>id!==input.uid&&r.r===role&&r.enabled!==false))core.fail('يجب إبقاء '+(role==='admin'?'مدير':'طبيب')+' فعال');s.roles[input.uid]={...target,enabled:false,deletePending:false,archivedAt:new Date().toISOString()};return s;});
+   await adapter.mutate(original=>{const s=structuredClone(original);perms.requirePermission(core.role(s,uid),'users.manage');const target=s.roles?.[input.uid];if(!target)core.fail('المستخدم غير موجود',404);if(input.uid===uid)core.fail('لا يمكنك حذف الحساب المستخدم حاليًا');for(const role of ['admin'])if(target.r===role&&!Object.entries(s.roles).some(([id,r])=>id!==input.uid&&r.r===role&&r.enabled!==false))core.fail('يجب إبقاء '+(role==='admin'?'مدير':'طبيب')+' فعال');s.roles[input.uid]={...target,enabled:false,deletePending:false,archivedAt:new Date().toISOString()};return s;});
    // Retain the identity so the administrator can restore access without losing credentials.
    return {ok:true,archived:true};
   }

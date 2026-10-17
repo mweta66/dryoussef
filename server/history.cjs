@@ -1,4 +1,4 @@
-const core=require('./core.cjs');
+const core=require('./core.cjs'),perms=require('./permissions.cjs');
 const ROOTS=['patients','files','complaints','attachments','bookings','inbox','followups','deletedBookings','sessions','complaintSequences','settings','roles'];
 const object=x=>x!==null&&typeof x==='object'&&!Array.isArray(x);
 const same=(a,b)=>JSON.stringify(a)===JSON.stringify(b);
@@ -16,6 +16,7 @@ function record(before,next,input,uid){
  for(const state of [before,next])for(const rows of Object.values(state.bookings||{}))for(const booking of Object.values(rows))if(phones.has(booking.phone))branches.push(booking.b);
  branches.splice(0,branches.length,...new Set(branches.filter(Boolean)));
  if(changes.some(x=>x.path[0]==='settings'&&x.path[1]==='sched')){next.settings||={};next.settings.scheduleUpdatedAt=at;}
+ if(input.action!=='siteContentSave'&&changes.some(x=>x.path[0]==='settings'&&x.path[1]==='site'&&['sections','layout'].includes(x.path[2]))){next.settings.contentRev=(before.settings?.contentRev||0)+1;}
  const entry={id,at,actor:uid,actorName:before.roles?.[uid]?.displayName||before.roles?.[uid]?.u,action:input.action,target:input.uid,branch:input.branch||(branches.length===1?branches[0]:undefined),branches,changeCount:changes.length};
  next.audit=[...(before.audit||[]),entry];next.activityDetails={...(next.activityDetails||{}),[id]:changes.map(x=>safe(x))};
  // Archive the exact missing subtrees, including original image references. No automatic expiry.
@@ -30,7 +31,7 @@ function record(before,next,input,uid){
  }
  return next;
 }
-function admin(state,uid){if(core.role(state,uid).r!=='admin')core.fail('هذه الصفحة لمدير النظام فقط',403);}
+function admin(state,uid,key='data.restore'){perms.requirePermission(core.role(state,uid),key);}
 function get(state,path){let x=state;for(const k of path)x=x?.[k];return x;}
 function restore(original,uid,id){
  admin(original,uid);const s=structuredClone(original),group=s.recycleBin?.[id];if(!group||group.restoredAt)core.fail('المحذوفات غير موجودة أو سبق استعادتها',404);

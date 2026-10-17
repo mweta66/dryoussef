@@ -1,6 +1,6 @@
 /* Private patient report images. Never put image content in shared caches. */
-function canUsePatientReports(){return !!me&&['admin','doctor','nurse'].includes(me.role)&&can(me.role==='nurse'?'complaints.read':'notes.read');}
-function canUploadPatientReports(){return canUsePatientReports()&&can(me.role==='nurse'?'complaints.create':'notes.edit');}
+function canUsePatientReports(){return !!me&&can('attachments.read');}
+function canUploadPatientReports(){return canUsePatientReports()&&can('attachments.create');}
 function reportPanel(phone){
  const panel=document.createElement('section');panel.className='patient-reports';panel.dataset.phone=phone;
  const title=document.createElement('h3');title.textContent='تقارير وصور الحالة';panel.append(title);
