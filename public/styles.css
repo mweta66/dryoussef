@@ -97,3 +97,16 @@ body.modal-open{overflow:hidden}
 html[data-clinic-public][data-hide-header] .hero .logo,html[data-clinic-public][data-hide-header] .hero>#clinic-header-text,html[data-clinic-public][data-hide-contacts] #contacts,html[data-clinic-public][data-hide-about] #clinic-about,html[data-clinic-public][data-hide-branches] #brs,html[data-clinic-public][data-hide-lookup] .patient-lookup,html[data-clinic-public][data-hide-footer] #clinic-footer{display:none!important}
 .hero{box-sizing:border-box;width:var(--header-width,100%);margin-inline:auto;border-radius:var(--header-radius,0px)}
 @media(max-width:600px){.hero{width:100%}}
+
+/* Consistent Arabic branch names and form values, independent of label size. */
+.branches{grid-template-columns:repeat(auto-fit,minmax(min(250px,100%),1fr))}
+.br,.branch-admin-card,.flt>div{min-width:0}
+.branch-admin-card{padding:16px}
+.br>b,.branch-admin-card>h3{display:block;font-size:clamp(18px,var(--clinic-text-size,16px),24px);font-weight:800;line-height:1.6;overflow-wrap:anywhere;text-align:start;margin:0 0 10px}
+#app input:not([type=checkbox]):not([type=radio]),#app select,#app textarea,.mod input:not([type=checkbox]):not([type=radio]),.mod select,.mod textarea{font-family:inherit;font-size:max(16px,var(--clinic-text-size,16px));font-weight:400;line-height:1.6;min-width:0;max-width:100%}
+#app select,.mod select{min-height:48px;padding-block:10px;padding-inline:12px 32px;text-align:start}
+#app select option,.mod select option{font:inherit}
+.branch-admin-card .branch-visibility{align-items:flex-start;line-height:1.7}
+.branch-admin-card .branch-visibility input{flex:none;margin-top:.3em}
+.spouse-details{padding:14px 16px;overflow-wrap:anywhere}
+.spouse-details p{margin:8px 0}

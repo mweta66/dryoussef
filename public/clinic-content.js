@@ -22,4 +22,4 @@ function selectUserPermissions(enabled){document.querySelectorAll('[data-perm]:n
 
 ACTION_NAMES.normalizeDemoNames='تحديث بيانات الحالات الافتراضية';
 var namesSettings=settings;settings=function(){return namesSettings()+(can('data.import')?'<button class="btn x" onclick="normalizeExistingDemoNames()">تحديث بيانات الحالات الافتراضية القديمة</button>':'');};
-async function normalizeExistingDemoNames(){await act(async()=>{const result=await gateway('normalizeDemoNames',{},true);PT=null;notify('تم تحديث '+result.patients+' اسم حالة و'+result.bookings+' حجز وبيانات أزواج '+result.spouses+' حالة')},'تم تحديث الأسماء الافتراضية');}
+async function normalizeExistingDemoNames(){await act(async()=>{const result=await gateway('normalizeDemoNames',{},true);if(result.profileMigrationVersion!==1)throw Error('تعذر تحديث بيانات الحالات: تحتاج خدمة العيادة إلى نشر الإصدار الحديث أولًا');PT=null;notify('تم تحديث '+result.patients+' اسم حالة و'+result.bookings+' حجز وبيانات أزواج '+result.spouses+' حالة')},'تم تحديث بيانات الحالات الافتراضية والأسماء وبيانات الزوج');}
