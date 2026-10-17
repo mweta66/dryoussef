@@ -1,6 +1,7 @@
 const perms=require('./permissions.cjs');
 const cases=require('./cases.cjs');
-const BRANCHES = ['dmn','alex'];
+const branchConfig=require('./branches.cjs');
+const branchIds=branchConfig.ids;
 const STATES = ['wait','exam','done','no','cx'];
 const fail = (message, status=400) => { const e=new Error(message);e.status=status;throw e; };
 function phone(p) {
@@ -23,16 +24,16 @@ function role(state,uid,doctor=false) {
  return r;
 }
 function allowed(r,b) {if(!perms.allBranches(r)&&r.br!==b)fail('غير مصرح بتعديل هذا الفرع',403);}
-function booking(n) {
+function booking(n,state={}) {
  if(!n||typeof n!=='object')fail('حجز غير صحيح');
  const p=phone(n.phone);
- if(!/^01[0125]\d{8}$/.test(p)||!BRANCHES.includes(n.b)||!['exam','cons','follow','emergency'].includes(n.v)||!STATES.includes(n.s||'wait'))fail('بيانات الحجز غير صحيحة');
+ if(!/^01[0125]\d{8}$/.test(p)||!branchIds(state).includes(n.b)||!['exam','cons','follow','emergency'].includes(n.v)||!STATES.includes(n.s||'wait'))fail('بيانات الحجز غير صحيحة');
  const name=String(n.name||'').trim(),nt=String(n.nt||'').trim();
  if(!name||name.length>120||nt.length>2000)fail('راجع الاسم والملاحظات');
  return {id:id(n.id),name,phone:p,b:n.b,v:n.v,s:n.s||'wait',date:date(n.date),nt};
 }
 function queueOrder(a,b){const rank=x=>x.s==='exam'?0:x.s==='wait'?(x.v==='emergency'?1:2):3;return rank(a)-rank(b)||a.no-b.no;}
-function presence(state,d){const selected=state.sessions?.[d+'_presence']?.branch;if(selected)return selected;const branches=new Set(Object.values(state.bookings?.[d]||{}).filter(x=>x.s==='exam').map(x=>x.b));for(const b of BRANCHES)if(state.sessions?.[d+'_'+b]?.status==='running')branches.add(b);return branches.size===1?[...branches][0]:null;}
+function presence(state,d){const selected=state.sessions?.[d+'_presence']?.branch;if(selected)return selected;const branches=new Set(Object.values(state.bookings?.[d]||{}).filter(x=>x.s==='exam').map(x=>x.b));for(const b of branchIds(state))if(state.sessions?.[d+'_'+b]?.status==='running')branches.add(b);return branches.size===1?[...branches][0]:null;}
 function canExamine(state,d,b){return (!presence(state,d)||presence(state,d)===b)&&!Object.values(state.bookings?.[d]||{}).some(x=>x.b!==b&&x.s==='exam')&&!Object.entries(state.sessions||{}).some(([key,x])=>key.startsWith(d+'_')&&key!==d+'_'+b&&x.status==='running');}
 function assertExamine(state,d,b){if(!canExamine(state,d,b))fail('الطبيب متواجد أو لديه جلسة كشف في الفرع الآخر. أنهِ الجلسة الحالية وحدد فرع التواجد أولًا.',409);}
 function queueTrack(state,list,x,clock=Date.now(),prepared){
@@ -47,7 +48,7 @@ function rebuild(state) {
  state.track={};const clock=Date.now(),currentDay=today(new Date(clock));
  for(const [d,rows] of Object.entries(state.bookings||{})){
   const list=Object.values(rows||{}),selected=presence(state,d);
-  for(const b of BRANCHES) {
+  for(const b of branchIds(state)) {
    const q=list.filter(x=>x.b===b).sort(queueOrder);
    const waiting=q.filter(x=>x.s==='wait'),prepared={presence:selected,ordered:q,active:q.find(x=>x.s==='exam'),waiting,positions:new Map(waiting.map((x,i)=>[x.id,i])),isToday:d===currentDay};
    for(const x of q){
@@ -77,7 +78,7 @@ function commit(state, uid, puts, dels, now=today()) {
  };
  dels.forEach(x=>remove(x,true));
  for(const p of puts){
-  const n=booking(p.n);allowed(r,n.b);
+  const n=booking(p.n,state);allowed(r,n.b);if(!branchIds(state,true).includes(n.b)&&(!p.o||p.o.b!==n.b||p.o.date!==n.date))fail("الفرع متوقف عن استقبال حجوزات جديدة");
   const old=p.o?remove(p.o,false):null;
   if(!perms.can(r,'notes.edit'))n.nt=old?.nt||'';
   if(!old)perms.requirePermission(r,'bookings.create');
@@ -111,8 +112,9 @@ function commit(state, uid, puts, dels, now=today()) {
  for(const key of advance){const d=key.slice(0,10),b=key.slice(11);if(!canExamine(state,d,b)||d!==now||state.sessions?.[key]&&state.sessions[key].status!=='running')continue;const list=Object.values(state.bookings[d]||{}).filter(x=>x.b===b);if(list.some(x=>x.s==='exam'))continue;const next=list.filter(x=>x.s==='wait').sort(queueOrder)[0];if(next){next.s='exam';next.startedAt=new Date().toISOString();next.rev=(next.rev||0)+1;}}
  rebuild(state);cases.indexPatients(state);return {state};
 }
+function publicSettings(state){if(!state.settings)return null;const {previousDesign,...settings}=state.settings;return settings;}
 function read(state,uid,path) {
- if(path==='settings')return state.settings||null;
+ if(path==='settings')return publicSettings(state);
  const r=role(state,uid);
  if(path==='sessions'){perms.requirePermission(r,'bookings.read');return state.sessions||{};}
  if(path==='audit'){perms.requirePermission(r,'audit.read');return state.audit||[];}
@@ -130,10 +132,8 @@ function read(state,uid,path) {
  }
  fail('مسار غير مسموح',403);
 }
-function schedule(s) {
- if(!s||!Array.isArray(s.d)||!s.d.length||!s.d.every(d=>Number.isInteger(d)&&d>=0&&d<=6)||!/^([01]\d|2[0-3]):[0-5]\d$/.test(s.f)||!/^([01]\d|2[0-3]):[0-5]\d$/.test(s.t)||s.f>=s.t)fail('مواعيد غير صحيحة');
- return {d:[...new Set(s.d)],f:s.f,t:s.t};
-}
+function schedule(s) {return branchConfig.schedule(s,fail)}
+
 function patch(state,uid,updates) {
  state=structuredClone(state||{});const r=role(state,uid);
  if(updates&&Object.keys(updates).every(p=>/^(patients|complaints|files|inbox)\//.test(p)))return cases.patch(state,r,updates,module.exports);
@@ -144,14 +144,14 @@ function patch(state,uid,updates) {
    const avg=path==='settings'?value.avg:value;
    if(!Number.isInteger(avg)||avg<1||avg>180)fail('متوسط الكشف من 1 إلى 180 دقيقة');
    state.settings.avg=avg;
-   if(path==='settings'&&value.sched){state.settings.sched||={};for(const b of BRANCHES)state.settings.sched[b]=schedule(value.sched[b]);}
-  }else if(/^settings\/sched\/(dmn|alex)$/.test(path)){
-   perms.requirePermission(r,'clinic.manage');state.settings.sched||={};state.settings.sched[path.split('/')[2]]=schedule(value);
+   if(path==='settings'&&value.sched){state.settings.sched||={};for(const b of branchIds(state))state.settings.sched[b]=schedule(value.sched[b]);}
+  }else if(/^settings\/sched\/[a-z][a-z0-9-]{1,31}$/.test(path)){
+   perms.requirePermission(r,'clinic.manage');if(!branchIds(state).includes(path.split('/')[2]))fail('فرع غير صحيح');state.settings.sched||={};state.settings.sched[path.split('/')[2]]=schedule(value);
   }else if(/^roles\/[A-Za-z0-9_-]{1,128}(?:\/br)?$/.test(path)){
    perms.requirePermission(r,'users.manage');const [,key,field]=path.split('/');if(key===uid||['doctor','admin'].includes(state.roles[key]?.r))fail('لا يمكن تغيير صلاحية الدكتور',403);
-   if(field){if(!state.roles[key]||!BRANCHES.includes(value))fail('فرع غير صحيح');state.roles[key].br=value;}
+   if(field){if(!state.roles[key]||!branchIds(state).includes(value))fail('فرع غير صحيح');state.roles[key].br=value;}
    else if(value===null)delete state.roles[key];
-   else{if(!['sec','nurse'].includes(value.r)||(value.r==='sec'&&!BRANCHES.includes(value.br))||!/^[a-z0-9._-]{3,64}$/.test(value.u))fail('حساب غير صحيح');state.roles[key]={r:value.r,u:value.u,...(value.r==='sec'?{br:value.br}:{})};}
+   else{if(!['sec','nurse'].includes(value.r)||(value.r==='sec'&&!branchIds(state).includes(value.br))||!/^[a-z0-9._-]{3,64}$/.test(value.u))fail('حساب غير صحيح');state.roles[key]={r:value.r,u:value.u,...(value.r==='sec'?{br:value.br}:{})};}
   }else fail('مسار كتابة غير مسموح',403);
  }
  return state;
@@ -161,4 +161,4 @@ function lookup(state,p,now=today(),clock=Date.now()) {
  const x=Object.values(state.bookings?.[now]||{}).find(x=>x.phone===p);
  if(!x)return null;return queueTrack(state,Object.values(state.bookings[now]||{}),x,clock);
 }
-module.exports={presence,canExamine,assertExamine,phone,today,date,role,booking,commit,read,patch,lookup,rebuild,fail,schedule,queueOrder,queueTrack};
+module.exports={publicSettings,branchIds,presence,canExamine,assertExamine,phone,today,date,role,booking,commit,read,patch,lookup,rebuild,fail,schedule,queueOrder,queueTrack};

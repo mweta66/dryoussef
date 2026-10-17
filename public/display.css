@@ -8,3 +8,13 @@ html:has(.queue-display){height:100%;overflow:hidden}.queue-display{height:100vh
 @media(max-height:450px){.display-wrap{gap:3px}.display-header p{line-height:1.15}.display-header h1{margin:0;line-height:1.2}.display-audio-panel[open]{display:grid;grid-template-columns:1fr 2fr;column-gap:10px;align-items:center}.display-audio-panel[open] .display-audio-levels{margin:0;gap:8px}.display-audio-panel[open] .hint{grid-column:1/-1;line-height:1.15}.display-audio-levels input{height:12px;margin:0}.display-grid .card{padding:5px}.display-current{gap:2px}.current{font-size:min(40cqh,calc(115cqw / var(--ticket-digits,2)))}.display-next{gap:2px}.display-count{padding:2px 6px}.waiting{gap:2px}.waiting span{font-size:min(4vw,8cqh);padding:0;line-height:1.2}}
 
 .waiting{grid-template-columns:minmax(0,1fr);grid-template-rows:minmax(0,1fr)}.waiting span{font-size:clamp(20px,min(18vw,35cqh),360px);line-height:1.2}
+
+.display-audio-levels select{width:100%;min-width:0;margin:2px 0;padding:3px 6px;height:28px;font-size:11px}.display-audio-levels .btn{padding:3px 6px;min-height:24px;font-size:10px;margin:2px 0}.display-audio-levels>div{min-width:0}
+@media(max-height:450px){.display-audio-levels{grid-template-columns:repeat(4,minmax(0,1fr))}.display-audio-panel[open]{grid-template-columns:minmax(0,1fr)}.display-audio-levels label{font-size:9px}.display-audio-levels .btn{min-height:18px;height:20px;margin:0}}
+
+.display-toolbar .follow-doctor-label{display:flex;align-items:center;gap:4px;white-space:nowrap}.display-toolbar #follow-doctor{width:14px;height:14px;margin:0;padding:0}.display-audio-levels{gap:8px}
+
+.display-audio-levels>div:has(#display-arabic-voice){display:grid;grid-template-columns:minmax(0,1fr) auto;gap:2px 4px}.display-audio-levels>div:has(#display-arabic-voice)>label{grid-column:1/-1}.display-audio-levels #display-test-call{width:auto;white-space:nowrap;margin:2px 0}.current{font-size:clamp(14px,min(36cqh,calc(100cqw / var(--ticket-digits,2))),600px);line-height:1.3}.waiting span{font-size:min(18vw,25cqh)}
+@media(max-height:700px){.display-audio-panel{padding:4px 8px}.display-audio-levels{margin-top:3px;gap:3px 8px}.display-audio-levels label{font-size:9px;line-height:1.15}.display-audio-levels input{height:12px;margin:0}.display-audio-levels select{height:22px;font-size:9px;padding:1px 3px;margin:1px 0}.display-audio-levels #display-test-call{height:22px;min-height:22px;padding:1px 3px;font-size:9px;margin:1px 0}.display-audio-panel .hint{font-size:8px;line-height:1.2}}
+
+#current{container-type:size;font-size:0}#current>span{font-size:min(65cqh,calc(100cqw / var(--ticket-digits,2)));line-height:1.3}
