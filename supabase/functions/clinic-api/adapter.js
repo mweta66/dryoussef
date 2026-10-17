@@ -13,6 +13,7 @@ export function supabaseAdapter(url,secret,fetcher=fetch){
    if(!safeRead||![429,502,503,504].includes(response.status)||attempt===1)break;
    await response.body?.cancel();await new Promise(r=>setTimeout(r,350*(attempt+1)));
   }
+  if(response.status===404&&options.method==='DELETE'&&path.startsWith('/auth/v1/admin/users/'))return {deleted:true};
   const data=await response.json().catch(()=>null);if(response.ok&&data===null){const err=new Error('استجابة غير مكتملة من خدمة البيانات. حاول بعد لحظة.');err.status=503;throw err}if(!response.ok){
    console.error('Clinic upstream rejected request',{requestId:requestContext.getStore(),operation:path.replace(/\/[0-9a-f-]{36}/gi,'/:id'),status:response.status,code:data?.code||data?.error_code||'unknown'});
    let status=503,message='تعذر الوصول إلى خدمة البيانات مؤقتًا. حاول بعد لحظة.';
@@ -25,6 +26,10 @@ export function supabaseAdapter(url,secret,fetcher=fetch){
  const rpc=(name,body)=>call('/rest/v1/rpc/'+name,{method:'POST',body:JSON.stringify(body)});
  const snapshot=async()=>{const data=await call('/rest/v1/clinic_state?id=eq.true&select=version,payload');if(!data?.[0])throw Error('Clinic schema is not initialized');return data[0]};
  return {
+  readAttachmentBytes:async(id,mime)=>{let response;try{response=await fetcher(base+'/storage/v1/object/authenticated/clinic-patient-reports/'+encodeURIComponent(id),{headers:{apikey:secret,Authorization:'Bearer '+secret},signal:AbortSignal.timeout(15000)})}catch{const e=Error('تعذر تنزيل الصورة؛ لم تكتمل النسخة الاحتياطية');e.status=503;throw e}if(!response.ok||Number(response.headers.get('content-length')||0)>600000){await response.body?.cancel();const e=Error('تعذر تنزيل الصورة للنسخة الاحتياطية');e.status=503;throw e}const bytes=new Uint8Array(await response.arrayBuffer());if(bytes.length>600000){const e=Error('صورة أكبر من الحد المسموح');e.status=413;throw e}let binary='';for(let i=0;i<bytes.length;i+=8192)binary+=String.fromCharCode(...bytes.subarray(i,i+8192));return {data:btoa(binary),mime}},
+  uploadAttachment:async(id,bytes,mime)=>call('/storage/v1/object/clinic-patient-reports/'+encodeURIComponent(id),{method:'POST',headers:{'Content-Type':mime,'x-upsert':'false'},body:bytes}),
+  readAttachment:async id=>{const data=await call('/storage/v1/object/sign/clinic-patient-reports/'+encodeURIComponent(id),{method:'POST',body:JSON.stringify({expiresIn:60})});const signed=data?.signedURL;if(typeof signed!=='string'||!signed.startsWith('/object/sign/clinic-patient-reports/')){const e=Error('تعذر تجهيز رابط التقرير');e.status=503;throw e}return {url:base+'/storage/v1'+signed}},
+  deleteAttachment:async id=>call('/storage/v1/object/clinic-patient-reports',{method:'DELETE',body:JSON.stringify({prefixes:[id]})}),
   read:async()=> (await snapshot()).payload,
   readFields:async(fields,day=null,entity=null)=>rpc('clinic_read_slice',{fields,selected_day:day,entity}),
   readHistory:async p=>rpc('clinic_patient_history',{patient_phone:p}),

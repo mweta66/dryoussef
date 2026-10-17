@@ -1,0 +1,3 @@
+function enqueue(state,items){state.attachmentGarbage||={};for(const item of Object.values(items||{}))if(/^[0-9a-f-]{36}$/.test(item?.key))state.attachmentGarbage[item.key]={queuedAt:new Date().toISOString()};}
+async function drain(adapter){const snapshot=await adapter.read(),keys=Object.keys(snapshot.attachmentGarbage||{});for(const key of keys){if(!adapter.deleteAttachment)continue;try{await adapter.deleteAttachment(key);await adapter.mutate(original=>{const s=structuredClone(original);delete s.attachmentGarbage?.[key];return s;});}catch{/* Keep the durable outbox entry so an administrator can retry. */}}return Object.keys((await adapter.read()).attachmentGarbage||{}).length;}
+export {enqueue,drain};

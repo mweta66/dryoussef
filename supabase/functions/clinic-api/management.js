@@ -1,8 +1,11 @@
 import {Buffer} from 'node:buffer';
+import * as displayOptions from './display-options.js';
+import * as siteContent from './site-content.js';
 import * as perms from './permissions.js';
 import * as cases from './cases.js';
 import * as branchConfig from './branches.js';
 import * as designOptions from './design-options.js';
+import * as storageCleanup from './storage-cleanup.js';
 function site(value,fail){
  if(!value||typeof value!=='object'||Array.isArray(value))fail('بيانات الموقع غير صحيحة');
  const result={};for(const k of ['doctorName','specialty','clinicName','bookingPhone','emergencyPhone','about','footer','headerTitle','headerSubtitle','headerText']){
@@ -10,6 +13,7 @@ function site(value,fail){
  }
  for(const k of ['bookingPhone','emergencyPhone'])if(result[k]&&!/^\+?[0-9]{7,15}$/.test(result[k]))fail('رقم الهاتف غير صحيح');
  result.branches={};for(const b of Object.keys(value.branches||{})){if(!branchConfig.validId(b))fail('رمز فرع غير صحيح');const x=value.branches?.[b];if(!x)continue;result.branches[b]={};for(const k of ['name','address','phone']){if(typeof x[k]!=='string'||x[k].length>300)fail('بيانات الفرع غير صحيحة');result.branches[b][k]=x[k];}if(x.phone&&!/^\+?[0-9]{7,15}$/.test(x.phone))fail('هاتف الفرع غير صحيح');}
+ Object.assign(result,siteContent.validate(value.sections,value.layout,fail));
  const d=value.design||{};result.design=designOptions.validate(d);for(const k of ['primary','background','text','accent','card']){if(d[k]!==undefined){if(!/^#[0-9a-f]{6}$/i.test(d[k]))fail('لون غير صحيح');result.design[k]=d[k];}}
  for(const [k,min,max] of [['radius',0,40],['width',600,1200],['fontSize',14,22]])if(d[k]!==undefined){if(!Number.isInteger(d[k])||d[k]<min||d[k]>max)fail('قيمة تصميم غير صحيحة');result.design[k]=d[k];}
  if(d.showBackground!==undefined){if(typeof d.showBackground!=='boolean')fail('خيار الخلفية غير صحيح');result.design.showBackground=d.showBackground;}
@@ -23,32 +27,46 @@ function site(value,fail){
 }
 function mutate(original,uid,input,core){
  const s=structuredClone(original),r=core.role(s,uid);
- if(input.action==='siteSave'){perms.requirePermission(r,'site.manage');s.settings||={};const nextSite=site(input.site,core.fail);if(JSON.stringify(s.settings.site?.design)!==JSON.stringify(nextSite.design))s.settings.previousDesign=structuredClone(s.settings.site?.design||{});s.settings.site=nextSite;if(s.settings.branches)for(const [b,x]of Object.entries(s.settings.site.branches)){if(s.settings.branches[b])s.settings.branches[b]={...s.settings.branches[b],...x};}return s;}
+ if(input.action==='displaySave'){perms.requirePermission(r,'display.manage');if(input.revision!==(s.settings?.displayRev||0))core.fail('تغيرت إعدادات الشاشة من جلسة أخرى؛ أعد التحميل أولًا',409);s.settings||={};s.settings.display=displayOptions.normalize(input.config,core.branchIds(s,true));s.settings.displayRev=(s.settings.displayRev||0)+1;return s;}
+ if(input.action==='siteContentSave'){perms.requirePermission(r,'site.manage');if(input.revision!==(s.settings?.contentRev||0))core.fail('تم تعديل المحتوى من جلسة أخرى؛ أعد التحميل قبل الحفظ',409);const content=siteContent.validate(input.sections,input.layout,core.fail);s.settings||={};s.settings.site={...s.settings.site,...content};s.settings.contentRev=(s.settings.contentRev||0)+1;return s;}
+ if(input.action==='headerSave'){
+  perms.requirePermission(r,'site.manage');if(input.revision!==(s.settings?.headerRev||0))core.fail('تم تعديل الهيدر من جلسة أخرى؛ أعد تحميل الإعدادات أولًا',409);const incoming=site(input.site,core.fail);s.settings||={};const current=s.settings.site||{},next={...current},design={...current.design};
+  for(const key of ['headerTitle','headerSubtitle','headerText'])if(incoming[key]!==undefined)next[key]=incoming[key];
+  for(const key of ['headerWidth','headerRadius','headerHeight','headerTitleSize','headerSubtitleSize','headerTextSize','logoSize','photoSize','headerPadding','headerGap','headerAlign','logo','doctorPhoto'])if(incoming.design[key]!==undefined)design[key]=incoming.design[key];
+  if(incoming.design.headerColors)design.headerColors=incoming.design.headerColors;
+  if(incoming.design.palettes){design.palettes=structuredClone(current.design?.palettes||{});for(const mode of ['light','dark'])if(incoming.design.palettes?.[mode]){const colors=incoming.design.palettes[mode];design.palettes[mode]={...colors,...design.palettes[mode]};for(const key of ['headerBackground','headerText'])if(colors[key]!==undefined)design.palettes[mode][key]=colors[key];}}
+  if(JSON.stringify(current.design)!==JSON.stringify(design))s.settings.previousDesign=structuredClone(current.design||{});next.design=design;s.settings.site=next;s.settings.headerRev=(s.settings.headerRev||0)+1;return s;
+ }
+ if(input.action==='siteSave'){perms.requirePermission(r,'site.manage');s.settings||={};const nextSite=site(input.site,core.fail);nextSite.sections=s.settings.site?.sections||{};nextSite.layout=s.settings.site?.layout||{};if(JSON.stringify(s.settings.site?.design)!==JSON.stringify(nextSite.design))s.settings.previousDesign=structuredClone(s.settings.site?.design||{});s.settings.site=nextSite;if(s.settings.branches)for(const [b,x]of Object.entries(s.settings.site.branches)){if(s.settings.branches[b])s.settings.branches[b]={...s.settings.branches[b],...x};}return s;}
  if(input.action==='userSave'){
   perms.requirePermission(r,'users.manage');if(!s.roles[input.uid])core.fail('المستخدم غير موجود',404);
+  if(s.roles[input.uid].deletePending)core.fail('حذف الحساب معلق؛ استكمل الحذف أولًا',409);
   const next=perms.validateRole(input.role,core.fail,core.branchIds(s));if(next.u!==s.roles[input.uid].u)core.fail('اسم الدخول ثابت؛ يمكنك تعديل الاسم الظاهر');
   if(s.roles[input.uid].r==='admin'&&(next.r!=='admin'||next.enabled===false)&&!Object.entries(s.roles).some(([id,x])=>id!==input.uid&&x.r==='admin'&&x.enabled!==false))core.fail('يجب إبقاء حساب مدير فعال واحد على الأقل');
-  if(s.roles[input.uid].r==='doctor'&&(next.r!=='doctor'||next.enabled===false)&&!Object.entries(s.roles).some(([id,x])=>id!==input.uid&&x.r==='doctor'&&x.enabled!==false))core.fail('يجب إبقاء حساب طبيب فعال واحد على الأقل');
+
   s.roles[input.uid]=next;return s;
  }
  if(input.action==='patientSave'){
   perms.requirePermission(r,'patients.edit');cases.indexPatients(s);const p=core.phone(input.phone),to=core.phone(input.newPhone||p),name=String(input.name||'').trim();
   if(!/^01[0125]\d{8}$/.test(p)||!/^01[0125]\d{8}$/.test(to)||!name||name.length>120)core.fail('راجع اسم الحالة والهاتف');
+  if(s.patients[p])cases.assertAccess(s,r,p);
   if(p!==to&&s.patients[to])core.fail('رقم الهاتف الجديد مستخدم لحالة أخرى',409);
-  s.patients[to]={n:name,d:s.patients[p]?.d||core.today()};if(p!==to)delete s.patients[p];
+  s.patients[to]={...s.patients[p],n:name,d:s.patients[p]?.d||core.today(),...(!cases.allPatients(r)?{br:r.br}:{})};if(p!==to)delete s.patients[p];
   for(const rows of Object.values(s.bookings||{}))for(const x of Object.values(rows))if(x.phone===p){x.phone=to;x.name=name;x.rev=(x.rev||0)+1;}
-  if(p!==to)for(const kind of ['files','complaints','followups'])if(s[kind]?.[p]){s[kind][to]=s[kind][p];delete s[kind][p];}
+  if(p!==to)for(const kind of ['files','complaints','followups','attachments','complaintSequences'])if(s[kind]?.[p]){s[kind][to]=s[kind][p];delete s[kind][p];}
   for(const n of Object.values(s.inbox||{}))if(n.p===p){n.p=to;n.n=name;}core.rebuild(s);return s;
  }
  if(input.action==='patientDelete'){
   perms.requirePermission(r,'patients.delete');const p=core.phone(input.phone);if(!/^01[0125]\d{8}$/.test(p))core.fail('هاتف غير صحيح');
+  storageCleanup.enqueue(s,s.attachments?.[p]);delete s.complaintSequences?.[p];
   for(const rows of Object.values(s.bookings||{}))for(const [id,x] of Object.entries(rows))if(x.phone===p)delete rows[id];
   for(const [id,x] of Object.entries(s.deletedBookings||{}))if(x.booking.phone===p)delete s.deletedBookings[id];
-  for(const kind of ['patients','files','complaints','followups'])delete s[kind]?.[p];for(const [id,x] of Object.entries(s.inbox||{}))if(x.p===p)delete s.inbox[id];core.rebuild(s);return s;
+  for(const kind of ['patients','files','complaints','followups','attachments','complaintSequences'])delete s[kind]?.[p];for(const [id,x] of Object.entries(s.inbox||{}))if(x.p===p)delete s.inbox[id];core.rebuild(s);return s;
  }
  if(input.action==='dataClear'){
   perms.requirePermission(r,'data.delete');if(input.confirmation!=='DELETE_CLINIC_DATA')core.fail('تأكيد الحذف مطلوب');
-  for(const kind of ['bookings','patients','files','complaints','inbox','track','deletedBookings','sessions','followups'])s[kind]={};return s;
+  for(const items of Object.values(s.attachments||{}))storageCleanup.enqueue(s,items);
+  for(const kind of ['bookings','patients','files','complaints','inbox','track','deletedBookings','sessions','followups','attachments','complaintSequences'])s[kind]={};return s;
  }
  core.fail('عملية غير مسموحة',403);
 }

@@ -17,3 +17,57 @@ Validation includes unit tests for dynamic branches, cross-branch permissions, t
 Release validation: 114 unit tests passed, plus browser acceptance for dynamic branches, paired themes, saved doctor/logo images, multiline text, automatic doctor following, manual/historical selection, native recorded Arabic speech, and 11 viewport sizes. The classified production reset removed 97 remaining bookings and 100 patient records from the approved synthetic group, created 100 marked synthetic cases and preserved six unclassified bookings as well as all accounts/settings. A private backup within the database preceded replacement.
 
 The full 114-chapter audio library was published and byte-range verified. Total audio storage is 804,209,235 bytes. Production frontend carries only the manifest and small local Arabic call recordings, not the full Quran files.
+
+## Four-branch local demonstration and report images
+
+The current local demo has four branches: alex (الإسكندرية), matrouh (مطروح), dmn (دمنهور), and libya (ليبيا). Each has 100 distinct synthetic cases, medical notes, complaints and bookings across five days. Addresses and phone numbers are empty for the administrator to fill. Accounts are preserved. The checked-in fixture contains the user-selected 14:00–18:00 schedules: Alexandria Saturday/Sunday/Tuesday/Wednesday, Matrouh Monday/Thursday, and no announced weekdays for Damanhour/Libya. The separate destructive local reset operator starts its replacement schedules flexible. The administrator can set weekly intervals and dated exceptions under الفروع ومواعيد الطبيب. Booking suggestions follow the selected date, exclude inactive branches and respect closures; flexible schedules are explicitly unconfirmed. Suggestions do not bypass the user's branch permissions or force an exceptional booking into another branch.
+
+Only if explicitly replacing the local demo again, stop its server and run:
+
+```sh
+cd /workspace/dryoussef
+node scripts/replace-local-branches.cjs --local --apply --cases-per-branch=100
+npm run demo
+```
+
+This is destructive to local clinical data, takes a verified private JSON backup first, retains account credentials and shared design, and never connects to production. Do not rerun during normal startup. Existing backups are ignored under `.private/`. Local credentials and current sample tracking phones remain in `.demo/guide.txt`.
+
+The header editor additionally supports title/subtitle/extra-text sizes, padding, gaps and alignment. Shared administrator header branding is preserved when staff select a personal body-color theme. Personal themes are stored per account/browser, with an option to return to the shared clinic theme. Public pages refresh settings every minute as a fallback; the TV refreshes every 30 seconds; Supabase change broadcasts invalidate settings sooner. Active drafts are preserved.
+
+Doctor, nurse and admin patient views have a private report-image section (JPG, PNG, WebP). The browser prepares an image up to 2000 pixels on the longest side and 600,000 bytes, displaying a warning to retain the original and check legibility. Up to 20 images per patient are accepted. The server validates type/signature, decoded size, current role, active account, patient membership and branch scope. Nurses use complaint read/create permissions; doctors use note read/edit permissions. A nurse may delete only her own uploads; doctors/admin may delete reports. Nurse access to doctor text notes remains unchanged.
+
+In the local demo binaries live in `.demo/attachments`, outside the static public directory. Every read passes through the authenticated clinic API. In production, apply `supabase/migrations/20261017210000_private_patient_reports.sql` and deploy the updated Edge function and frontend. The new bucket is private and has no client access policy; the authenticated API returns read URLs valid for 60 seconds. Production storage has not been provisioned or validated by this local task.
+
+Standard JSON-only exports contain attachment metadata, not image bytes. Use the complete portable backup action for clinical data plus images, or back up `.demo/attachments` together with `.demo/state.json` locally and the private bucket separately in production. Patient and bulk deletion enqueue object keys durably and try storage cleanup immediately; failures remain visible for an administrator to retry. Do not describe the standard JSON-only export as a full image backup.
+
+## Automatic following of the doctor's weekly schedule
+
+Weekday controls and public schedule chips display Saturday through Friday. The stored weekday numbers retain JavaScript conventions (Sunday=0, Saturday=6), so existing schedules are not shifted.
+
+The TV follows the scheduled branch for its selected date, including a future/historical date, by default. A manually selected branch disables following until the user checks «اتباع جدول الطبيب» again. A running or paused examination takes precedence over a changed plan and must be explicitly ended; editing a schedule never starts/ends an examination or renumbers/moves an existing booking. If multiple branches are scheduled, the current time may disambiguate today's intervals; otherwise the screen asks for manual selection. Closures/exceptions and inactive branches are respected.
+
+The all-branch booking dashboard automatically filters cases by the unique scheduled branch for its date. Its following checkbox can be disabled, and choosing a manual branch disables it. New booking forms automatically select the unique scheduled branch for the chosen date. Selecting a branch finds its next available day (up to one year); editing a saved booking never changes its date/branch automatically. If no single assignment or available day exists, the form keeps the choice and explains the conflict instead of inventing attendance. Schedule invalidation also updates an open new-booking form without losing patient input. Existing clinical records remain attached to their saved branch/date after schedule changes.
+
+## Branch visibility and days-only attendance
+
+Each admin branch card includes a visibility checkbox and a Saturday-first weekday checklist. «حفظ الأيام بدون ساعات» saves `mode: days` with the selected numeric weekdays; no examination hours are invented. The detailed editor still supports weekly time intervals and date exceptions. Empty weekday selections mean no announced attendance. Saving the simple checklist preserves existing date exceptions and branch contact details, and unsaved checklist changes survive background rendering.
+
+Hiding uses the existing `enabled: false` branch flag. It removes the branch from public branch cards, new-booking selectors, TV links/options and automatic attendance selection. Public queue, phone lookup and phone-history responses no longer expose hidden-branch queues/bookings. Admin staff history, patient records, saved weekdays and account assignments remain intact and are restored to public selection when the branch is shown again. A running/paused session must end before hiding; at least one branch must remain visible. Existing hidden-branch bookings can still be managed through authenticated history; hiding never deletes them.
+
+Before deploying the schedule/visibility changes to Supabase, apply `20261017220000_schedule_visibility_reads.sql` along with the other pending migrations. It adds current schedules and branch visibility to optimized public read projections. This task validates the local demo, not a production database migration.
+
+## Review fixes and staff workflow
+
+The checked-in synthetic fixture contains every one of the 400 local demo patients and related clinical data, plus the requested branch schedules. It contains no login accounts or passwords. Fresh `demo:seed` loads the fixture, shifts its sample dates to the current Cairo day and generates new local credentials. Existing local files are never overwritten by seeding.
+
+Medical files carry an optimistic `rev`; saves of a stale version fail with 409 and retain the entered form for review. File content and version are taken from the same read snapshot. Closing a dirty medical modal asks for confirmation. Patient, file and complaint reads/writes now enforce branch membership consistently with image access; legacy nurses without a branch retain their original all-patient role.
+
+Complaints have per-patient, server-assigned sequence numbers and trusted creation timestamps. Deleted complaint numbers are not reused. Existing complaints acquire stable numbers by recorded timestamp; editing preserves the original number, author and creation time, adding `editedAt` and `editedBy`. The table displays number, complaint date, creation time, cause, complaint, prescribed treatment and author. Client-supplied numbers/timestamps cannot override server assignment. Import retains available complaint numbers and assigns missing legacy ones.
+
+Patient report deletion and bulk deletion enqueue private storage object keys in `attachmentGarbage` before removing patient metadata. The service tries cleanup immediately. Storage failures retain durable entries, reported on the health screen, with an admin-only retry. Pending user deletion similarly disables the role while keeping it available for retry until Auth deletion succeeds.
+
+Complete backup downloads include actual image bytes and metadata. The import wizard validates the image manifest, previews normal records, then restores images through protected upload calls. Source IDs and SHA-256 digests make retried restores duplicate-safe. Missing/mismatched image manifests fail validation. Portable backup size is capped at 64 MB; exceeding it fails explicitly without offering an incomplete archive. Full JSON-only exports remain available and are labeled as excluding image bytes.
+
+The requested phone-only public lookup is intentionally retained; anyone knowing the phone can query its minimal appointment history. The user explicitly declined a tracking code/OTP. Public names and medical notes remain excluded, hidden branches remain excluded, and lookup budgets remain in force.
+
+Additional improvements: mobile staff navigation dropdown, last-success indication, keyboard shortcuts (Alt+N for new booking and Alt+F for case search), private report categories/date/zoom/rotation, sensitive-permission grant warnings, color-contrast warnings, report counts/summary layout/CSV export, and Arabic audit event names with user/date/branch filters. TV header fields now use the shared design controls; its minimum height is constrained responsively to preserve space for ticket numbers. The health screen distinguishes no recorded backup from loading.
