@@ -1,2 +1,5 @@
 User-agent: *
 Allow: /
+Disallow: /admin.html
+Disallow: /display.html
+Sitemap: https://dryoussef.vercel.app/sitemap.xml

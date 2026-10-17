@@ -71,9 +71,12 @@ const server=http.createServer(async(req,res)=>{
   const file=path.resolve(root,'.'+relative);
   if(!file.startsWith(root+path.sep)||relative.includes('..'))return json(res,403,{error:'Forbidden'});
   const exists=fs.existsSync(file)&&fs.statSync(file).isFile(),target=exists?file:path.join(root,'404.html');
-  const mime={'.html':'text/html; charset=utf-8','.js':'text/javascript; charset=utf-8','.css':'text/css; charset=utf-8','.jpg':'image/jpeg','.png':'image/png','.txt':'text/plain'};
-  res.writeHead(exists?200:404,{'Content-Type':mime[path.extname(target)]||'application/octet-stream','Cache-Control':'no-store','X-Content-Type-Options':'nosniff'});
-  res.end(req.method==='HEAD'?'':fs.readFileSync(target));
+  const mime={'.html':'text/html; charset=utf-8','.js':'text/javascript; charset=utf-8','.css':'text/css; charset=utf-8','.jpg':'image/jpeg','.png':'image/png','.txt':'text/plain','.xml':'application/xml','.mp3':'audio/mpeg','.wav':'audio/wav'};
+  const size=fs.statSync(target).size,range=req.headers.range;
+  let start=0,end=size-1,partial=false;
+  if(exists&&range){const match=/^bytes=(\d*)-(\d*)$/.exec(range);if(!match||(!match[1]&&!match[2])){res.writeHead(416,{'Content-Range':'bytes */'+size});return res.end()}if(match[1]){start=Number(match[1]);end=match[2]?Math.min(size-1,Number(match[2])):size-1}else start=Math.max(0,size-Number(match[2]));if(start>=size||start>end){res.writeHead(416,{'Content-Range':'bytes */'+size});return res.end()}partial=true;}
+  res.writeHead(exists?(partial?206:200):404,{'Content-Type':mime[path.extname(target)]||'application/octet-stream','Cache-Control':'no-store','X-Content-Type-Options':'nosniff','Accept-Ranges':'bytes','Content-Length':end-start+1,...(partial?{'Content-Range':'bytes '+start+'-'+end+'/'+size}:{})});
+  if(req.method==='HEAD')return res.end();fs.createReadStream(target,{start,end}).pipe(res);
  }catch(e){return json(res,e.status||500,{error:e.status?e.message:'تعذر تنفيذ العملية'});}
 });
 server.listen(Number(process.env.CLINIC_DEMO_PORT||4173),'127.0.0.1',()=>console.log('Local demo: http://127.0.0.1:'+server.address().port+' — credentials in .demo/guide.txt'));
