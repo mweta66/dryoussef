@@ -68,7 +68,17 @@ var SD=today(),AUTH=null,LOADED={all:0,dates:{}},rtok=0;
 try{AUTH=JSON.parse(sessionStorage.getItem("clinic_supabase_auth"))}catch(e){}
 if(!AUTH)me=null;
 function saveAuth(){try{if(AUTH)sessionStorage.setItem("clinic_supabase_auth",JSON.stringify(AUTH));else sessionStorage.removeItem("clinic_supabase_auth")}catch(e){}}
-async function gateway(action,payload,auth){if(!CONFIG.demo&&!CONFIG.endpoint)throw new Error("لم يكتمل إعداد اتصال Supabase بعد");var headers={"Content-Type":"application/json"};if(CONFIG.publishableKey)headers.apikey=CONFIG.publishableKey;if(auth)headers.Authorization="Bearer "+await token();var r=await request(CONFIG.endpoint||"/api/clinic",{method:"POST",headers:headers,body:JSON.stringify(Object.assign({action:action},payload))}),j=await r.json();if(!r.ok)throw new Error((r.status===401||r.status===403?"NOAUTH: ":"")+(j.error||"تعذر تنفيذ العملية")+(j.requestId&&r.status>=500?" (مرجع: "+j.requestId+")":""));return j.data}
+async function gateway(action,payload,auth){
+ if(!CONFIG.demo&&!CONFIG.endpoint)throw new Error("لم يكتمل إعداد اتصال Supabase بعد");
+ var headers={"Content-Type":"application/json"};if(CONFIG.publishableKey)headers.apikey=CONFIG.publishableKey;if(auth)headers.Authorization="Bearer "+await token();
+ var readOnly=['get','workspace','systemHealth','reportData'].includes(action);
+ for(var attempt=0;attempt<(readOnly?2:1);attempt++){
+  try{var r=await request(CONFIG.endpoint||"/api/clinic",{method:"POST",headers:headers,body:JSON.stringify(Object.assign({action:action},payload))}),j=await r.json();
+   if(!r.ok){var error=new Error((r.status===401?"NOAUTH: ":"")+(j.error||"تعذر تنفيذ العملية")+(j.requestId&&r.status>=500?" (مرجع: "+j.requestId+")":""));error.status=r.status;throw error;}return j.data;
+  }catch(e){if(!readOnly||attempt||e.status&&![502,503,504].includes(e.status))throw e;await new Promise(resolve=>setTimeout(resolve,500));}
+ }
+}
+
 async function request(url,options){var controller=new AbortController(),timer=setTimeout(function(){controller.abort()},15000);try{return await fetch(url,Object.assign({},options,{signal:controller.signal,cache:"no-store"}))}finally{clearTimeout(timer)}}
 function authResult(j){return {idToken:j.access_token,refreshToken:j.refresh_token,localId:j.user?.id,expiresIn:String(j.expires_in||3600)}}
 async function authCall(ep,body){
@@ -167,7 +177,8 @@ function render(){if(location.protocol==="file:"){document.getElementById("app")
  else if(!staffView()){loadSettings().then(function(){var b=document.getElementById("brs");if(b)b.innerHTML=branches()}).catch(function(){})}}
 function busy(){var a=document.activeElement;return featureBusy||adminDraftDirty()||writing||saving||modalOpen()||(a&&/INPUT|TEXTAREA|SELECT/.test(a.tagName))}
 window.addEventListener("hashchange",function(){dataEpoch++;rtok++;shown++;if(modalOpen()&&!saving)closeM();render()});
-async function restoreSession(){if(location.protocol==="file:"){render();return}if(!AUTH){me=null;render();return}try{var role=await jget("roles/"+AUTH.uid,true);if(!role||(!["admin","doctor","sec","nurse","staff"].includes(role.r)))throw new Error("NOAUTH");me={u:role.u||"",role:role.r,br:role.br,scope:role.scope,permissions:role.permissions};if(me.role==="admin"){openAdmin();return}if(adminPage()){location.replace("index.html#staff");return}render()}catch(e){logout();notify("انتهت الجلسة أو تعذر التحقق منها. سجّل الدخول مجدداً.")}}
+var sessionRetry,sessionRetryDelay=5000;
+async function restoreSession(){var owner=AUTH;if(location.protocol==="file:"){render();return}if(!AUTH){me=null;render();return}try{var role=await jget("roles/"+AUTH.uid,true);if(AUTH!==owner)return;sessionRetryDelay=5000;if(!role||(!["admin","doctor","sec","nurse","staff"].includes(role.r)))throw new Error("NOAUTH");me={u:role.u||"",role:role.r,br:role.br,scope:role.scope,permissions:role.permissions};if(me.role==="admin"){openAdmin();return}if(adminPage()){location.replace("index.html#staff");return}render()}catch(e){if(AUTH!==owner)return;if(e.status===401||e.status===403||/NOAUTH/.test(e.message)){logout();notify("انتهت جلسة الدخول. سجّل الدخول مجدداً.")}else{me=null;render();notify("تعذر التحقق من الجلسة مؤقتًا. سنعيد المحاولة دون حذف تسجيل دخولك.");clearTimeout(sessionRetry);sessionRetry=setTimeout(function(){if(AUTH===owner)return restoreSession()},sessionRetryDelay);sessionRetryDelay=Math.min(30000,sessionRetryDelay*2)}}}
 me=null;
 restoreSession();
 /* Live updates and fallback polling are managed by clinic-enhancements.js. */

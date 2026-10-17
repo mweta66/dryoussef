@@ -1,3 +1,6 @@
+import {AsyncLocalStorage} from 'node:async_hooks';
+const requestContext=new AsyncLocalStorage();
+export function withRequestContext(id,fn){return requestContext.run(id,fn)}
 import {createHash} from 'node:crypto';
 export function supabaseAdapter(url,secret,fetcher=fetch){
  if(!url||!secret)throw Error('Supabase server configuration is missing');
@@ -6,12 +9,12 @@ export function supabaseAdapter(url,secret,fetcher=fetch){
   const safeRead=!options.method||options.method==='GET'||['clinic_session_active','clinic_read_slice','clinic_read_day','clinic_patient_history','clinic_health_metadata'].some(name=>path==='/rest/v1/rpc/'+name);
   let response;
   for(let attempt=0;attempt<(safeRead?2:1);attempt++){
-   try{response=await fetcher(base+path,{...options,signal:AbortSignal.timeout(safeRead?4500:10000),headers:{apikey:secret,Authorization:'Bearer '+token,'Content-Type':'application/json',...options.headers}})}catch(e){if(safeRead&&attempt<1){await new Promise(r=>setTimeout(r,250));continue}const err=new Error('انقطع الاتصال مؤقتًا. حاول مجددًا بعد لحظة.');err.status=503;throw err}
+   try{response=await fetcher(base+path,{...options,signal:AbortSignal.timeout(safeRead?4500:10000),headers:{apikey:secret,Authorization:'Bearer '+token,'Content-Type':'application/json',...options.headers}})}catch(e){if(safeRead&&attempt<1){await new Promise(r=>setTimeout(r,250));continue}console.error('Clinic upstream transport failure',{requestId:requestContext.getStore(),operation:path.replace(/\/[0-9a-f-]{36}/gi,'/:id'),attempt:attempt+1,kind:e?.name==='TimeoutError'?'timeout':'network'});const err=new Error('انقطع الاتصال مؤقتًا. حاول مجددًا بعد لحظة.');err.status=503;throw err}
    if(!safeRead||![429,502,503,504].includes(response.status)||attempt===1)break;
    await response.body?.cancel();await new Promise(r=>setTimeout(r,350*(attempt+1)));
   }
-  const data=await response.json().catch(()=>null);if(!response.ok){
-   console.error('Clinic upstream rejected request',{operation:path.replace(/\/[0-9a-f-]{36}/gi,'/:id'),status:response.status,code:data?.code||data?.error_code||'unknown'});
+  const data=await response.json().catch(()=>null);if(response.ok&&data===null){const err=new Error('استجابة غير مكتملة من خدمة البيانات. حاول بعد لحظة.');err.status=503;throw err}if(!response.ok){
+   console.error('Clinic upstream rejected request',{requestId:requestContext.getStore(),operation:path.replace(/\/[0-9a-f-]{36}/gi,'/:id'),status:response.status,code:data?.code||data?.error_code||'unknown'});
    let status=503,message='تعذر الوصول إلى خدمة البيانات مؤقتًا. حاول بعد لحظة.';
    if(path==='/auth/v1/user'&&[400,401,403].includes(response.status)){status=401;message='انتهت جلسة الدخول. سجّل الدخول مجددًا.'}
    else if(response.status===429){status=429;message='طلبات كثيرة إلى الخدمة. انتظر قليلًا ثم أعد المحاولة.'}
@@ -34,7 +37,7 @@ export function supabaseAdapter(url,secret,fetcher=fetch){
   limit:async(client,p='')=>{const minute=Math.floor(Date.now()/60000),hash=x=>createHash('sha256').update(x).digest('hex');if(!await rpc('clinic_lookup_budget',{ip_key:hash('ip|'+client+'|'+minute),patient_key:hash('patient|'+client+'|'+p+'|'+minute)})){const e=new Error('طلبات كثيرة. حاول بعد دقيقة.');e.status=429;throw e}},
   createUser:async(u,p)=>{const data=await call('/auth/v1/admin/users',{method:'POST',body:JSON.stringify({email:u+'@clinic.app',password:p,email_confirm:true})});return data.id},
   deleteUser:async uid=>{await rpc('clinic_revoke_sessions',{user_uuid:uid});await call('/auth/v1/admin/users/'+encodeURIComponent(uid),{method:'DELETE'})},
-  updateUser:async(uid,password)=>{await call('/auth/v1/admin/users/'+encodeURIComponent(uid),{method:'PUT',body:JSON.stringify({password})});await rpc('clinic_revoke_sessions',{user_uuid:uid})},
+  updateUser:async(uid,password)=>{await call('/auth/v1/admin/users/'+encodeURIComponent(uid),{method:'PUT',body:JSON.stringify({password})})},
   updateCredentials:async(uid,{username,password})=>{await call('/auth/v1/admin/users/'+encodeURIComponent(uid),{method:'PUT',body:JSON.stringify({email:username+'@clinic.app',email_confirm:true,...(password?{password}:{})})})},
   revokeUserSessions:async uid=>{await rpc('clinic_revoke_sessions',{user_uuid:uid})},
   verify:async token=>{
