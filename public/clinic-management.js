@@ -58,7 +58,7 @@ async function refreshWorkspaceData(){if(!me)return;var owner=me,epoch=++dataEpo
 };
 
 var adminDirtyTab=null;
-function adminDraftDirty(){return adminDirtyTab===tab&&["clinic","design","users"].includes(tab)}
+function adminDraftDirty(){return adminDirtyTab===tab&&["clinic","design","users","header","display"].includes(tab)}
 function clearAdminDraft(){adminDirtyTab=null}
 document.addEventListener("input",function(e){if(e.target.closest("#app")&&/^(site_|design_|advanced_|palette_|image_|user_)/.test(e.target.id))adminDirtyTab=tab});
 document.addEventListener("change",function(e){if(e.target.closest("#app")&&(e.target.matches("[data-perm]")||/^(site_|design_|advanced_|palette_|image_|user_)/.test(e.target.id)))adminDirtyTab=tab});

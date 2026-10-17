@@ -1,7 +1,7 @@
 const keys=['bookings.read','bookings.create','bookings.edit','bookings.status','bookings.delete','patients.read','patients.edit','patients.delete','complaints.read','complaints.create','complaints.edit','complaints.delete','notes.read','notes.edit','notifications.read','users.manage','clinic.manage','site.manage','data.export','data.delete'];
-keys.push('data.import','data.restore','audit.details','attachments.read','attachments.create','attachments.delete','attachments.own.delete','sessions.manage','queue.configure','reports.export','audit.read');
+keys.push('display.manage','data.import','data.restore','audit.details','attachments.read','attachments.create','attachments.delete','attachments.own.delete','sessions.manage','queue.configure','reports.export','audit.read');
 
-const administrative=['data.import','data.restore','audit.details','attachments.own.delete','users.manage','clinic.manage','site.manage','data.export','data.delete','audit.read','patients.delete'];
+const administrative=['display.manage','data.import','data.restore','audit.details','attachments.own.delete','users.manage','clinic.manage','site.manage','data.export','data.delete','audit.read','patients.delete'];
 const defaults={doctor:keys.filter(k=>!administrative.includes(k)),sec:['bookings.read','bookings.create','bookings.status'],nurse:['patients.read','complaints.read','complaints.create','attachments.read','attachments.create','attachments.own.delete'],staff:[]};
 function can(r,key){if(!keys.includes(key))return false;if(r.r==='admin')return keys.includes(key);return typeof r.permissions?.[key]==='boolean'?r.permissions[key]:(defaults[r.r]||[]).includes(key);}
 function requirePermission(r,key){if(!can(r,key)){const e=new Error('ليس لديك صلاحية لهذه العملية');e.status=403;throw e;}}

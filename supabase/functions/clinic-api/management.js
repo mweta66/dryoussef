@@ -1,4 +1,5 @@
 import {Buffer} from 'node:buffer';
+import * as displayOptions from './display-options.js';
 import * as siteContent from './site-content.js';
 import * as perms from './permissions.js';
 import * as cases from './cases.js';
@@ -26,7 +27,16 @@ function site(value,fail){
 }
 function mutate(original,uid,input,core){
  const s=structuredClone(original),r=core.role(s,uid);
+ if(input.action==='displaySave'){perms.requirePermission(r,'display.manage');if(input.revision!==(s.settings?.displayRev||0))core.fail('تغيرت إعدادات الشاشة من جلسة أخرى؛ أعد التحميل أولًا',409);s.settings||={};s.settings.display=displayOptions.normalize(input.config,core.branchIds(s,true));s.settings.displayRev=(s.settings.displayRev||0)+1;return s;}
  if(input.action==='siteContentSave'){perms.requirePermission(r,'site.manage');if(input.revision!==(s.settings?.contentRev||0))core.fail('تم تعديل المحتوى من جلسة أخرى؛ أعد التحميل قبل الحفظ',409);const content=siteContent.validate(input.sections,input.layout,core.fail);s.settings||={};s.settings.site={...s.settings.site,...content};s.settings.contentRev=(s.settings.contentRev||0)+1;return s;}
+ if(input.action==='headerSave'){
+  perms.requirePermission(r,'site.manage');if(input.revision!==(s.settings?.headerRev||0))core.fail('تم تعديل الهيدر من جلسة أخرى؛ أعد تحميل الإعدادات أولًا',409);const incoming=site(input.site,core.fail);s.settings||={};const current=s.settings.site||{},next={...current},design={...current.design};
+  for(const key of ['headerTitle','headerSubtitle','headerText'])if(incoming[key]!==undefined)next[key]=incoming[key];
+  for(const key of ['headerWidth','headerRadius','headerHeight','headerTitleSize','headerSubtitleSize','headerTextSize','logoSize','photoSize','headerPadding','headerGap','headerAlign','logo','doctorPhoto'])if(incoming.design[key]!==undefined)design[key]=incoming.design[key];
+  if(incoming.design.headerColors)design.headerColors=incoming.design.headerColors;
+  if(incoming.design.palettes){design.palettes=structuredClone(current.design?.palettes||{});for(const mode of ['light','dark'])if(incoming.design.palettes?.[mode]){const colors=incoming.design.palettes[mode];design.palettes[mode]={...colors,...design.palettes[mode]};for(const key of ['headerBackground','headerText'])if(colors[key]!==undefined)design.palettes[mode][key]=colors[key];}}
+  if(JSON.stringify(current.design)!==JSON.stringify(design))s.settings.previousDesign=structuredClone(current.design||{});next.design=design;s.settings.site=next;s.settings.headerRev=(s.settings.headerRev||0)+1;return s;
+ }
  if(input.action==='siteSave'){perms.requirePermission(r,'site.manage');s.settings||={};const nextSite=site(input.site,core.fail);nextSite.sections=s.settings.site?.sections||{};nextSite.layout=s.settings.site?.layout||{};if(JSON.stringify(s.settings.site?.design)!==JSON.stringify(nextSite.design))s.settings.previousDesign=structuredClone(s.settings.site?.design||{});s.settings.site=nextSite;if(s.settings.branches)for(const [b,x]of Object.entries(s.settings.site.branches)){if(s.settings.branches[b])s.settings.branches[b]={...s.settings.branches[b],...x};}return s;}
  if(input.action==='userSave'){
   perms.requirePermission(r,'users.manage');if(!s.roles[input.uid])core.fail('المستخدم غير موجود',404);

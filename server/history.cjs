@@ -17,6 +17,7 @@ function record(before,next,input,uid){
  branches.splice(0,branches.length,...new Set(branches.filter(Boolean)));
  if(changes.some(x=>x.path[0]==='settings'&&x.path[1]==='sched')){next.settings||={};next.settings.scheduleUpdatedAt=at;}
  if(input.action!=='siteContentSave'&&changes.some(x=>x.path[0]==='settings'&&x.path[1]==='site'&&['sections','layout'].includes(x.path[2]))){next.settings.contentRev=(before.settings?.contentRev||0)+1;}
+ if(input.action!=='headerSave'&&changes.some(x=>x.path[0]==='settings'&&x.path[1]==='site'&&(!x.path[2]||['design','headerTitle','headerSubtitle','headerText','doctorName','specialty'].includes(x.path[2])))){next.settings.headerRev=(before.settings?.headerRev||0)+1;}
  const entry={id,at,actor:uid,actorName:before.roles?.[uid]?.displayName||before.roles?.[uid]?.u,action:input.action,target:input.uid,branch:input.branch||(branches.length===1?branches[0]:undefined),branches,changeCount:changes.length};
  next.audit=[...(before.audit||[]),entry];next.activityDetails={...(next.activityDetails||{}),[id]:changes.map(x=>safe(x))};
  // Archive the exact missing subtrees, including original image references. No automatic expiry.
