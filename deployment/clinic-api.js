@@ -1081,6 +1081,9 @@ function bad(message) {
   e.status = 400;
   throw e;
 }
+function validDate(value) {
+  return /^\d{4}-\d{2}-\d{2}$/.test(value) && Number.isFinite(Date.parse(value + "T12:00:00Z")) && (/* @__PURE__ */ new Date(value + "T12:00:00Z")).toISOString().slice(0, 10) === value;
+}
 function normalize3(input = {}, branches2 = []) {
   if (!input || typeof input !== "object" || Array.isArray(input)) bad("\u0625\u0639\u062F\u0627\u062F\u0627\u062A \u0634\u0627\u0634\u0629 \u0627\u0644\u062F\u0648\u0631 \u063A\u064A\u0631 \u0635\u062D\u064A\u062D\u0629");
   const out = {};
@@ -1099,6 +1102,11 @@ function normalize3(input = {}, branches2 = []) {
     if (typeof value !== "string" || value.length > 160) bad("\u0646\u0635 \u0627\u0644\u0634\u0627\u0634\u0629 \u064A\u062C\u0628 \u0623\u0644\u0627 \u064A\u062A\u062C\u0627\u0648\u0632 160 \u062D\u0631\u0641\u064B\u0627");
     out[key] = value;
   }
+  out.dateMode = input.dateMode ?? "local";
+  if (!["local", "today", "fixed"].includes(out.dateMode)) bad("\u0648\u0636\u0639 \u062A\u0627\u0631\u064A\u062E \u0627\u0644\u0634\u0627\u0634\u0629 \u063A\u064A\u0631 \u0635\u062D\u064A\u062D");
+  out.date = input.date ?? "";
+  if (typeof out.date !== "string" || out.date !== "" && !validDate(out.date)) bad("\u062A\u0627\u0631\u064A\u062E \u0634\u0627\u0634\u0629 \u0627\u0644\u062F\u0648\u0631 \u063A\u064A\u0631 \u0635\u062D\u064A\u062D");
+  if (out.dateMode === "fixed" && !validDate(out.date)) bad("\u0627\u062E\u062A\u0631 \u062A\u0627\u0631\u064A\u062E\u064B\u0627 \u0635\u062D\u064A\u062D\u064B\u0627 \u0644\u062A\u062B\u0628\u064A\u062A \u0634\u0627\u0634\u0629 \u0627\u0644\u062F\u0648\u0631");
   out.branchMode = input.branchMode || "local";
   if (!["local", "doctor", "fixed"].includes(out.branchMode)) bad("\u0648\u0636\u0639 \u0641\u0631\u0639 \u0627\u0644\u0634\u0627\u0634\u0629 \u063A\u064A\u0631 \u0635\u062D\u064A\u062D");
   if (input.branch !== void 0 && typeof input.branch !== "string") bad("\u0641\u0631\u0639 \u0627\u0644\u0634\u0627\u0634\u0629 \u063A\u064A\u0631 \u0635\u062D\u064A\u062D");
@@ -1416,13 +1424,13 @@ function mutate(original, uid, input, core) {
 }
 
 // supabase/functions/clinic-api/schedule.js
-function validDate(date2) {
+function validDate2(date2) {
   const parsed = /* @__PURE__ */ new Date(date2 + "T12:00:00Z");
   return /^\d{4}-\d{2}-\d{2}$/.test(date2) && Number.isFinite(parsed.getTime()) && parsed.toISOString().slice(0, 10) === date2;
 }
 function availability(registry, schedules, date2) {
   const result = { scheduled: [], flexible: [] };
-  if (!validDate(date2)) return result;
+  if (!validDate2(date2)) return result;
   const day = (/* @__PURE__ */ new Date(date2 + "T12:00:00Z")).getUTCDay();
   for (const [id2, branch] of Object.entries(registry)) {
     if (branch.enabled === false) continue;
