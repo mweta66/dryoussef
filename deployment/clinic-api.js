@@ -634,6 +634,25 @@ function commit(state, uid, puts, dels, now = today()) {
     n.no = moved ? max + 1 : old.no;
     state.sequences[seqKey] = Math.max(max, n.no);
     n.rev = (old?.rev || 0) + 1;
+    if (Object.hasOwn(p, "patient")) {
+      if (!p.patient || typeof p.patient !== "object" || Array.isArray(p.patient) || Object.keys(p.patient).some((k) => !["spouseName", "spouseJob", "spousePhone"].includes(k))) fail2("\u0631\u0627\u062C\u0639 \u0628\u064A\u0627\u0646\u0627\u062A \u0627\u0644\u0632\u0648\u062C");
+      const existing = state.patients?.[n.phone], family = {};
+      for (const [k, raw] of Object.entries(p.patient)) {
+        if (typeof raw !== "string" || raw.length > 120) fail2("\u0631\u0627\u062C\u0639 \u0628\u064A\u0627\u0646\u0627\u062A \u0627\u0644\u0632\u0648\u062C");
+        const value = k === "spousePhone" ? phone(raw) : raw.trim();
+        if (k === "spousePhone" && value && !/^01[0125]\d{8}$/.test(value)) fail2("\u0631\u0642\u0645 \u0645\u0648\u0628\u0627\u064A\u0644 \u0627\u0644\u0632\u0648\u062C \u063A\u064A\u0631 \u0635\u062D\u064A\u062D");
+        if (value === (existing?.[k] || "")) continue;
+        if (old || existing?.[k]) {
+          requirePermission(r, "patients.edit");
+          assertAccess(state, r, n.phone);
+        }
+        family[k] = value;
+      }
+      if (Object.keys(family).length) {
+        state.patients ||= {};
+        state.patients[n.phone] = { ...existing, n: n.name, d: existing?.d || n.date, ...family };
+      }
+    }
     rows[n.id] = n;
     if (old?.s === "exam" && n.s === "wait" && old.date === n.date && old.b === n.b) advance.delete(old.date + "_" + old.b);
   }
@@ -696,7 +715,7 @@ function schedule2(s) {
 function patch2(state, uid, updates) {
   state = structuredClone(state || {});
   const r = role(state, uid);
-  if (updates && Object.keys(updates).every((p) => /^(patients|complaints|files|inbox)\//.test(p))) return patch(state, r, updates, api);
+  if (updates && Object.keys(updates).every((p) => /^(patients|complaints|files|inbox)\//.test(p))) return patch(state, r, updates, coreExports);
   if (!updates || Array.isArray(updates) || typeof updates !== "object" || Object.keys(updates).length > 10) fail2("\u062A\u062D\u062F\u064A\u062B \u063A\u064A\u0631 \u0635\u062D\u064A\u062D");
   state.settings ||= {};
   state.roles ||= {};
@@ -738,7 +757,7 @@ function lookup(state, p, now = today(), clock = Date.now()) {
   if (!x) return null;
   return queueTrack(state, Object.values(state.bookings[now] || {}), x, clock);
 }
-var api = { publicSettings, branchIds, presence, canExamine, assertExamine, phone, today, date, role, booking, commit, read: read2, patch: patch2, lookup, rebuild, fail: fail2, schedule: schedule2, queueOrder, queueTrack };
+var coreExports = { publicSettings, branchIds, presence, canExamine, assertExamine, phone, today, date, role, booking, commit, read: read2, patch: patch2, lookup, rebuild, fail: fail2, schedule: schedule2, queueOrder, queueTrack };
 
 // supabase/functions/clinic-api/demo-profiles.js
 var profiles = [
@@ -1508,6 +1527,14 @@ function normalize4(input, state = {}, withSettings = false) {
     const n = text(x.n, 120, "\u0627\u0633\u0645 \u0627\u0644\u0645\u0631\u064A\u0636").trim();
     if (!n) bad2("\u0627\u0644\u0627\u0633\u0645", "\u0627\u0633\u0645 \u0627\u0644\u062D\u0627\u0644\u0629 \u0645\u0637\u0644\u0648\u0628");
     out.patients[p] = { n, d: x.d ? date(x.d) : today() };
+    if (x.br !== void 0) {
+      if (!branchIds(state).includes(x.br)) bad2("\u0641\u0631\u0639 \u0627\u0644\u062D\u0627\u0644\u0629", "\u0641\u0631\u0639 \u063A\u064A\u0631 \u0645\u0639\u0631\u0648\u0641");
+      out.patients[p].br = x.br;
+    }
+    if (x.visitType !== void 0) {
+      if (!["exam", "cons", "follow", "emergency"].includes(x.visitType)) bad2("\u0646\u0648\u0639 \u0627\u0644\u0632\u064A\u0627\u0631\u0629", "\u0642\u064A\u0645\u0629 \u063A\u064A\u0631 \u0635\u062D\u064A\u062D\u0629");
+      out.patients[p].visitType = x.visitType;
+    }
     for (const k of ["spouseName", "spouseJob", "spousePhone"]) if (x[k] !== void 0) out.patients[p][k] = k === "spousePhone" ? x[k] ? phone2(x[k], k) : "" : text(x[k], 120, k);
   });
   const seenIds = /* @__PURE__ */ new Set(), seenPhones = /* @__PURE__ */ new Set();
@@ -1851,6 +1878,10 @@ function createService(baseAdapter) {
     if (action === "attachmentExport") return exportImage(adapter2, input, uid);
     if (["attachmentList", "attachmentUpload", "attachmentRead", "attachmentDelete"].includes(action)) return handleAttachments(adapter2, input, uid);
     const readFields = (fields, day = null, entity = null) => adapter2.readFields ? adapter2.readFields(fields, day, entity) : adapter2.read();
+    if (action === "bookingCapabilities") {
+      role(await readFields(["roles"]), uid);
+      return { familyMetadata: 1 };
+    }
     if (action === "importPreview") {
       const plan = prepare(await adapter2.read(), uid, input.data, input.options);
       return { summary: plan.summary, token: plan.token };

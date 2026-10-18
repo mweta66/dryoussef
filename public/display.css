@@ -118,3 +118,5 @@ html[data-display-hide-showNext] .display-grid{grid-template-columns:minmax(0,1f
 .display-panel-actions{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px}
 html[data-display-hide-showControls] .display-controls-toggle{display:none!important}
 @media(max-width:600px){.display-context{flex-wrap:wrap}.display-controls-toggle{font-size:12px;padding:6px 10px}}
+
+.display-header #display-logo{height:auto;width:min(var(--header-logo-size,104px),14vw);background:none;border-radius:0;object-fit:contain}
