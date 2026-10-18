@@ -1,3 +1,4 @@
+import * as patientPrint from './patient-print.js';
 import * as demoNames from './demo-names.js';
 import * as history from './history.js';
 import * as perms from './permissions.js';
@@ -24,6 +25,7 @@ function createService(baseAdapter) {
   if(action==='attachmentExport')return backup.exportImage(adapter,input,uid);
   if(['attachmentList','attachmentUpload','attachmentRead','attachmentDelete'].includes(action))return attachments.handleAttachments(adapter,input,uid);
   const readFields=(fields,day=null,entity=null)=>adapter.readFields?adapter.readFields(fields,day,entity):adapter.read();
+  if(action==='patientPrintData')return patientPrint.build(await readFields(['roles','patients','bookings','settings','files','complaints'],null,core.phone(input.phone)),uid,input.phone);
   if(action==='bookingCapabilities'){core.role(await readFields(['roles']),uid);return {familyMetadata:1};}
   if(action==='importPreview'){const plan=imports.prepare(await adapter.read(),uid,input.data,input.options);return {summary:plan.summary,token:plan.token};}
   if(action==='importApply'){if(input.confirmation!=='IMPORT_CLINIC_DATA'||typeof input.previewToken!=='string')core.fail('راجع المعاينة وأكد الاستيراد أولًا');let summary;await adapter.mutate(s=>{const plan=imports.prepare(s,uid,input.data,input.options);if(plan.token!==input.previewToken)core.fail('تغيرت بيانات العيادة أو الملف منذ المعاينة؛ أعد المعاينة أولًا',409);summary=plan.summary;return plan.state;});return {ok:true,summary};}
@@ -97,7 +99,7 @@ function createService(baseAdapter) {
     state.settings||={};state.settings.demoPurged=true;core.rebuild(state);return state;
    });return {ok:true};
   }
-  if(['displaySave','headerSave','siteContentSave','siteSave','userSave','patientSave','patientDelete','dataClear'].includes(action)){await adapter.mutate(s=>management.mutate(s,uid,input,core));return {ok:true,...(['patientDelete','dataClear'].includes(action)?{cleanupPending:await cleanup.drain(adapter)}:{})};}
+  if(['watermarkSave','aboutSave','displaySave','headerSave','siteContentSave','siteSave','userSave','patientSave','patientDelete','dataClear'].includes(action)){await adapter.mutate(s=>management.mutate(s,uid,input,core));return {ok:true,...(['patientDelete','dataClear'].includes(action)?{cleanupPending:await cleanup.drain(adapter)}:{})};}
   if(action==='userRevokeSessions'){const state=await adapter.read();perms.requirePermission(core.role(state,uid),'users.manage');if(!state.roles?.[input.uid])core.fail('المستخدم غير موجود',404);await adapter.revokeUserSessions(input.uid);await adapter.mutate(s=>structuredClone(s));return {ok:true};}
   if(action==='userPassword'){const state=await adapter.read();perms.requirePermission(core.role(state,uid),'users.manage');if(!input.uid||typeof input.password!=='string'||input.password.length<6||input.password.length>128)core.fail('كلمة السر من 6 إلى 128 حرفاً');const target=state.roles?.[input.uid];if(!target)core.fail('المستخدم غير موجود',404);try{await adapter.updateUser(input.uid,input.password)}catch(e){if(e.status>=500)core.fail('تعذر تأكيد نتيجة تغيير كلمة السر لحساب '+target.u+'. تحقق من تسجيل الدخول قبل إعادة المحاولة.',503);throw e}let warning='';try{await adapter.revokeUserSessions(input.uid)}catch(e){warning='تم حفظ كلمة السر، لكن تعذر إنهاء الجلسات القديمة. أعد محاولة إنهائها.'}await adapter.mutate(s=>structuredClone(s));return {ok:true,username:target.u,enabled:target.enabled!==false,warning};}
   if(action==='userCredentials'){

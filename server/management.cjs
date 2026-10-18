@@ -14,7 +14,7 @@ function site(value,fail){
  const d=value.design||{};result.design=designOptions.validate(d);for(const k of ['primary','background','text','accent','card']){if(d[k]!==undefined){if(!/^#[0-9a-f]{6}$/i.test(d[k]))fail('لون غير صحيح');result.design[k]=d[k];}}
  for(const [k,min,max] of [['radius',0,40],['width',600,1200],['fontSize',14,22]])if(d[k]!==undefined){if(!Number.isInteger(d[k])||d[k]<min||d[k]>max)fail('قيمة تصميم غير صحيحة');result.design[k]=d[k];}
  if(d.showBackground!==undefined){if(typeof d.showBackground!=='boolean')fail('خيار الخلفية غير صحيح');result.design.showBackground=d.showBackground;}
- for(const k of ['logo','doctorPhoto'])if(d[k]!==undefined){
+ for(const k of ['logo','doctorPhoto','watermarkImage'])if(d[k]!==undefined){
   if(d[k]===''){result.design[k]='';continue;}
   const match=String(d[k]).match(/^data:image\/(png|jpeg|webp);base64,([A-Za-z0-9+/]+=*)$/);if(!match)fail('الصورة يجب أن تكون PNG أو JPEG أو WebP');
   const bytes=Buffer.from(match[2],'base64');if(bytes.length>200000||bytes.length<12)fail('حجم الصورة غير مناسب');
@@ -26,6 +26,12 @@ function mutate(original,uid,input,core){
  const s=structuredClone(original),r=core.role(s,uid);
  if(input.action==='displaySave'){perms.requirePermission(r,'display.manage');if(input.revision!==(s.settings?.displayRev||0))core.fail('تغيرت إعدادات الشاشة من جلسة أخرى؛ أعد التحميل أولًا',409);s.settings||={};s.settings.display=displayOptions.normalize(input.config,core.branchIds(s,true));s.settings.displayRev=(s.settings.displayRev||0)+1;return s;}
  if(input.action==='siteContentSave'){perms.requirePermission(r,'site.manage');if(input.revision!==(s.settings?.contentRev||0))core.fail('تم تعديل المحتوى من جلسة أخرى؛ أعد التحميل قبل الحفظ',409);const content=siteContent.validate(input.sections,input.layout,core.fail);s.settings||={};s.settings.site={...s.settings.site,...content};s.settings.contentRev=(s.settings.contentRev||0)+1;return s;}
+ if(input.action==='watermarkSave'){
+  perms.requirePermission(r,'site.manage');if(input.revision!==(s.settings?.watermarkRev||0))core.fail('تم تعديل اللوجو الخلفية من جلسة أخرى؛ أعد تحميل الإعدادات أولًا',409);const incoming=site({design:input.design},core.fail);s.settings||={};const current=s.settings.site||{},design={...current.design};for(const key of Object.keys(design))if(key.startsWith('watermark'))delete design[key];for(const [key,value]of Object.entries(incoming.design))if(key.startsWith('watermark'))design[key]=value;s.settings.previousDesign=structuredClone(current.design||{});s.settings.site={...current,design};s.settings.watermarkRev=(s.settings.watermarkRev||0)+1;return s;
+ }
+ if(input.action==='aboutSave'){
+  perms.requirePermission(r,'site.manage');if(input.revision!==(s.settings?.aboutRev||0))core.fail('تم تعديل نبذة العيادة من جلسة أخرى؛ أعد تحميل الإعدادات أولًا',409);if(typeof input.text!=='string')core.fail('نص النبذة غير صحيح');const incoming=site({about:input.text,design:input.design},core.fail);s.settings||={};const current=s.settings.site||{},design={...current.design};for(const key of Object.keys(design))if(key.startsWith('about'))delete design[key];for(const [key,value]of Object.entries(incoming.design))if(key.startsWith('about'))design[key]=value;if(JSON.stringify(current.design)!==JSON.stringify(design))s.settings.previousDesign=structuredClone(current.design||{});s.settings.site={...current,about:incoming.about,design};s.settings.aboutRev=(s.settings.aboutRev||0)+1;return s;
+ }
  if(input.action==='headerSave'){
   perms.requirePermission(r,'site.manage');if(input.revision!==(s.settings?.headerRev||0))core.fail('تم تعديل الهيدر من جلسة أخرى؛ أعد تحميل الإعدادات أولًا',409);const incoming=site(input.site,core.fail);s.settings||={};const current=s.settings.site||{},next={...current},design={...current.design};
   for(const key of ['headerTitle','headerSubtitle','headerText'])if(incoming[key]!==undefined)next[key]=incoming[key];
