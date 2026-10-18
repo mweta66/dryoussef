@@ -16,7 +16,7 @@ function makeDemo() {
   const d=time.toISOString().slice(0,10);state.bookings[d]={};
   for(const b of ['dmn','alex'])for(let no=1;no<=6;no++){
    i++;const id='demo_booking_'+i;
-   state.bookings[d][id]={id,no,date:d,b,name:egyptianName(i-1),phone:'010000'+String(i).padStart(5,'0'),v:no%2?'exam':'cons',s:['wait','exam','done','no','cx','wait'][no-1],nt:'بيانات اصطناعية للاختبار فقط — لا تستخدم للتواصل',rev:1};
+   state.bookings[d][id]={id,no,date:d,b,name:egyptianName(i-1),phone:'010000'+String(i).padStart(5,'0'),v:no%2?'exam':'cons',s:['wait','exam','done','no','cx','wait'][no-1],nt:'',rev:1};
    state.sequences[d+'_'+b]=no;
   }
  }

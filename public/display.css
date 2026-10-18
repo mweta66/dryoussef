@@ -103,8 +103,8 @@ html:has(.queue-display){height:100%;overflow:hidden}
  .display-audio-panel[open] .display-audio-levels{margin-top:3px;gap:6px}
 }
 /* Keep controls usable on small screens when explicitly expanded. */
-.queue-display:has(.display-controls[open]) .display-wrap{overflow:auto}
-.queue-display:has(.display-controls[open]) .display-grid{flex:none;height:max(260px,50vh)}
+.queue-display:has(.display-controls:not([hidden])) .display-wrap{overflow:auto}
+.queue-display:has(.display-controls:not([hidden])) .display-grid{flex:none;height:max(260px,50vh)}
 .display-current h2{text-align:center}
 .display-header{width:var(--header-width,100%);margin-inline:auto;border-radius:var(--header-radius,18px)}
 @media(max-width:600px){.display-header{width:100%}}
@@ -112,3 +112,9 @@ html:has(.queue-display){height:100%;overflow:hidden}
 html[data-display-hide-showNext] .display-next,html[data-display-hide-showWaiting] #waiting-count,html[data-display-hide-showClock] #clock,html[data-display-hide-showDate] #display-date,html[data-display-hide-showSchedule] #display-schedule,html[data-display-hide-showFooter] #display-footer-text,html[data-display-hide-showConnection] #connection:not([data-error=true]),html[data-display-hide-showControls] .display-controls,html[data-display-hide-showGuide] #current-guide{display:none!important}
 html[data-display-hide-showNext] .display-grid{grid-template-columns:minmax(0,1fr);grid-template-rows:minmax(0,1fr)}
 @media(max-aspect-ratio:4/5){.display-grid{grid-template-columns:minmax(0,1fr);grid-template-rows:minmax(0,var(--queue-main-share,2fr)) minmax(0,var(--queue-next-share,1fr))}#next.waiting span{font-size:min(var(--queue-next-portrait-size,38cqh),calc(62cqw / var(--next-digits,2)),15vw)}}
+
+.display-controls[hidden],.display-controls-toggle[hidden]{display:none!important}
+.display-controls-toggle{flex:none;border:1px solid var(--line);border-radius:10px;padding:7px 12px;background:var(--card);color:var(--ink);font:inherit;font-size:14px;cursor:pointer}
+.display-panel-actions{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px}
+html[data-display-hide-showControls] .display-controls-toggle{display:none!important}
+@media(max-width:600px){.display-context{flex-wrap:wrap}.display-controls-toggle{font-size:12px;padding:6px 10px}}
