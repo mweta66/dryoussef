@@ -15,7 +15,7 @@ function createService(baseAdapter) {
   if(action==='normalizeDemoNames'){let summary;await adapter.mutate(s=>{const result=demoNames.normalize(s,uid);summary=result.summary;return result.state;});return {ok:true,...summary,profileMigrationVersion:1};}
   if(action==='trashList')return history.list(await adapter.read(),uid,input);
   if(action==='trashRestore'){await adapter.mutate(s=>history.restore(s,uid,input.id));return {ok:true};}
-  if(action==='auditDetail'){const s=await adapter.read();history.admin(s,uid,'audit.details');const entry=(s.audit||[]).find(x=>x.id===input.id);if(!entry)core.fail('السجل غير موجود',404);return {...entry,changes:s.activityDetails?.[input.id]||[]};}
+  if(action==='auditDetail'){const s=await adapter.read();history.admin(s,uid,'audit.details');const entry=(s.audit||[]).find(x=>x.id===input.id);if(!entry)core.fail('السجل غير موجود',404);const changes=s.activityDetails?.[input.id]||[];return {...entry,changes,context:s.activityContext?.[input.id]||history.context(s,s,changes,entry)};}
   if(action==='attachmentExport')return backup.exportImage(adapter,input,uid);
   if(['attachmentList','attachmentUpload','attachmentRead','attachmentDelete'].includes(action))return attachments.handleAttachments(adapter,input,uid);
   const readFields=(fields,day=null,entity=null)=>adapter.readFields?adapter.readFields(fields,day,entity):adapter.read();

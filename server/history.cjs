@@ -9,6 +9,21 @@ function diff(before,after,path=[],out=[]){
  return out;
 }
 function safe(value){if(Array.isArray(value))return value.map(safe);if(object(value))return Object.fromEntries(Object.entries(value).filter(([k])=>!/(password|token|secret|hash|salt)/i.test(k)).map(([k,v])=>[k,safe(v)]));return typeof value==='string'&&value.startsWith('data:image/')?'[صورة مضمّنة]':value;}
+function context(before,next,changes,input={}){
+ const out={patients:{},bookings:{},branches:{},users:{}};
+ for(const state of [before,next]){
+  for(const [p,x]of Object.entries(state.patients||{}))if(x.n)out.patients[p]=x.n;
+  for(const [d,rows]of Object.entries(state.bookings||{}))for(const x of Object.values(rows)){out.patients[x.phone]||=x.name;out.bookings[d+'/'+x.id]={name:x.name,phone:x.phone,no:x.no,b:x.b,date:d};}
+  for(const [b,x]of Object.entries(state.settings?.branches||state.settings?.site?.branches||{}))out.branches[b]=x.name;
+  for(const [id,x]of Object.entries(state.roles||{})){out.users[id]=x.displayName||x.u;out.users[x.u]=x.displayName||x.u;}
+ }
+ const phones=new Set(),tickets=new Set(),users=new Set([input.uid,input.actor].filter(Boolean));
+ for(const c of changes){const [root,a,b]=c.path;if(['patients','files','complaints','attachments','inbox','followups'].includes(root))phones.add(a);if(root==='patients'){for(const v of [c.before,c.after])if(v&&typeof v==='object'&&v.n)out.patients[a]=v.n;if(b==='n'&&typeof(c.after||c.before)==='string')out.patients[a]=c.after||c.before;}if(root==='roles')users.add(a);
+  if(root==='bookings'){if(b)tickets.add(a+'/'+b);for(const v of [c.before,c.after])if(v&&typeof v==='object'){const rows=b?[v]:Object.values(v);for(const x of rows)if(x?.id){out.bookings[a+'/'+x.id]={name:x.name,phone:x.phone,no:x.no,b:x.b,date:a};out.patients[x.phone]||=x.name;phones.add(x.phone);tickets.add(a+'/'+x.id);}}}
+ }
+ for(const k of tickets)if(out.bookings[k]?.phone)phones.add(out.bookings[k].phone);
+ out.patients=Object.fromEntries(Object.entries(out.patients).filter(([p])=>phones.has(p)));out.bookings=Object.fromEntries(Object.entries(out.bookings).filter(([k])=>tickets.has(k)));out.users=Object.fromEntries(Object.entries(out.users).filter(([id])=>users.has(id)||changes.some(c=>['by','editedBy','archivedBy'].includes(c.path.at(-1))&&[c.before,c.after].includes(id))));return out;
+}
 function record(before,next,input,uid){
  const changes=[];for(const root of ROOTS)diff(before[root]||{},next[root]||{},[root],changes);
  const id=crypto.randomUUID(),at=new Date().toISOString(),branches=[...new Set((input.puts||[]).map(x=>x.n?.b).concat((input.dels||[]).map(x=>x.b)).filter(Boolean))];
@@ -19,7 +34,7 @@ function record(before,next,input,uid){
  if(input.action!=='siteContentSave'&&changes.some(x=>x.path[0]==='settings'&&x.path[1]==='site'&&['sections','layout'].includes(x.path[2]))){next.settings.contentRev=(before.settings?.contentRev||0)+1;}
  if(input.action!=='headerSave'&&changes.some(x=>x.path[0]==='settings'&&x.path[1]==='site'&&(!x.path[2]||['design','headerTitle','headerSubtitle','headerText','doctorName','specialty'].includes(x.path[2])))){next.settings.headerRev=(before.settings?.headerRev||0)+1;}
  const entry={id,at,actor:uid,actorName:before.roles?.[uid]?.displayName||before.roles?.[uid]?.u,action:input.action,target:input.uid,branch:input.branch||(branches.length===1?branches[0]:undefined),branches,changeCount:changes.length};
- next.audit=[...(before.audit||[]),entry];next.activityDetails={...(next.activityDetails||{}),[id]:changes.map(x=>safe(x))};
+ next.audit=[...(before.audit||[]),entry];next.activityDetails={...(next.activityDetails||{}),[id]:changes.map(x=>safe(x))};next.activityContext={...(next.activityContext||{}),[id]:context(before,next,changes,{...input,actor:uid})};
  // Archive the exact missing subtrees, including original image references. No automatic expiry.
  if(input.action==='bookingRestore')for(const group of Object.values(next.recycleBin||{})){group.items=(group.items||[]).filter(x=>!(x.path[0]==='bookings'&&x.path[2]===input.id));if(!group.items.length)group.restoredAt=at;}
  const removed=changes.filter(x=>x.removed&&!['roles','sessions','complaintSequences'].includes(x.path[0]));
@@ -48,4 +63,4 @@ function restore(original,uid,id){
  group.restoredAt=new Date().toISOString();group.restoredBy=uid;core.rebuild(s);return s;
 }
 function list(state,uid,input){admin(state,uid);const page=Math.max(0,Math.floor(Number(input.page)||0)),size=30;let rows=Object.values(state.recycleBin||{}).filter(x=>!x.restoredAt).sort((a,b)=>b.at.localeCompare(a.at));return {total:rows.length,page,rows:rows.slice(page*size,(page+1)*size).map(({items,...entry})=>({...entry,count:items.length,paths:items.map(x=>x.path.join('/'))}))};}
-module.exports={record,restore,list,admin,diff};
+module.exports={context,record,restore,list,admin,diff};
