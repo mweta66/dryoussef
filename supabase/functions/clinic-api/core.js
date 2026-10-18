@@ -107,6 +107,12 @@ function commit(state, uid, puts, dels, now=today()) {
   n.no=moved?max+1:old.no;
   state.sequences[seqKey]=Math.max(max,n.no);
   n.rev=(old?.rev||0)+1;
+  if(Object.hasOwn(p,'patient')){
+   if(!p.patient||typeof p.patient!=='object'||Array.isArray(p.patient)||Object.keys(p.patient).some(k=>!['spouseName','spouseJob','spousePhone'].includes(k)))fail('راجع بيانات الزوج');
+   const existing=state.patients?.[n.phone],family={};
+   for(const [k,raw]of Object.entries(p.patient)){if(typeof raw!=='string'||raw.length>120)fail('راجع بيانات الزوج');const value=k==='spousePhone'?phone(raw):raw.trim();if(k==='spousePhone'&&value&&!/^01[0125]\d{8}$/.test(value))fail('رقم موبايل الزوج غير صحيح');if(value===(existing?.[k]||''))continue;if(old||existing?.[k]){perms.requirePermission(r,'patients.edit');cases.assertAccess(state,r,n.phone);}family[k]=value;}
+   if(Object.keys(family).length){state.patients||={};state.patients[n.phone]={...existing,n:n.name,d:existing?.d||n.date,...family};}
+  }
   rows[n.id]=n;
   if(old?.s==='exam'&&n.s==='wait'&&old.date===n.date&&old.b===n.b)advance.delete(old.date+'_'+old.b);
  }
@@ -137,7 +143,7 @@ function schedule(s) {return branchConfig.schedule(s,fail)}
 
 function patch(state,uid,updates) {
  state=structuredClone(state||{});const r=role(state,uid);
- if(updates&&Object.keys(updates).every(p=>/^(patients|complaints|files|inbox)\//.test(p)))return cases.patch(state,r,updates,api);
+ if(updates&&Object.keys(updates).every(p=>/^(patients|complaints|files|inbox)\//.test(p)))return cases.patch(state,r,updates,coreExports);
  if(!updates||Array.isArray(updates)||typeof updates!=='object'||Object.keys(updates).length>10)fail('تحديث غير صحيح');
  state.settings||={};state.roles||={};
  for(const [path,value] of Object.entries(updates)){
@@ -162,6 +168,5 @@ function lookup(state,p,now=today(),clock=Date.now()) {
  const x=Object.values(state.bookings?.[now]||{}).find(x=>x.phone===p);
  if(!x)return null;return queueTrack(state,Object.values(state.bookings[now]||{}),x,clock);
 }
+const coreExports={publicSettings,branchIds,presence,canExamine,assertExamine,phone,today,date,role,booking,commit,read,patch,lookup,rebuild,fail,schedule,queueOrder,queueTrack};
 export {publicSettings,branchIds,presence,canExamine,assertExamine,phone,today,date,role,booking,commit,read,patch,lookup,rebuild,fail,schedule,queueOrder,queueTrack};
-
-const api={publicSettings,branchIds,presence,canExamine,assertExamine,phone,today,date,role,booking,commit,read,patch,lookup,rebuild,fail,schedule,queueOrder,queueTrack};
