@@ -138,7 +138,9 @@ html[data-display-hide-showControls] .display-controls-toggle{display:none!impor
 @media(max-width:600px){.display-emergency-notice{font-size:min(var(--notice-font-size,18px),24px)}}
 
 /* Queue screens use the header logo only; shared watermarks remain on other pages. */
-.queue-display .display-header{direction:rtl;align-items:flex-start}
-.queue-display .display-identity{flex:1;flex-direction:row;align-items:flex-start}
-.queue-display #display-logo{align-self:flex-start}
+.queue-display .display-header{direction:rtl;display:grid;grid-template-columns:minmax(0,1fr) auto minmax(0,1fr);align-items:center}
+.queue-display .display-identity{display:contents}
+.queue-display .display-identity>div{grid-column:1;grid-row:1;min-width:0}
+.queue-display #display-logo{grid-column:2;grid-row:1;justify-self:center;align-self:center}
+.queue-display .display-time{grid-column:3;grid-row:1;max-width:100%;min-width:0}
 .queue-display .display-header::before,.queue-display .card::before{content:none;display:none!important}
