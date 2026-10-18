@@ -1,10 +1,11 @@
 const {test}=require('node:test'),assert=require('node:assert/strict');
 const core=require('../server/core.cjs'),{makeDemo}=require('../scripts/demo-data.cjs'),{createService}=require('../server/service.cjs');
 function fixture(){const state=makeDemo().state;state.roles.demo_nurse={r:'nurse',u:'nurse'};return state;}
-test('nurse can search patients and read complaints but cannot read bookings, notes or inbox',()=>{
+test('nurse can search patients, read complaints and bookings but cannot read private notes or inbox',()=>{
  const s=fixture(),p=Object.values(s.bookings[core.today()])[0].phone;
  assert.ok(core.read(s,'demo_nurse','patients')[p]);assert.deepEqual(core.read(s,'demo_nurse','complaints/'+p),{});
- for(const path of ['bookings','bookings/'+core.today(),'files/'+p,'files','complaints','inbox','roles'])assert.throws(()=>core.read(s,'demo_nurse',path),{status:403});
+ assert.ok(core.read(s,'demo_nurse','bookings/'+core.today()));
+ for(const path of ['files/'+p,'files','complaints','inbox','roles'])assert.throws(()=>core.read(s,'demo_nurse',path),{status:403});
  assert.throws(()=>core.read(s,'demo_dmn','patients'),{status:403});
 });
 test('nurse complaints generate a trusted notification and cannot be overwritten or deleted by a nurse',()=>{

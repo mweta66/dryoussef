@@ -83,7 +83,7 @@ function commit(state, uid, puts, dels, now=today()) {
   if(!perms.can(r,'notes.edit'))n.nt=old?.nt||'';
   if(!old)perms.requirePermission(r,'bookings.create');
   if(!old&&!['doctor','admin'].includes(r.r)&&n.date<now)fail('لا يمكن الحجز في تاريخ سابق');
-  if(old&&['name','phone','v','nt','date','b'].some(k=>n[k]!==old[k]))perms.requirePermission(r,'bookings.edit');
+  if(old&&['name','phone','v','nt','date','b'].some(k=>n[k]!==(k==='nt'?String(old[k]||''):old[k])))perms.requirePermission(r,'bookings.edit');
   const limit=branchConfig.branches(state)[n.b]?.maxBookings||0;if(limit&&(!old||old.b!==n.b||old.date!==n.date||old.s==='cx'&&n.s!=='cx')&&n.s!=='cx'&&n.v!=='emergency'&&Object.values(state.bookings[n.date]||{}).filter(x=>x.b===n.b&&x.id!==n.id&&x.s!=='cx'&&x.v!=='emergency').length>=limit)fail('اكتمل الحد اليومي للحجوزات في هذا الفرع. اختر يومًا آخر أو راجع الإدارة.',409);
   const otherActive=Object.values(state.bookings[n.date]||{}).find(x=>x.b===n.b&&x.s==='exam');
   const sessionKey=n.date+'_'+n.b,session=state.sessions?.[sessionKey];
@@ -106,7 +106,7 @@ function commit(state, uid, puts, dels, now=today()) {
   const max=Math.max(state.sequences[seqKey]||0,0,...Object.values(rows).filter(x=>x.b===n.b).map(x=>Number(x.no)||0));
   n.no=moved?max+1:old.no;
   state.sequences[seqKey]=Math.max(max,n.no);
-  n.rev=(old?.rev||0)+1;
+  n.rev=(old?.rev||0)+1;if(old?.scheduleMove)n.scheduleMove=old.scheduleMove;
   if(Object.hasOwn(p,'patient')){
    if(!p.patient||typeof p.patient!=='object'||Array.isArray(p.patient)||Object.keys(p.patient).some(k=>!['spouseName','spouseJob','spousePhone'].includes(k)))fail('راجع بيانات الزوج');
    const existing=state.patients?.[n.phone],family={};
