@@ -1,0 +1,5 @@
+/* Per-screen date selection persists in the URL, separately from shared settings. */
+var displayDateOverride=new URLSearchParams(location.search).get('date-mode')||'shared';
+if(!['shared','today','fixed'].includes(displayDateOverride))displayDateOverride='shared';
+function applyDisplayDateMode(){const date=document.getElementById('queue-date'),mode=displayDateOverride==='shared'?(displayAppearance.dateMode||'local'):displayDateOverride;document.getElementById('display-date-mode').value=displayDateOverride;date.disabled=mode==='today'||mode==='fixed'&&displayDateOverride==='shared';document.getElementById('display-today').disabled=false;if(mode==='today'){displayAutoDay=true;date.value=displayToday();}else if(mode==='fixed'){displayAutoDay=false;if(displayDateOverride==='shared')date.value=displayAppearance.date;else if(!validDisplayDate(date.value))date.value=displayToday();}}
+function changeDisplayDateMode(value){if(!['shared','today','fixed'].includes(value))return;displayDateOverride=value;applyDisplayDateMode();changeDisplaySelection();}

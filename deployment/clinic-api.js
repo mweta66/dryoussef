@@ -1099,6 +1099,8 @@ import { Buffer as Buffer2 } from "node:buffer";
 
 // supabase/functions/clinic-api/display-options.js
 var numbers = [["currentShare", 71, 60, 85], ["currentScale", 72, 60, 85], ["nextScale", 24, 12, 28], ["radius", 22, 0, 40], ["gap", 18, 8, 40], ["pollSeconds", 5, 5, 30], ["musicVolume", 18, 0, 100], ["callVolume", 85, 0, 100], ["musicTrack", 0, 0, 113]];
+var noticeNumbers = [["noticeFontSize", 18, 12, 48], ["noticeMaxWidth", 620, 160, 1e3], ["noticeBorderWidth", 2, 0, 8], ["noticeRadius", 12, 0, 48], ["noticePadding", 10, 4, 48], ["noticeNeonSize", 18, 0, 40]];
+var noticeColors = { noticeTextColor: "#ad362e", noticeBackground: "#fcecea", noticeBorderColor: "#ad362e", noticeNeonColor: "#ef4444" };
 var flags = { showNext: true, showWaiting: true, showClock: true, showDate: true, showSchedule: true, showFooter: true, showConnection: true, showControls: true, showGuide: true, customColors: false, managedAudio: false };
 var texts = { currentLabel: "\u0631\u0642\u0645 \u0627\u0644\u062D\u0627\u0644\u0629 \u0627\u0644\u062D\u0627\u0644\u064A\u0629", nextLabel: "\u0627\u0644\u062F\u0648\u0631 \u0627\u0644\u062A\u0627\u0644\u064A", guideText: "\u064A\u0631\u062C\u0649 \u0627\u0644\u0627\u0646\u062A\u0638\u0627\u0631 \u062D\u062A\u0649 \u0638\u0647\u0648\u0631 \u0631\u0642\u0645\u0643 \u0639\u0644\u0649 \u0627\u0644\u0634\u0627\u0634\u0629", emptyText: "\u0644\u0627 \u062A\u0648\u062C\u062F \u062D\u0627\u0644\u0627\u062A \u0641\u064A \u0627\u0644\u0627\u0646\u062A\u0638\u0627\u0631", footerText: "\u0627\u0644\u0637\u0648\u0627\u0631\u0626 \u0644\u0647\u0627 \u0623\u0648\u0644\u0648\u064A\u0629 \u0628\u0639\u062F \u0627\u0644\u062D\u0627\u0644\u0629 \u0627\u0644\u062D\u0627\u0644\u064A\u0629", runningText: "\u062C\u0627\u0631\u064A \u0627\u0644\u0643\u0634\u0641 \u2014 \u062A\u0641\u0636\u0644 \u0628\u0627\u0644\u062F\u062E\u0648\u0644", pausedText: "\u0627\u0644\u0643\u0634\u0641 \u0645\u062A\u0648\u0642\u0641 \u0645\u0624\u0642\u062A\u064B\u0627", endedText: "\u0627\u0646\u062A\u0647\u062A \u062C\u0644\u0633\u0629 \u0627\u0644\u0643\u0634\u0641", idleText: "\u0627\u0644\u0637\u0628\u064A\u0628 \u0644\u0645 \u064A\u0628\u062F\u0623 \u0627\u0644\u0643\u0634\u0641 \u0628\u0639\u062F" };
 var colorKeys = ["background", "currentBackground", "currentText", "nextBackground", "nextText", "accent"];
@@ -1134,6 +1136,20 @@ function normalize3(input = {}, branches2 = []) {
   out.date = input.date ?? "";
   if (typeof out.date !== "string" || out.date !== "" && !validDate(out.date)) bad("\u062A\u0627\u0631\u064A\u062E \u0634\u0627\u0634\u0629 \u0627\u0644\u062F\u0648\u0631 \u063A\u064A\u0631 \u0635\u062D\u064A\u062D");
   if (out.dateMode === "fixed" && !validDate(out.date)) bad("\u0627\u062E\u062A\u0631 \u062A\u0627\u0631\u064A\u062E\u064B\u0627 \u0635\u062D\u064A\u062D\u064B\u0627 \u0644\u062A\u062B\u0628\u064A\u062A \u0634\u0627\u0634\u0629 \u0627\u0644\u062F\u0648\u0631");
+  for (const [key, fallback, min, max] of noticeNumbers) {
+    const value = input[key] ?? fallback;
+    if (!Number.isInteger(value) || value < min || value > max) bad("\u0631\u0627\u062C\u0639 \u0645\u0642\u0627\u0633 \u0628\u0631\u0648\u0627\u0632 \u0627\u0644\u0637\u0648\u0627\u0631\u0626: " + key);
+    out[key] = value;
+  }
+  for (const [key, fallback] of Object.entries(noticeColors)) {
+    const value = input[key] ?? fallback;
+    if (!/^#[0-9a-f]{6}$/i.test(value)) bad("\u0644\u0648\u0646 \u0628\u0631\u0648\u0627\u0632 \u0627\u0644\u0637\u0648\u0627\u0631\u0626 \u063A\u064A\u0631 \u0635\u062D\u064A\u062D");
+    out[key] = value;
+  }
+  out.noticeNeonEnabled = input.noticeNeonEnabled ?? false;
+  if (typeof out.noticeNeonEnabled !== "boolean") bad("\u062E\u064A\u0627\u0631 \u0646\u064A\u0648\u0646 \u0627\u0644\u0637\u0648\u0627\u0631\u0626 \u063A\u064A\u0631 \u0635\u062D\u064A\u062D");
+  out.noticeAlign = input.noticeAlign ?? "center";
+  if (!["start", "center", "end"].includes(out.noticeAlign)) bad("\u0645\u062D\u0627\u0630\u0627\u0629 \u0631\u0633\u0627\u0644\u0629 \u0627\u0644\u0637\u0648\u0627\u0631\u0626 \u063A\u064A\u0631 \u0635\u062D\u064A\u062D\u0629");
   out.branchMode = input.branchMode || "local";
   if (!["local", "doctor", "fixed"].includes(out.branchMode)) bad("\u0648\u0636\u0639 \u0641\u0631\u0639 \u0627\u0644\u0634\u0627\u0634\u0629 \u063A\u064A\u0631 \u0635\u062D\u064A\u062D");
   if (input.branch !== void 0 && typeof input.branch !== "string") bad("\u0641\u0631\u0639 \u0627\u0644\u0634\u0627\u0634\u0629 \u063A\u064A\u0631 \u0635\u062D\u064A\u062D");
@@ -1957,6 +1973,10 @@ function createService(baseAdapter) {
     if (["attachmentList", "attachmentUpload", "attachmentRead", "attachmentDelete"].includes(action)) return handleAttachments(adapter2, input, uid);
     const readFields = (fields, day = null, entity = null) => adapter2.readFields ? adapter2.readFields(fields, day, entity) : adapter2.read();
     if (action === "patientPrintData") return build(await readFields(["roles", "patients", "bookings", "settings", "files", "complaints"], null, phone(input.phone)), uid, input.phone);
+    if (action === "displayCapabilities") {
+      requirePermission(role(await readFields(["roles"]), uid), "display.manage");
+      return { noticeAppearanceVersion: 1 };
+    }
     if (action === "bookingCapabilities") {
       role(await readFields(["roles"]), uid);
       return { familyMetadata: 1 };

@@ -21,6 +21,7 @@ function createService(baseAdapter) {
   if(['attachmentList','attachmentUpload','attachmentRead','attachmentDelete'].includes(action))return attachments.handleAttachments(adapter,input,uid);
   const readFields=(fields,day=null,entity=null)=>adapter.readFields?adapter.readFields(fields,day,entity):adapter.read();
   if(action==='patientPrintData')return patientPrint.build(await readFields(['roles','patients','bookings','settings','files','complaints'],null,core.phone(input.phone)),uid,input.phone);
+  if(action==='displayCapabilities'){perms.requirePermission(core.role(await readFields(['roles']),uid),'display.manage');return {noticeAppearanceVersion:1};}
   if(action==='bookingCapabilities'){core.role(await readFields(['roles']),uid);return {familyMetadata:1};}
   if(action==='importPreview'){const plan=imports.prepare(await adapter.read(),uid,input.data,input.options);return {summary:plan.summary,token:plan.token};}
   if(action==='importApply'){if(input.confirmation!=='IMPORT_CLINIC_DATA'||typeof input.previewToken!=='string')core.fail('راجع المعاينة وأكد الاستيراد أولًا');let summary;await adapter.mutate(s=>{const plan=imports.prepare(s,uid,input.data,input.options);if(plan.token!==input.previewToken)core.fail('تغيرت بيانات العيادة أو الملف منذ المعاينة؛ أعد المعاينة أولًا',409);summary=plan.summary;return plan.state;});return {ok:true,summary};}
