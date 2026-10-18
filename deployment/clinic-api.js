@@ -168,6 +168,142 @@ function supabaseAdapter(url, secret, fetcher = fetch) {
   };
 }
 
+// supabase/functions/clinic-api/schedule.js
+function validDate(date2) {
+  const parsed = /* @__PURE__ */ new Date(date2 + "T12:00:00Z");
+  return /^\d{4}-\d{2}-\d{2}$/.test(date2) && Number.isFinite(parsed.getTime()) && parsed.toISOString().slice(0, 10) === date2;
+}
+function availability(registry, schedules, date2) {
+  const result = { scheduled: [], flexible: [] };
+  if (!validDate(date2)) return result;
+  const day = (/* @__PURE__ */ new Date(date2 + "T12:00:00Z")).getUTCDay();
+  for (const [id2, branch] of Object.entries(registry)) {
+    if (branch.enabled === false) continue;
+    const schedule3 = schedules[id2];
+    if (Object.hasOwn(schedule3?.exceptions || {}, date2)) {
+      const slots2 = schedule3.exceptions[date2];
+      if (slots2.length) result.scheduled.push({ id: id2, slots: slots2 });
+      continue;
+    }
+    if (schedule3?.mode === "days") {
+      if (schedule3.d?.includes(day)) result.scheduled.push({ id: id2, slots: [], dayOnly: true });
+      continue;
+    }
+    if (!schedule3 || schedule3.mode === "flexible") {
+      result.flexible.push(id2);
+      continue;
+    }
+    const slots = schedule3.mode === "weekly" ? schedule3.weekly?.[day] || [] : schedule3.d?.includes(day) ? [{ f: schedule3.f, t: schedule3.t }] : [];
+    if (slots.length) result.scheduled.push({ id: id2, slots });
+  }
+  return result;
+}
+function choose(registry, schedules, date2, time) {
+  const items = availability(registry, schedules, date2).scheduled;
+  if (items.length === 1) return items[0].id;
+  if (time && items.every((item) => !item.dayOnly)) {
+    const active = items.filter((item) => item.slots.some((slot) => slot.f <= time && time < slot.t));
+    if (active.length === 1) return active[0].id;
+  }
+  return null;
+}
+
+// supabase/functions/clinic-api/branches.js
+var DEFAULTS = { dmn: { name: "\u0641\u0631\u0639 \u062F\u0645\u0646\u0647\u0648\u0631", address: "", phone: "", enabled: true }, alex: { name: "\u0641\u0631\u0639 \u0627\u0644\u0625\u0633\u0643\u0646\u062F\u0631\u064A\u0629", address: "", phone: "", enabled: true } };
+var validId = (b) => typeof b === "string" && /^[a-z][a-z0-9-]{1,31}$/.test(b) && !["all", "presence", "constructor", "prototype"].includes(b);
+function branches(state = {}) {
+  const configured = state.settings?.branches;
+  if (configured && Object.keys(configured).length) return configured;
+  const legacy = state.settings?.site?.branches || {};
+  return Object.fromEntries(Object.entries({ ...DEFAULTS, ...legacy }).filter(([b]) => validId(b)).map(([b, x]) => [b, { ...DEFAULTS[b], ...x, enabled: x.enabled !== false }]));
+}
+function ids(state, active = false) {
+  return Object.keys(branches(state)).filter((b) => !active || branches(state)[b].enabled !== false);
+}
+function schedule(s, fail4) {
+  if (!s || typeof s !== "object" || Array.isArray(s)) fail4("\u0645\u0648\u0627\u0639\u064A\u062F \u063A\u064A\u0631 \u0635\u062D\u064A\u062D\u0629");
+  const slots = (value) => {
+    if (!Array.isArray(value) || value.length > 6) fail4("\u0641\u062A\u0631\u0627\u062A \u063A\u064A\u0631 \u0635\u062D\u064A\u062D\u0629");
+    const out2 = value.map((x) => {
+      if (!x || !/^([01]\d|2[0-3]):[0-5]\d$/.test(x.f) || !/^([01]\d|2[0-3]):[0-5]\d$/.test(x.t) || x.f >= x.t) fail4("\u0648\u0642\u062A \u0627\u0644\u0646\u0647\u0627\u064A\u0629 \u064A\u062C\u0628 \u0623\u0646 \u064A\u0643\u0648\u0646 \u0628\u0639\u062F \u0627\u0644\u0628\u062F\u0627\u064A\u0629");
+      return { f: x.f, t: x.t };
+    }).sort((a, b) => a.f.localeCompare(b.f));
+    if (out2.some((x, i) => i && x.f < out2[i - 1].t)) fail4("\u0641\u062A\u0631\u0627\u062A \u0627\u0644\u0645\u0648\u0627\u0639\u064A\u062F \u0645\u062A\u062F\u0627\u062E\u0644\u0629");
+    return out2;
+  };
+  if (s.mode === void 0) {
+    if (!Array.isArray(s.d) || !s.d.length || !s.d.every((d) => Number.isInteger(d) && d >= 0 && d <= 6)) fail4("\u0645\u0648\u0627\u0639\u064A\u062F \u063A\u064A\u0631 \u0635\u062D\u064A\u062D\u0629");
+    const pair = slots([{ f: s.f, t: s.t }])[0];
+    return { d: [...new Set(s.d)], ...pair };
+  }
+  if (!["flexible", "weekly", "days"].includes(s.mode)) fail4("\u0646\u0648\u0639 \u0645\u0648\u0627\u0639\u064A\u062F \u063A\u064A\u0631 \u0635\u062D\u064A\u062D");
+  const out = { mode: s.mode, weekly: {}, exceptions: {} };
+  if (s.mode === "days") {
+    if (!Array.isArray(s.d) || s.d.length > 7 || s.d.some((d) => !Number.isInteger(d) || d < 0 || d > 6)) fail4("\u0623\u064A\u0627\u0645 \u0627\u0644\u062A\u0648\u0627\u062C\u062F \u063A\u064A\u0631 \u0635\u062D\u064A\u062D\u0629");
+    out.d = [...new Set(s.d)].sort((a, b) => (a + 1) % 7 - (b + 1) % 7);
+  }
+  if (s.mode === "weekly") {
+    if (!s.weekly || typeof s.weekly !== "object" || Array.isArray(s.weekly) || Object.keys(s.weekly).some((k) => !/^[0-6]$/.test(k))) fail4("\u0623\u064A\u0627\u0645 \u063A\u064A\u0631 \u0635\u062D\u064A\u062D\u0629");
+    for (let d = 0; d < 7; d++) out.weekly[d] = slots(s.weekly[d] || []);
+  }
+  if (s.exceptions !== void 0) {
+    if (!s.exceptions || typeof s.exceptions !== "object" || Array.isArray(s.exceptions) || Object.keys(s.exceptions).length > 366) fail4("\u0627\u0633\u062A\u062B\u0646\u0627\u0621\u0627\u062A \u063A\u064A\u0631 \u0635\u062D\u064A\u062D\u0629");
+    for (const [d, x] of Object.entries(s.exceptions)) {
+      const parsed = /* @__PURE__ */ new Date(d + "T12:00:00Z");
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(d) || !Number.isFinite(parsed.getTime()) || parsed.toISOString().slice(0, 10) !== d) fail4("\u062A\u0627\u0631\u064A\u062E \u0627\u0644\u0627\u0633\u062A\u062B\u0646\u0627\u0621 \u063A\u064A\u0631 \u0635\u062D\u064A\u062D");
+      out.exceptions[d] = slots(x);
+    }
+  }
+  return out;
+}
+function save(original, uid, input, core, perms) {
+  const s = structuredClone(original);
+  perms.requirePermission(core.role(s, uid), "clinic.manage");
+  const b = input.branch;
+  if (!validId(b)) core.fail("\u0631\u0645\u0632 \u0627\u0644\u0641\u0631\u0639: \u062D\u0631\u0648\u0641 \u0625\u0646\u062C\u0644\u064A\u0632\u064A\u0629 \u0635\u063A\u064A\u0631\u0629 \u0648\u0623\u0631\u0642\u0627\u0645 \u0648\u0634\u0631\u0637\u0629\u060C \u0645\u0646 2 \u0625\u0644\u0649 32 \u062D\u0631\u0641\u064B\u0627");
+  const x = input.details;
+  if (!x || typeof x !== "object") core.fail("\u0628\u064A\u0627\u0646\u0627\u062A \u0627\u0644\u0641\u0631\u0639 \u063A\u064A\u0631 \u0635\u062D\u064A\u062D\u0629");
+  const current = branches(s), old = current[b];
+  if (input.create === true && old) core.fail("\u0631\u0645\u0632 \u0627\u0644\u0641\u0631\u0639 \u0645\u0633\u062A\u062E\u062F\u0645 \u0628\u0627\u0644\u0641\u0639\u0644\u061B \u0627\u062E\u062A\u0631 \u0631\u0645\u0632\u064B\u0627 \u062C\u062F\u064A\u062F\u064B\u0627", 409);
+  if (!old && Object.keys(current).length >= 25) core.fail("\u0627\u0644\u062D\u062F \u0627\u0644\u0623\u0642\u0635\u0649 25 \u0641\u0631\u0639\u064B\u0627");
+  const next = {};
+  for (const k of ["name", "address", "phone"]) {
+    if (typeof x[k] !== "string" || x[k].length > 300 || k === "name" && !x[k].trim()) core.fail("\u0631\u0627\u062C\u0639 \u0627\u0633\u0645 \u0648\u0639\u0646\u0648\u0627\u0646 \u0627\u0644\u0641\u0631\u0639");
+    next[k] = x[k].trim();
+  }
+  if (next.phone && !/^\+?[0-9]{7,15}$/.test(next.phone)) core.fail("\u0647\u0627\u062A\u0641 \u0627\u0644\u0641\u0631\u0639 \u063A\u064A\u0631 \u0635\u062D\u064A\u062D");
+  if (typeof x.enabled !== "boolean") core.fail("\u062D\u0627\u0644\u0629 \u0641\u0631\u0639 \u063A\u064A\u0631 \u0635\u062D\u064A\u062D\u0629");
+  next.enabled = x.enabled;
+  if (x.maxBookings !== void 0) {
+    if (!Number.isInteger(x.maxBookings) || x.maxBookings < 0 || x.maxBookings > 1e3) core.fail("\u062D\u062F \u0627\u0644\u062D\u062C\u0648\u0632\u0627\u062A \u0645\u0646 0 \u0625\u0644\u0649 1000");
+    next.maxBookings = x.maxBookings;
+  } else if (old?.maxBookings !== void 0) next.maxBookings = old.maxBookings;
+  if (!next.enabled && (Object.values(s.bookings?.[core.today()] || {}).some((x2) => x2.b === b && x2.s === "exam") || Object.entries(s.sessions || {}).some(([key, v]) => key.endsWith("_" + b) && key.startsWith(core.today()) && ["running", "paused"].includes(v.status)))) core.fail("\u0623\u0646\u0647 \u062C\u0644\u0633\u0629 \u0627\u0644\u0641\u0631\u0639 \u0642\u0628\u0644 \u062A\u0639\u0637\u064A\u0644\u0647", 409);
+  const all = { ...current, [b]: next };
+  if (!Object.values(all).some((x2) => x2.enabled)) core.fail("\u064A\u062C\u0628 \u0625\u0628\u0642\u0627\u0621 \u0641\u0631\u0639 \u0641\u0639\u0627\u0644 \u0648\u0627\u062D\u062F \u0639\u0644\u0649 \u0627\u0644\u0623\u0642\u0644");
+  s.settings ||= {};
+  s.settings.branches = all;
+  if (!next.enabled && s.sessions?.[core.today() + "_presence"]?.branch === b) delete s.sessions[core.today() + "_presence"];
+  s.settings.sched ||= {};
+  s.settings.sched[b] = input.schedule ? schedule(input.schedule, core.fail) : s.settings.sched[b] || { mode: "flexible", weekly: {}, exceptions: {} };
+  s.settings.site ||= {};
+  s.settings.site.branches = Object.fromEntries(Object.entries(all).map(([id2, x2]) => [id2, { name: x2.name, address: x2.address, phone: x2.phone }]));
+  return s;
+}
+function validateRegistry(value, fail4) {
+  if (!value || typeof value !== "object" || Array.isArray(value) || !Object.keys(value).length || Object.keys(value).length > 25) fail4("\u0628\u064A\u0627\u0646\u0627\u062A \u0627\u0644\u0641\u0631\u0648\u0639 \u063A\u064A\u0631 \u0635\u062D\u064A\u062D\u0629");
+  const out = {};
+  for (const [id2, x] of Object.entries(value)) {
+    if (!validId(id2) || !x || typeof x !== "object") fail4("\u0631\u0645\u0632 \u0641\u0631\u0639 \u063A\u064A\u0631 \u0635\u062D\u064A\u062D");
+    for (const k of ["name", "address", "phone"]) if (typeof x[k] !== "string" || x[k].length > 300 || k === "name" && !x[k].trim()) fail4("\u0628\u064A\u0627\u0646\u0627\u062A \u0641\u0631\u0639 \u063A\u064A\u0631 \u0635\u062D\u064A\u062D\u0629");
+    if (x.phone && !/^\+?[0-9]{7,15}$/.test(x.phone) || typeof x.enabled !== "boolean") fail4("\u062D\u0627\u0644\u0629 \u0623\u0648 \u0647\u0627\u062A\u0641 \u0641\u0631\u0639 \u063A\u064A\u0631 \u0635\u062D\u064A\u062D");
+    if (x.maxBookings !== void 0 && (!Number.isInteger(x.maxBookings) || x.maxBookings < 0 || x.maxBookings > 1e3)) fail4("\u062D\u062F \u062D\u062C\u0648\u0632\u0627\u062A \u063A\u064A\u0631 \u0635\u062D\u064A\u062D");
+    out[id2] = { ...x.maxBookings !== void 0 ? { maxBookings: x.maxBookings } : {}, name: x.name.trim(), address: x.address.trim(), phone: x.phone.trim(), enabled: x.enabled };
+  }
+  if (!Object.values(out).some((x) => x.enabled)) fail4("\u064A\u062C\u0628 \u0625\u0628\u0642\u0627\u0621 \u0641\u0631\u0639 \u0641\u0639\u0627\u0644");
+  return out;
+}
+
 // supabase/functions/clinic-api/core.js
 var core_exports = {};
 __export(core_exports, {
@@ -205,7 +341,7 @@ __export(permissions_exports, {
 var keys = ["bookings.read", "bookings.create", "bookings.edit", "bookings.status", "bookings.delete", "patients.read", "patients.edit", "patients.delete", "complaints.read", "complaints.create", "complaints.edit", "complaints.delete", "notes.read", "notes.edit", "notifications.read", "users.manage", "clinic.manage", "site.manage", "data.export", "data.delete"];
 keys.push("patients.print", "display.manage", "data.import", "data.restore", "audit.details", "attachments.read", "attachments.create", "attachments.delete", "attachments.own.delete", "sessions.manage", "queue.configure", "reports.export", "audit.read");
 var administrative = ["display.manage", "data.import", "data.restore", "audit.details", "attachments.own.delete", "users.manage", "clinic.manage", "site.manage", "data.export", "data.delete", "audit.read", "patients.delete"];
-var defaults = { doctor: keys.filter((k) => !administrative.includes(k)), sec: ["patients.print", "bookings.read", "bookings.create", "bookings.status"], nurse: ["patients.print", "patients.read", "complaints.read", "complaints.create", "attachments.read", "attachments.create", "attachments.own.delete"], staff: ["patients.print"] };
+var defaults = { doctor: keys.filter((k) => !administrative.includes(k)), sec: ["patients.print", "bookings.read", "bookings.create", "bookings.status"], nurse: ["bookings.read", "bookings.create", "bookings.status", "patients.print", "patients.read", "complaints.read", "complaints.create", "attachments.read", "attachments.create", "attachments.own.delete"], staff: ["patients.print"] };
 function can(r, key) {
   if (!keys.includes(key)) return false;
   if (r.r === "admin") return keys.includes(key);
@@ -219,7 +355,7 @@ function requirePermission(r, key) {
   }
 }
 function allBranches(r) {
-  return r.r === "admin" || r.scope === "all" || r.r === "doctor" && r.scope === void 0;
+  return r.r === "admin" || r.scope === "all" || ["doctor", "nurse"].includes(r.r) && r.scope === void 0;
 }
 function normalize(r) {
   return { ...r, permissions: Object.fromEntries(keys.map((k) => [k, can(r, k)])) };
@@ -240,7 +376,7 @@ var fail = (m, s = 400) => {
   throw e;
 };
 var validPhone = (p) => /^01[0125]\d{8}$/.test(p);
-var validId = (p) => /^[A-Za-z0-9_-]{1,128}$/.test(p);
+var validId2 = (p) => /^[A-Za-z0-9_-]{1,128}$/.test(p);
 function indexPatients(state) {
   state.patients ||= {};
   for (const rows of Object.values(state.bookings || {})) for (const x of Object.values(rows || {})) {
@@ -311,7 +447,7 @@ function patch(state, r, updates, core) {
   for (const [path, value] of entries) {
     const [kind, ph, key, extra] = path.split("/");
     if (kind === "inbox") {
-      if (!validId(ph) || key) fail("\u0645\u0633\u0627\u0631 \u063A\u064A\u0631 \u0635\u062D\u064A\u062D");
+      if (!validId2(ph) || key) fail("\u0645\u0633\u0627\u0631 \u063A\u064A\u0631 \u0635\u062D\u064A\u062D");
       if (value !== null) {
         if (!entries.some(([p, v]) => p.startsWith("complaints/") && p.endsWith("/" + ph) && v)) fail("\u0625\u0634\u0639\u0627\u0631 \u063A\u064A\u0631 \u0635\u062D\u064A\u062D");
         continue;
@@ -357,7 +493,7 @@ function patch(state, r, updates, core) {
       continue;
     }
     if (kind === "complaints") {
-      if (!validId(key)) fail("\u0645\u0639\u0631\u0651\u0641 \u063A\u064A\u0631 \u0635\u062D\u064A\u062D");
+      if (!validId2(key)) fail("\u0645\u0639\u0631\u0651\u0641 \u063A\u064A\u0631 \u0635\u062D\u064A\u062D");
       const rows = state.complaints[ph] ||= {}, old = rows[key];
       requirePermission(r, value === null ? "complaints.delete" : old ? "complaints.edit" : "complaints.create");
       if (value === null) {
@@ -380,102 +516,6 @@ function patch(state, r, updates, core) {
     fail("\u0645\u0633\u0627\u0631 \u0643\u062A\u0627\u0628\u0629 \u063A\u064A\u0631 \u0645\u0633\u0645\u0648\u062D", 403);
   }
   return state;
-}
-
-// supabase/functions/clinic-api/branches.js
-var DEFAULTS = { dmn: { name: "\u0641\u0631\u0639 \u062F\u0645\u0646\u0647\u0648\u0631", address: "", phone: "", enabled: true }, alex: { name: "\u0641\u0631\u0639 \u0627\u0644\u0625\u0633\u0643\u0646\u062F\u0631\u064A\u0629", address: "", phone: "", enabled: true } };
-var validId2 = (b) => typeof b === "string" && /^[a-z][a-z0-9-]{1,31}$/.test(b) && !["all", "presence", "constructor", "prototype"].includes(b);
-function branches(state = {}) {
-  const configured = state.settings?.branches;
-  if (configured && Object.keys(configured).length) return configured;
-  const legacy = state.settings?.site?.branches || {};
-  return Object.fromEntries(Object.entries({ ...DEFAULTS, ...legacy }).filter(([b]) => validId2(b)).map(([b, x]) => [b, { ...DEFAULTS[b], ...x, enabled: x.enabled !== false }]));
-}
-function ids(state, active = false) {
-  return Object.keys(branches(state)).filter((b) => !active || branches(state)[b].enabled !== false);
-}
-function schedule(s, fail4) {
-  if (!s || typeof s !== "object" || Array.isArray(s)) fail4("\u0645\u0648\u0627\u0639\u064A\u062F \u063A\u064A\u0631 \u0635\u062D\u064A\u062D\u0629");
-  const slots = (value) => {
-    if (!Array.isArray(value) || value.length > 6) fail4("\u0641\u062A\u0631\u0627\u062A \u063A\u064A\u0631 \u0635\u062D\u064A\u062D\u0629");
-    const out2 = value.map((x) => {
-      if (!x || !/^([01]\d|2[0-3]):[0-5]\d$/.test(x.f) || !/^([01]\d|2[0-3]):[0-5]\d$/.test(x.t) || x.f >= x.t) fail4("\u0648\u0642\u062A \u0627\u0644\u0646\u0647\u0627\u064A\u0629 \u064A\u062C\u0628 \u0623\u0646 \u064A\u0643\u0648\u0646 \u0628\u0639\u062F \u0627\u0644\u0628\u062F\u0627\u064A\u0629");
-      return { f: x.f, t: x.t };
-    }).sort((a, b) => a.f.localeCompare(b.f));
-    if (out2.some((x, i) => i && x.f < out2[i - 1].t)) fail4("\u0641\u062A\u0631\u0627\u062A \u0627\u0644\u0645\u0648\u0627\u0639\u064A\u062F \u0645\u062A\u062F\u0627\u062E\u0644\u0629");
-    return out2;
-  };
-  if (s.mode === void 0) {
-    if (!Array.isArray(s.d) || !s.d.length || !s.d.every((d) => Number.isInteger(d) && d >= 0 && d <= 6)) fail4("\u0645\u0648\u0627\u0639\u064A\u062F \u063A\u064A\u0631 \u0635\u062D\u064A\u062D\u0629");
-    const pair = slots([{ f: s.f, t: s.t }])[0];
-    return { d: [...new Set(s.d)], ...pair };
-  }
-  if (!["flexible", "weekly", "days"].includes(s.mode)) fail4("\u0646\u0648\u0639 \u0645\u0648\u0627\u0639\u064A\u062F \u063A\u064A\u0631 \u0635\u062D\u064A\u062D");
-  const out = { mode: s.mode, weekly: {}, exceptions: {} };
-  if (s.mode === "days") {
-    if (!Array.isArray(s.d) || s.d.length > 7 || s.d.some((d) => !Number.isInteger(d) || d < 0 || d > 6)) fail4("\u0623\u064A\u0627\u0645 \u0627\u0644\u062A\u0648\u0627\u062C\u062F \u063A\u064A\u0631 \u0635\u062D\u064A\u062D\u0629");
-    out.d = [...new Set(s.d)].sort((a, b) => (a + 1) % 7 - (b + 1) % 7);
-  }
-  if (s.mode === "weekly") {
-    if (!s.weekly || typeof s.weekly !== "object" || Array.isArray(s.weekly) || Object.keys(s.weekly).some((k) => !/^[0-6]$/.test(k))) fail4("\u0623\u064A\u0627\u0645 \u063A\u064A\u0631 \u0635\u062D\u064A\u062D\u0629");
-    for (let d = 0; d < 7; d++) out.weekly[d] = slots(s.weekly[d] || []);
-  }
-  if (s.exceptions !== void 0) {
-    if (!s.exceptions || typeof s.exceptions !== "object" || Array.isArray(s.exceptions) || Object.keys(s.exceptions).length > 366) fail4("\u0627\u0633\u062A\u062B\u0646\u0627\u0621\u0627\u062A \u063A\u064A\u0631 \u0635\u062D\u064A\u062D\u0629");
-    for (const [d, x] of Object.entries(s.exceptions)) {
-      const parsed = /* @__PURE__ */ new Date(d + "T12:00:00Z");
-      if (!/^\d{4}-\d{2}-\d{2}$/.test(d) || !Number.isFinite(parsed.getTime()) || parsed.toISOString().slice(0, 10) !== d) fail4("\u062A\u0627\u0631\u064A\u062E \u0627\u0644\u0627\u0633\u062A\u062B\u0646\u0627\u0621 \u063A\u064A\u0631 \u0635\u062D\u064A\u062D");
-      out.exceptions[d] = slots(x);
-    }
-  }
-  return out;
-}
-function save(original, uid, input, core, perms) {
-  const s = structuredClone(original);
-  perms.requirePermission(core.role(s, uid), "clinic.manage");
-  const b = input.branch;
-  if (!validId2(b)) core.fail("\u0631\u0645\u0632 \u0627\u0644\u0641\u0631\u0639: \u062D\u0631\u0648\u0641 \u0625\u0646\u062C\u0644\u064A\u0632\u064A\u0629 \u0635\u063A\u064A\u0631\u0629 \u0648\u0623\u0631\u0642\u0627\u0645 \u0648\u0634\u0631\u0637\u0629\u060C \u0645\u0646 2 \u0625\u0644\u0649 32 \u062D\u0631\u0641\u064B\u0627");
-  const x = input.details;
-  if (!x || typeof x !== "object") core.fail("\u0628\u064A\u0627\u0646\u0627\u062A \u0627\u0644\u0641\u0631\u0639 \u063A\u064A\u0631 \u0635\u062D\u064A\u062D\u0629");
-  const current = branches(s), old = current[b];
-  if (input.create === true && old) core.fail("\u0631\u0645\u0632 \u0627\u0644\u0641\u0631\u0639 \u0645\u0633\u062A\u062E\u062F\u0645 \u0628\u0627\u0644\u0641\u0639\u0644\u061B \u0627\u062E\u062A\u0631 \u0631\u0645\u0632\u064B\u0627 \u062C\u062F\u064A\u062F\u064B\u0627", 409);
-  if (!old && Object.keys(current).length >= 25) core.fail("\u0627\u0644\u062D\u062F \u0627\u0644\u0623\u0642\u0635\u0649 25 \u0641\u0631\u0639\u064B\u0627");
-  const next = {};
-  for (const k of ["name", "address", "phone"]) {
-    if (typeof x[k] !== "string" || x[k].length > 300 || k === "name" && !x[k].trim()) core.fail("\u0631\u0627\u062C\u0639 \u0627\u0633\u0645 \u0648\u0639\u0646\u0648\u0627\u0646 \u0627\u0644\u0641\u0631\u0639");
-    next[k] = x[k].trim();
-  }
-  if (next.phone && !/^\+?[0-9]{7,15}$/.test(next.phone)) core.fail("\u0647\u0627\u062A\u0641 \u0627\u0644\u0641\u0631\u0639 \u063A\u064A\u0631 \u0635\u062D\u064A\u062D");
-  if (typeof x.enabled !== "boolean") core.fail("\u062D\u0627\u0644\u0629 \u0641\u0631\u0639 \u063A\u064A\u0631 \u0635\u062D\u064A\u062D\u0629");
-  next.enabled = x.enabled;
-  if (x.maxBookings !== void 0) {
-    if (!Number.isInteger(x.maxBookings) || x.maxBookings < 0 || x.maxBookings > 1e3) core.fail("\u062D\u062F \u0627\u0644\u062D\u062C\u0648\u0632\u0627\u062A \u0645\u0646 0 \u0625\u0644\u0649 1000");
-    next.maxBookings = x.maxBookings;
-  } else if (old?.maxBookings !== void 0) next.maxBookings = old.maxBookings;
-  if (!next.enabled && (Object.values(s.bookings?.[core.today()] || {}).some((x2) => x2.b === b && x2.s === "exam") || Object.entries(s.sessions || {}).some(([key, v]) => key.endsWith("_" + b) && key.startsWith(core.today()) && ["running", "paused"].includes(v.status)))) core.fail("\u0623\u0646\u0647 \u062C\u0644\u0633\u0629 \u0627\u0644\u0641\u0631\u0639 \u0642\u0628\u0644 \u062A\u0639\u0637\u064A\u0644\u0647", 409);
-  const all = { ...current, [b]: next };
-  if (!Object.values(all).some((x2) => x2.enabled)) core.fail("\u064A\u062C\u0628 \u0625\u0628\u0642\u0627\u0621 \u0641\u0631\u0639 \u0641\u0639\u0627\u0644 \u0648\u0627\u062D\u062F \u0639\u0644\u0649 \u0627\u0644\u0623\u0642\u0644");
-  s.settings ||= {};
-  s.settings.branches = all;
-  if (!next.enabled && s.sessions?.[core.today() + "_presence"]?.branch === b) delete s.sessions[core.today() + "_presence"];
-  s.settings.sched ||= {};
-  s.settings.sched[b] = input.schedule ? schedule(input.schedule, core.fail) : s.settings.sched[b] || { mode: "flexible", weekly: {}, exceptions: {} };
-  s.settings.site ||= {};
-  s.settings.site.branches = Object.fromEntries(Object.entries(all).map(([id2, x2]) => [id2, { name: x2.name, address: x2.address, phone: x2.phone }]));
-  return s;
-}
-function validateRegistry(value, fail4) {
-  if (!value || typeof value !== "object" || Array.isArray(value) || !Object.keys(value).length || Object.keys(value).length > 25) fail4("\u0628\u064A\u0627\u0646\u0627\u062A \u0627\u0644\u0641\u0631\u0648\u0639 \u063A\u064A\u0631 \u0635\u062D\u064A\u062D\u0629");
-  const out = {};
-  for (const [id2, x] of Object.entries(value)) {
-    if (!validId2(id2) || !x || typeof x !== "object") fail4("\u0631\u0645\u0632 \u0641\u0631\u0639 \u063A\u064A\u0631 \u0635\u062D\u064A\u062D");
-    for (const k of ["name", "address", "phone"]) if (typeof x[k] !== "string" || x[k].length > 300 || k === "name" && !x[k].trim()) fail4("\u0628\u064A\u0627\u0646\u0627\u062A \u0641\u0631\u0639 \u063A\u064A\u0631 \u0635\u062D\u064A\u062D\u0629");
-    if (x.phone && !/^\+?[0-9]{7,15}$/.test(x.phone) || typeof x.enabled !== "boolean") fail4("\u062D\u0627\u0644\u0629 \u0623\u0648 \u0647\u0627\u062A\u0641 \u0641\u0631\u0639 \u063A\u064A\u0631 \u0635\u062D\u064A\u062D");
-    if (x.maxBookings !== void 0 && (!Number.isInteger(x.maxBookings) || x.maxBookings < 0 || x.maxBookings > 1e3)) fail4("\u062D\u062F \u062D\u062C\u0648\u0632\u0627\u062A \u063A\u064A\u0631 \u0635\u062D\u064A\u062D");
-    out[id2] = { ...x.maxBookings !== void 0 ? { maxBookings: x.maxBookings } : {}, name: x.name.trim(), address: x.address.trim(), phone: x.phone.trim(), enabled: x.enabled };
-  }
-  if (!Object.values(out).some((x) => x.enabled)) fail4("\u064A\u062C\u0628 \u0625\u0628\u0642\u0627\u0621 \u0641\u0631\u0639 \u0641\u0639\u0627\u0644");
-  return out;
 }
 
 // supabase/functions/clinic-api/core.js
@@ -599,7 +639,7 @@ function commit(state, uid, puts, dels, now = today()) {
     if (!can(r, "notes.edit")) n.nt = old?.nt || "";
     if (!old) requirePermission(r, "bookings.create");
     if (!old && !["doctor", "admin"].includes(r.r) && n.date < now) fail2("\u0644\u0627 \u064A\u0645\u0643\u0646 \u0627\u0644\u062D\u062C\u0632 \u0641\u064A \u062A\u0627\u0631\u064A\u062E \u0633\u0627\u0628\u0642");
-    if (old && ["name", "phone", "v", "nt", "date", "b"].some((k) => n[k] !== old[k])) requirePermission(r, "bookings.edit");
+    if (old && ["name", "phone", "v", "nt", "date", "b"].some((k) => n[k] !== (k === "nt" ? String(old[k] || "") : old[k]))) requirePermission(r, "bookings.edit");
     const limit = branches(state)[n.b]?.maxBookings || 0;
     if (limit && (!old || old.b !== n.b || old.date !== n.date || old.s === "cx" && n.s !== "cx") && n.s !== "cx" && n.v !== "emergency" && Object.values(state.bookings[n.date] || {}).filter((x) => x.b === n.b && x.id !== n.id && x.s !== "cx" && x.v !== "emergency").length >= limit) fail2("\u0627\u0643\u062A\u0645\u0644 \u0627\u0644\u062D\u062F \u0627\u0644\u064A\u0648\u0645\u064A \u0644\u0644\u062D\u062C\u0648\u0632\u0627\u062A \u0641\u064A \u0647\u0630\u0627 \u0627\u0644\u0641\u0631\u0639. \u0627\u062E\u062A\u0631 \u064A\u0648\u0645\u064B\u0627 \u0622\u062E\u0631 \u0623\u0648 \u0631\u0627\u062C\u0639 \u0627\u0644\u0625\u062F\u0627\u0631\u0629.", 409);
     const otherActive = Object.values(state.bookings[n.date] || {}).find((x) => x.b === n.b && x.s === "exam");
@@ -634,6 +674,7 @@ function commit(state, uid, puts, dels, now = today()) {
     n.no = moved ? max + 1 : old.no;
     state.sequences[seqKey] = Math.max(max, n.no);
     n.rev = (old?.rev || 0) + 1;
+    if (old?.scheduleMove) n.scheduleMove = old.scheduleMove;
     if (Object.hasOwn(p, "patient")) {
       if (!p.patient || typeof p.patient !== "object" || Array.isArray(p.patient) || Object.keys(p.patient).some((k) => !["spouseName", "spouseJob", "spousePhone"].includes(k))) fail2("\u0631\u0627\u062C\u0639 \u0628\u064A\u0627\u0646\u0627\u062A \u0627\u0644\u0632\u0648\u062C");
       const existing = state.patients?.[n.phone], family = {};
@@ -758,6 +799,635 @@ function lookup(state, p, now = today(), clock = Date.now()) {
   return queueTrack(state, Object.values(state.bookings[now] || {}), x, clock);
 }
 var coreExports = { publicSettings, branchIds, presence, canExamine, assertExamine, phone, today, date, role, booking, commit, read: read2, patch: patch2, lookup, rebuild, fail: fail2, schedule: schedule2, queueOrder, queueTrack };
+
+// supabase/functions/clinic-api/schedule-transfers.js
+function reconcile(before, next) {
+  if (JSON.stringify(before.settings?.sched) === JSON.stringify(next.settings?.sched) && !Object.keys(next.scheduleTransferPending || {}).length) return next;
+  const registry = branches(next), oldRegistry = branches(before), today2 = today();
+  next.scheduleTransferPending ||= {};
+  for (const [date2, rows] of Object.entries(next.bookings || {})) for (const row of Object.values(rows)) {
+    const key = date2 + "/" + row.id, old = before.bookings?.[date2]?.[row.id];
+    if (date2 < today2 || row.s !== "wait") {
+      delete next.scheduleTransferPending[key];
+      continue;
+    }
+    const available = availability(registry, next.settings?.sched || {}, date2), stillAvailable = available.scheduled.some((x) => x.id === row.b) || available.flexible.includes(row.b);
+    if (stillAvailable) {
+      delete next.scheduleTransferPending[key];
+      continue;
+    }
+    const prior = availability(oldRegistry, before.settings?.sched || {}, date2), wasAvailable = prior.scheduled.some((x) => x.id === row.b) || prior.flexible.includes(row.b);
+    if (!next.scheduleTransferPending[key] && old?.b === row.b && wasAvailable) next.scheduleTransferPending[key] = { from: row.b, requestedAt: (/* @__PURE__ */ new Date()).toISOString() };
+    const pending = next.scheduleTransferPending[key];
+    if (!pending) continue;
+    if (available.scheduled.length !== 1) {
+      pending.reason = available.scheduled.length ? "multiple" : "unassigned";
+      continue;
+    }
+    const target = available.scheduled[0].id;
+    if ([row.b, target].some((b) => ["running", "paused"].includes(next.sessions?.[date2 + "_" + b]?.status) || Object.values(rows).some((x) => x.b === b && x.s === "exam"))) {
+      pending.reason = "session";
+      continue;
+    }
+    const targetRows = Object.values(rows).filter((x) => x.b === target), limit = registry[target]?.maxBookings || 0;
+    if (limit && row.v !== "emergency" && targetRows.filter((x) => x.s !== "cx" && x.v !== "emergency").length >= limit) {
+      pending.reason = "capacity";
+      continue;
+    }
+    if (Object.values(rows).some((x) => x.id !== row.id && x.phone === row.phone)) {
+      pending.reason = "duplicate";
+      continue;
+    }
+    next.sequences ||= {};
+    const counter = date2 + "_" + target, no = Math.max(next.sequences[counter] || 0, 0, ...targetRows.map((x) => x.no || 0)) + 1;
+    row.scheduleMove = { from: row.b, previousNo: row.no, at: (/* @__PURE__ */ new Date()).toISOString() };
+    row.b = target;
+    row.no = no;
+    row.rev = (row.rev || 0) + 1;
+    next.sequences[counter] = no;
+    delete next.scheduleTransferPending[key];
+  }
+  for (const key of Object.keys(next.scheduleTransferPending)) {
+    const [date2, id2] = key.split("/");
+    if (!next.bookings?.[date2]?.[id2]) delete next.scheduleTransferPending[key];
+  }
+  next.settings ||= {};
+  next.settings.scheduleTransferPendingCount = Object.keys(next.scheduleTransferPending).length;
+  return rebuild(next);
+}
+function preview(state, branch, schedule3) {
+  const next = structuredClone(state);
+  next.settings ||= {};
+  next.settings.sched = { ...next.settings.sched, [branch]: schedule2(schedule3) };
+  reconcile(state, next);
+  const moved = [];
+  for (const [date2, rows] of Object.entries(next.bookings || {})) for (const row of Object.values(rows)) if (state.bookings?.[date2]?.[row.id]?.b !== row.b) moved.push({ id: row.id, date: date2, from: state.bookings[date2][row.id].b, to: row.b, no: row.no });
+  return { transferCount: moved.length, transfers: moved.slice(0, 20), pendingCount: Object.keys(next.scheduleTransferPending || {}).length };
+}
+function transferDay(state, from, to, day) {
+  state = structuredClone(state);
+  if (from === to || !branchIds(state, true).includes(from) || !branchIds(state, true).includes(to) || !Number.isInteger(day) || day < 0 || day > 6) fail2("\u0627\u062E\u062A\u0631 \u0641\u0631\u0639\u064A\u0646 \u0645\u062E\u062A\u0644\u0641\u064A\u0646 \u0648\u064A\u0648\u0645\u064B\u0627 \u0635\u062D\u064A\u062D\u064B\u0627");
+  const source = state.settings?.sched?.[from], target = state.settings?.sched?.[to] || { mode: "days", d: [] }, dayOnly = source?.mode === "days", slots = source?.mode === "weekly" ? source.weekly?.[day] || [] : source?.d?.includes(day) && !dayOnly ? [{ f: source.f, t: source.t }] : [];
+  if (dayOnly ? !source.d?.includes(day) : !slots.length) fail2("\u0627\u0644\u064A\u0648\u0645 \u063A\u064A\u0631 \u0645\u062D\u062F\u062F \u0641\u064A \u0627\u0644\u0641\u0631\u0639 \u0627\u0644\u0623\u0635\u0644\u064A");
+  const targetDays = target.mode === "days", targetEmpty = target.mode === "flexible" || targetDays && !target.d?.length || target.mode === "weekly" && !Object.values(target.weekly || {}).some((x) => x.length);
+  if (!targetEmpty && dayOnly !== targetDays) fail2("\u0627\u0644\u0641\u0631\u0639\u0627\u0646 \u064A\u0633\u062A\u062E\u062F\u0645\u0627\u0646 \u0623\u064A\u0627\u0645\u064B\u0627 \u0648\u0633\u0627\u0639\u0627\u062A \u0645\u062E\u062A\u0644\u0641\u0629\u061B \u0648\u062D\u0651\u062F \u0646\u0648\u0639 \u0627\u0644\u0645\u0648\u0627\u0639\u064A\u062F \u0623\u0648 \u062D\u062F\u062F \u0633\u0627\u0639\u0627\u062A \u0627\u0644\u064A\u0648\u0645 \u0645\u0646 \u0645\u062D\u0631\u0631 \u0627\u0644\u0645\u0648\u0627\u0639\u064A\u062F");
+  const remove = dayOnly ? { ...source, d: source.d.filter((x) => x !== day) } : { mode: "weekly", weekly: { ...source.mode === "weekly" ? source.weekly : Object.fromEntries((source.d || []).map((x) => [x, [{ f: source.f, t: source.t }]])), [day]: [] }, exceptions: source.exceptions || {} };
+  const add = dayOnly ? { mode: "days", d: [.../* @__PURE__ */ new Set([...target.d || [], day])], exceptions: target.exceptions || {} } : { mode: "weekly", weekly: { ...target.mode === "weekly" ? target.weekly : target.mode ? {} : Object.fromEntries((target.d || []).map((x) => [x, [{ f: target.f, t: target.t }]])), [day]: slots }, exceptions: target.exceptions || {} };
+  return { ...state, settings: { ...state.settings, sched: { ...state.settings?.sched, [from]: schedule2(remove), [to]: schedule2(add) } } };
+}
+
+// fixtures/training-branch-assignments-500.json
+var training_branch_assignments_500_default = {
+  "01000040001": "alex",
+  "01000040002": "alex",
+  "01000040003": "alex",
+  "01000040004": "alex",
+  "01000040005": "alex",
+  "01000040006": "alex",
+  "01000040007": "alex",
+  "01000040008": "alex",
+  "01000040009": "alex",
+  "01000040010": "alex",
+  "01000040011": "alex",
+  "01000040012": "alex",
+  "01000040013": "alex",
+  "01000040014": "alex",
+  "01000040015": "alex",
+  "01000040016": "alex",
+  "01000040017": "alex",
+  "01000040018": "alex",
+  "01000040019": "alex",
+  "01000040020": "alex",
+  "01000040021": "alex",
+  "01000040022": "alex",
+  "01000040023": "alex",
+  "01000040024": "alex",
+  "01000040025": "alex",
+  "01000040026": "alex",
+  "01000040027": "alex",
+  "01000040028": "alex",
+  "01000040029": "alex",
+  "01000040030": "alex",
+  "01000040031": "alex",
+  "01000040032": "alex",
+  "01000040033": "alex",
+  "01000040034": "alex",
+  "01000040035": "alex",
+  "01000040036": "alex",
+  "01000040037": "alex",
+  "01000040038": "alex",
+  "01000040039": "alex",
+  "01000040040": "alex",
+  "01000040041": "alex",
+  "01000040042": "alex",
+  "01000040043": "alex",
+  "01000040044": "alex",
+  "01000040045": "alex",
+  "01000040046": "alex",
+  "01000040047": "alex",
+  "01000040048": "alex",
+  "01000040049": "alex",
+  "01000040050": "alex",
+  "01000040051": "alex",
+  "01000040052": "alex",
+  "01000040053": "alex",
+  "01000040054": "alex",
+  "01000040055": "alex",
+  "01000040056": "alex",
+  "01000040057": "alex",
+  "01000040058": "alex",
+  "01000040059": "alex",
+  "01000040060": "alex",
+  "01000040061": "alex",
+  "01000040062": "alex",
+  "01000040063": "alex",
+  "01000040064": "alex",
+  "01000040065": "alex",
+  "01000040066": "alex",
+  "01000040067": "alex",
+  "01000040068": "alex",
+  "01000040069": "alex",
+  "01000040070": "alex",
+  "01000040071": "alex",
+  "01000040072": "alex",
+  "01000040073": "alex",
+  "01000040074": "alex",
+  "01000040075": "alex",
+  "01000040076": "alex",
+  "01000040077": "alex",
+  "01000040078": "alex",
+  "01000040079": "alex",
+  "01000040080": "alex",
+  "01000040081": "alex",
+  "01000040082": "alex",
+  "01000040083": "alex",
+  "01000040084": "alex",
+  "01000040085": "alex",
+  "01000040086": "alex",
+  "01000040087": "alex",
+  "01000040088": "alex",
+  "01000040089": "alex",
+  "01000040090": "alex",
+  "01000040091": "alex",
+  "01000040092": "alex",
+  "01000040093": "alex",
+  "01000040094": "alex",
+  "01000040095": "alex",
+  "01000040096": "alex",
+  "01000040097": "alex",
+  "01000040098": "alex",
+  "01000040099": "alex",
+  "01000040100": "alex",
+  "01000040101": "matrouh",
+  "01000040102": "matrouh",
+  "01000040103": "matrouh",
+  "01000040104": "matrouh",
+  "01000040105": "matrouh",
+  "01000040106": "matrouh",
+  "01000040107": "matrouh",
+  "01000040108": "matrouh",
+  "01000040109": "matrouh",
+  "01000040110": "matrouh",
+  "01000040111": "matrouh",
+  "01000040112": "matrouh",
+  "01000040113": "matrouh",
+  "01000040114": "matrouh",
+  "01000040115": "matrouh",
+  "01000040116": "matrouh",
+  "01000040117": "matrouh",
+  "01000040118": "matrouh",
+  "01000040119": "matrouh",
+  "01000040120": "matrouh",
+  "01000040121": "matrouh",
+  "01000040122": "matrouh",
+  "01000040123": "matrouh",
+  "01000040124": "matrouh",
+  "01000040125": "matrouh",
+  "01000040126": "matrouh",
+  "01000040127": "matrouh",
+  "01000040128": "matrouh",
+  "01000040129": "matrouh",
+  "01000040130": "matrouh",
+  "01000040131": "matrouh",
+  "01000040132": "matrouh",
+  "01000040133": "matrouh",
+  "01000040134": "matrouh",
+  "01000040135": "matrouh",
+  "01000040136": "matrouh",
+  "01000040137": "matrouh",
+  "01000040138": "matrouh",
+  "01000040139": "matrouh",
+  "01000040140": "matrouh",
+  "01000040141": "matrouh",
+  "01000040142": "matrouh",
+  "01000040143": "matrouh",
+  "01000040144": "matrouh",
+  "01000040145": "matrouh",
+  "01000040146": "matrouh",
+  "01000040147": "matrouh",
+  "01000040148": "matrouh",
+  "01000040149": "matrouh",
+  "01000040150": "matrouh",
+  "01000040151": "matrouh",
+  "01000040152": "matrouh",
+  "01000040153": "matrouh",
+  "01000040154": "matrouh",
+  "01000040155": "matrouh",
+  "01000040156": "matrouh",
+  "01000040157": "matrouh",
+  "01000040158": "matrouh",
+  "01000040159": "matrouh",
+  "01000040160": "matrouh",
+  "01000040161": "matrouh",
+  "01000040162": "matrouh",
+  "01000040163": "matrouh",
+  "01000040164": "matrouh",
+  "01000040165": "matrouh",
+  "01000040166": "matrouh",
+  "01000040167": "matrouh",
+  "01000040168": "matrouh",
+  "01000040169": "matrouh",
+  "01000040170": "matrouh",
+  "01000040171": "matrouh",
+  "01000040172": "matrouh",
+  "01000040173": "matrouh",
+  "01000040174": "matrouh",
+  "01000040175": "matrouh",
+  "01000040176": "matrouh",
+  "01000040177": "matrouh",
+  "01000040178": "matrouh",
+  "01000040179": "matrouh",
+  "01000040180": "matrouh",
+  "01000040181": "matrouh",
+  "01000040182": "matrouh",
+  "01000040183": "matrouh",
+  "01000040184": "matrouh",
+  "01000040185": "matrouh",
+  "01000040186": "matrouh",
+  "01000040187": "matrouh",
+  "01000040188": "matrouh",
+  "01000040189": "matrouh",
+  "01000040190": "matrouh",
+  "01000040191": "matrouh",
+  "01000040192": "matrouh",
+  "01000040193": "matrouh",
+  "01000040194": "matrouh",
+  "01000040195": "matrouh",
+  "01000040196": "matrouh",
+  "01000040197": "matrouh",
+  "01000040198": "matrouh",
+  "01000040199": "matrouh",
+  "01000040200": "matrouh",
+  "01000040201": "dmn",
+  "01000040202": "dmn",
+  "01000040203": "dmn",
+  "01000040204": "dmn",
+  "01000040205": "dmn",
+  "01000040206": "dmn",
+  "01000040207": "dmn",
+  "01000040208": "dmn",
+  "01000040209": "dmn",
+  "01000040210": "dmn",
+  "01000040211": "dmn",
+  "01000040212": "dmn",
+  "01000040213": "dmn",
+  "01000040214": "dmn",
+  "01000040215": "dmn",
+  "01000040216": "dmn",
+  "01000040217": "dmn",
+  "01000040218": "dmn",
+  "01000040219": "dmn",
+  "01000040220": "dmn",
+  "01000040221": "dmn",
+  "01000040222": "dmn",
+  "01000040223": "dmn",
+  "01000040224": "dmn",
+  "01000040225": "dmn",
+  "01000040226": "dmn",
+  "01000040227": "dmn",
+  "01000040228": "dmn",
+  "01000040229": "dmn",
+  "01000040230": "dmn",
+  "01000040231": "dmn",
+  "01000040232": "dmn",
+  "01000040233": "dmn",
+  "01000040234": "dmn",
+  "01000040235": "dmn",
+  "01000040236": "dmn",
+  "01000040237": "dmn",
+  "01000040238": "dmn",
+  "01000040239": "dmn",
+  "01000040240": "dmn",
+  "01000040241": "dmn",
+  "01000040242": "dmn",
+  "01000040243": "dmn",
+  "01000040244": "dmn",
+  "01000040245": "dmn",
+  "01000040246": "dmn",
+  "01000040247": "dmn",
+  "01000040248": "dmn",
+  "01000040249": "dmn",
+  "01000040250": "dmn",
+  "01000040251": "dmn",
+  "01000040252": "dmn",
+  "01000040253": "dmn",
+  "01000040254": "dmn",
+  "01000040255": "dmn",
+  "01000040256": "dmn",
+  "01000040257": "dmn",
+  "01000040258": "dmn",
+  "01000040259": "dmn",
+  "01000040260": "dmn",
+  "01000040261": "dmn",
+  "01000040262": "dmn",
+  "01000040263": "dmn",
+  "01000040264": "dmn",
+  "01000040265": "dmn",
+  "01000040266": "dmn",
+  "01000040267": "dmn",
+  "01000040268": "dmn",
+  "01000040269": "dmn",
+  "01000040270": "dmn",
+  "01000040271": "dmn",
+  "01000040272": "dmn",
+  "01000040273": "dmn",
+  "01000040274": "dmn",
+  "01000040275": "dmn",
+  "01000040276": "dmn",
+  "01000040277": "dmn",
+  "01000040278": "dmn",
+  "01000040279": "dmn",
+  "01000040280": "dmn",
+  "01000040281": "dmn",
+  "01000040282": "dmn",
+  "01000040283": "dmn",
+  "01000040284": "dmn",
+  "01000040285": "dmn",
+  "01000040286": "dmn",
+  "01000040287": "dmn",
+  "01000040288": "dmn",
+  "01000040289": "dmn",
+  "01000040290": "dmn",
+  "01000040291": "dmn",
+  "01000040292": "dmn",
+  "01000040293": "dmn",
+  "01000040294": "dmn",
+  "01000040295": "dmn",
+  "01000040296": "dmn",
+  "01000040297": "dmn",
+  "01000040298": "dmn",
+  "01000040299": "dmn",
+  "01000040300": "dmn",
+  "01000040301": "libya",
+  "01000040302": "libya",
+  "01000040303": "libya",
+  "01000040304": "libya",
+  "01000040305": "libya",
+  "01000040306": "libya",
+  "01000040307": "libya",
+  "01000040308": "libya",
+  "01000040309": "libya",
+  "01000040310": "libya",
+  "01000040311": "libya",
+  "01000040312": "libya",
+  "01000040313": "libya",
+  "01000040314": "libya",
+  "01000040315": "libya",
+  "01000040316": "libya",
+  "01000040317": "libya",
+  "01000040318": "libya",
+  "01000040319": "libya",
+  "01000040320": "libya",
+  "01000040321": "libya",
+  "01000040322": "libya",
+  "01000040323": "libya",
+  "01000040324": "libya",
+  "01000040325": "libya",
+  "01000040326": "libya",
+  "01000040327": "libya",
+  "01000040328": "libya",
+  "01000040329": "libya",
+  "01000040330": "libya",
+  "01000040331": "libya",
+  "01000040332": "libya",
+  "01000040333": "libya",
+  "01000040334": "libya",
+  "01000040335": "libya",
+  "01000040336": "libya",
+  "01000040337": "libya",
+  "01000040338": "libya",
+  "01000040339": "libya",
+  "01000040340": "libya",
+  "01000040341": "libya",
+  "01000040342": "libya",
+  "01000040343": "libya",
+  "01000040344": "libya",
+  "01000040345": "libya",
+  "01000040346": "libya",
+  "01000040347": "libya",
+  "01000040348": "libya",
+  "01000040349": "libya",
+  "01000040350": "libya",
+  "01000040351": "libya",
+  "01000040352": "libya",
+  "01000040353": "libya",
+  "01000040354": "libya",
+  "01000040355": "libya",
+  "01000040356": "libya",
+  "01000040357": "libya",
+  "01000040358": "libya",
+  "01000040359": "libya",
+  "01000040360": "libya",
+  "01000040361": "libya",
+  "01000040362": "libya",
+  "01000040363": "libya",
+  "01000040364": "libya",
+  "01000040365": "libya",
+  "01000040366": "libya",
+  "01000040367": "libya",
+  "01000040368": "libya",
+  "01000040369": "libya",
+  "01000040370": "libya",
+  "01000040371": "libya",
+  "01000040372": "libya",
+  "01000040373": "libya",
+  "01000040374": "libya",
+  "01000040375": "libya",
+  "01000040376": "libya",
+  "01000040377": "libya",
+  "01000040378": "libya",
+  "01000040379": "libya",
+  "01000040380": "libya",
+  "01000040381": "libya",
+  "01000040382": "libya",
+  "01000040383": "libya",
+  "01000040384": "libya",
+  "01000040385": "libya",
+  "01000040386": "libya",
+  "01000040387": "libya",
+  "01000040388": "libya",
+  "01000040389": "libya",
+  "01000040390": "libya",
+  "01000040391": "libya",
+  "01000040392": "libya",
+  "01000040393": "libya",
+  "01000040394": "libya",
+  "01000040395": "libya",
+  "01000040396": "libya",
+  "01000040397": "libya",
+  "01000040398": "libya",
+  "01000040399": "libya",
+  "01000040400": "libya",
+  "01000112244": "matrouh",
+  "01000112255": "matrouh",
+  "01000113344": "alex",
+  "01011223355": "alex",
+  "01011223366": "matrouh",
+  "01011224455": "matrouh",
+  "01012345678": "alex",
+  "01022334466": "matrouh",
+  "01022335566": "matrouh",
+  "01033119977": "matrouh",
+  "01033445577": "alex",
+  "01033446677": "alex",
+  "01044556677": "alex",
+  "01044556688": "matrouh",
+  "01044556699": "matrouh",
+  "01044557788": "matrouh",
+  "01055443311": "alex",
+  "01055443322": "matrouh",
+  "01055667799": "matrouh",
+  "01055668899": "matrouh",
+  "01066778800": "alex",
+  "01066779900": "alex",
+  "01077665544": "matrouh",
+  "01077880011": "alex",
+  "01077889911": "matrouh",
+  "01077889922": "matrouh",
+  "01088990022": "matrouh",
+  "01088991122": "alex",
+  "01098765432": "alex",
+  "01099001133": "alex",
+  "01099002233": "alex",
+  "01099775533": "alex",
+  "01099886655": "alex",
+  "01100112244": "matrouh",
+  "01100113344": "matrouh",
+  "01111009977": "matrouh",
+  "01111223355": "alex",
+  "01111223366": "matrouh",
+  "01111224455": "alex",
+  "01122119988": "alex",
+  "01122334455": "alex",
+  "01122334466": "matrouh",
+  "01122334477": "matrouh",
+  "01122335566": "alex",
+  "01133445577": "alex",
+  "01133446677": "alex",
+  "01144332211": "alex",
+  "01144556688": "matrouh",
+  "01144557788": "matrouh",
+  "01155331199": "matrouh",
+  "01155667700": "matrouh",
+  "01155667788": "alex",
+  "01155667799": "alex",
+  "01155668899": "alex",
+  "01166778800": "matrouh",
+  "01166779900": "alex",
+  "01177665533": "alex",
+  "01177880011": "matrouh",
+  "01177889911": "matrouh",
+  "01187654321": "matrouh",
+  "01188776655": "matrouh",
+  "01188990022": "alex",
+  "01188990033": "matrouh",
+  "01188991122": "alex",
+  "01199001133": "matrouh",
+  "01199002233": "alex",
+  "01199887766": "alex",
+  "01200112244": "matrouh",
+  "01200113344": "matrouh",
+  "01211223344": "matrouh",
+  "01211223355": "alex",
+  "01211224455": "alex",
+  "01211997755": "alex",
+  "01222334455": "alex",
+  "01222334466": "matrouh",
+  "01222334477": "matrouh",
+  "01222335566": "matrouh",
+  "01233221100": "alex",
+  "01233221199": "matrouh",
+  "01233445577": "alex",
+  "01233445588": "matrouh",
+  "01233446677": "alex",
+  "01234567890": "alex",
+  "01244556677": "matrouh",
+  "01244556688": "alex",
+  "01244557788": "alex",
+  "01255443322": "matrouh",
+  "01255667799": "alex",
+  "01255668899": "alex",
+  "01266778800": "alex",
+  "01266778811": "matrouh",
+  "01266779900": "matrouh",
+  "01277553311": "alex",
+  "01277880011": "matrouh",
+  "01277889911": "matrouh",
+  "01288990022": "alex",
+  "01288991122": "alex",
+  "01299001133": "alex",
+  "01299001144": "matrouh",
+  "01299002233": "matrouh"
+};
+
+// supabase/functions/clinic-api/training-assignment.js
+var grants = ["patients.print", "patients.read", "patients.edit", "bookings.read", "bookings.create", "bookings.edit", "bookings.status", "complaints.read", "complaints.create", "attachments.read", "attachments.create"];
+function preview2(state, uid, accounts) {
+  if (role(state, uid).r !== "admin") fail2("\u062A\u0646\u0638\u064A\u0645 \u0628\u064A\u0627\u0646\u0627\u062A \u0627\u0644\u062A\u062F\u0631\u064A\u0628 \u0645\u062A\u0627\u062D \u0644\u0644\u0623\u062F\u0645\u0646 \u0641\u0642\u0637", 403);
+  if (!accounts || typeof accounts.dmn !== "string" || typeof accounts.libya !== "string" || accounts.dmn === accounts.libya) fail2("\u0627\u062E\u062A\u0631 \u062D\u0633\u0627\u0628\u064A\u0646 \u0645\u062E\u062A\u0644\u0641\u064A\u0646 \u0644\u0625\u062F\u062E\u0627\u0644 \u0627\u0644\u0628\u064A\u0627\u0646\u0627\u062A");
+  const roles = [];
+  for (const [branch, username, name] of [["dmn", "dmn-sec", "\u062F\u0645\u0646\u0647\u0648\u0631"], ["libya", "libya-sec", "\u0644\u064A\u0628\u064A\u0627"]]) {
+    const id2 = accounts[branch], old = state.roles?.[id2];
+    if (!old || !["staff", "sec"].includes(old.r) || old.enabled === false || old.archivedAt || old.deletePending) fail2("\u0627\u062E\u062A\u0631 \u062D\u0633\u0627\u0628 \u0625\u062F\u062E\u0627\u0644 \u0628\u064A\u0627\u0646\u0627\u062A \u0641\u0639\u0627\u0644\u064B\u0627 \u0644\u0643\u0644 \u0645\u062C\u0645\u0648\u0639\u0629");
+    if (old.r === "sec" && old.br !== branch) fail2("\u062D\u0633\u0627\u0628 \u0627\u0644\u0633\u0643\u0631\u062A\u0627\u0631\u064A\u0629 \u0627\u0644\u0645\u062E\u062A\u0627\u0631 \u062A\u0627\u0628\u0639 \u0644\u0641\u0631\u0639 \u0622\u062E\u0631\u061B \u0627\u062E\u062A\u0631 \u062D\u0633\u0627\u0628 \u0627\u0644\u0641\u0631\u0639 \u0627\u0644\u0635\u062D\u064A\u062D", 409);
+    if (Object.entries(state.roles).some(([other, r]) => other !== id2 && r.u === username)) fail2("\u0627\u0633\u0645 \u0627\u0644\u062F\u062E\u0648\u0644 " + username + " \u0645\u0633\u062A\u062E\u062F\u0645 \u0628\u0627\u0644\u0641\u0639\u0644", 409);
+    roles.push({ uid: id2, before: old, role: { ...old, u: username, r: "sec", br: branch, scope: "branch", displayName: name, permissions: { ...old.permissions, ...Object.fromEntries(grants.map((key) => [key, true])) } } });
+  }
+  const counts = { alex: 0, matrouh: 0, dmn: 0, libya: 0 };
+  for (const [phone3, b] of Object.entries(training_branch_assignments_500_default)) if (state.patients?.[phone3]) counts[b]++;
+  return { roles, counts, missing: 500 - Object.values(counts).reduce((a, b) => a + b, 0) };
+}
+function organize(original, uid) {
+  if (role(original, uid).r !== "admin") fail2("\u063A\u064A\u0631 \u0645\u0635\u0631\u062D", 403);
+  const s = structuredClone(original);
+  if (!branchIds(s).includes("libya")) fail2("\u0641\u0631\u0639 \u0644\u064A\u0628\u064A\u0627 \u063A\u064A\u0631 \u0645\u0648\u062C\u0648\u062F", 409);
+  for (const [phone3, branch] of Object.entries(training_branch_assignments_500_default)) if (s.patients?.[phone3]) s.patients[phone3].br = branch;
+  return s;
+}
+
+// supabase/functions/clinic-api/staff-access.js
+var queueGrants = ["bookings.read", "bookings.create", "bookings.status", "patients.print", "patients.read", "patients.edit"];
+var nurseGrants = [...queueGrants, "patients.read", "complaints.read", "complaints.create", "attachments.read", "attachments.create", "attachments.own.delete"];
+function plan(state, uid, core) {
+  if (core.role(state, uid).r !== "admin") core.fail("\u0636\u0628\u0637 \u062D\u0633\u0627\u0628\u0627\u062A \u0627\u0644\u0641\u0631\u0648\u0639 \u0645\u062A\u0627\u062D \u0644\u0644\u0623\u062F\u0645\u0646 \u0641\u0642\u0637", 403);
+  const registry = branches(state), roles = Object.entries(state.roles || {}), staff = [];
+  for (const [branch, username] of [["alex", "alex-sec"], ["matrouh", "matrouh-sec"], ["dmn", "dmn-sec"], ["libya", "libya-sec"]]) {
+    if (!registry[branch]) core.fail("\u0623\u0636\u0641 \u0641\u0631\u0639 " + branch + " \u0642\u0628\u0644 \u0636\u0628\u0637 \u062D\u0633\u0627\u0628\u0627\u062A\u0647", 409);
+    const named = roles.find(([, r]) => r.u === username);
+    if (named && (!["sec", "staff"].includes(named[1].r) || named[1].br !== branch || named[1].archivedAt || named[1].deletePending)) core.fail("\u0627\u0633\u0645 " + username + " \u0645\u0631\u062A\u0628\u0637 \u0628\u062D\u0633\u0627\u0628 \u0645\u062E\u062A\u0644\u0641 \u0623\u0648 \u0645\u0624\u0631\u0634\u0641\u061B \u0631\u0627\u062C\u0639\u0647 \u0645\u0646 \u0627\u0644\u0645\u0633\u062A\u062E\u062F\u0645\u064A\u0646 \u0623\u0648\u0644\u064B\u0627", 409);
+    const matches = roles.filter(([, r]) => r.r === "sec" && r.br === branch && r.enabled !== false && !r.archivedAt && !r.deletePending);
+    if (!named && matches.length > 1) core.fail("\u064A\u0648\u062C\u062F \u0623\u0643\u062B\u0631 \u0645\u0646 \u062D\u0633\u0627\u0628 \u0633\u0643\u0631\u062A\u0627\u0631\u064A\u0629 \u0644\u0644\u0641\u0631\u0639 " + registry[branch].name + "\u061B \u062D\u062F\u0651\u062F \u0627\u0644\u062D\u0633\u0627\u0628 \u0627\u0644\u0645\u0637\u0644\u0648\u0628 \u0628\u062A\u0633\u0645\u064A\u062A\u0647 " + username + " \u0623\u0648\u0644\u064B\u0627", 409);
+    const dataMatches = roles.filter(([, r]) => r.r === "staff" && r.br === branch && r.enabled !== false && !r.archivedAt && !r.deletePending && /data/i.test(r.u));
+    if (!named && !matches.length && dataMatches.length > 1) core.fail("\u064A\u0648\u062C\u062F \u0623\u0643\u062B\u0631 \u0645\u0646 \u062D\u0633\u0627\u0628 \u062F\u0627\u062A\u0627 \u0644\u0644\u0641\u0631\u0639 " + registry[branch].name + "\u061B \u0631\u0627\u062C\u0639 \u0627\u0644\u062D\u0633\u0627\u0628 \u0627\u0644\u0645\u0637\u0644\u0648\u0628 \u0623\u0648\u0644\u064B\u0627", 409);
+    const selected = named || matches[0] || dataMatches[0], old = selected?.[1] || {};
+    const role2 = { ...old, u: username, r: "sec", br: branch, scope: "branch", enabled: true, displayName: old.displayName || "\u0633\u0643\u0631\u062A\u0627\u0631\u064A\u0629 " + registry[branch].name, permissions: { ...old.permissions, ...Object.fromEntries(queueGrants.map((key) => [key, true])) } };
+    staff.push({ before: selected?.[1] || null, uid: selected?.[0] || null, username, create: !selected, role: validateRole(role2, core.fail, Object.keys(registry)) });
+  }
+  for (const [id2, old] of roles.filter(([, r]) => r.r === "nurse" && r.enabled !== false && !r.archivedAt && !r.deletePending)) {
+    staff.push({ before: old, uid: id2, username: old.u, create: false, role: validateRole({ ...old, scope: "all", permissions: { ...old.permissions, ...Object.fromEntries(nurseGrants.map((key) => [key, true])) } }, core.fail, Object.keys(registry)) });
+  }
+  return { staff };
+}
 
 // supabase/functions/clinic-api/patient-print.js
 function build(state, uid, value) {
@@ -1110,7 +1780,7 @@ function bad(message) {
   e.status = 400;
   throw e;
 }
-function validDate(value) {
+function validDate2(value) {
   return /^\d{4}-\d{2}-\d{2}$/.test(value) && Number.isFinite(Date.parse(value + "T12:00:00Z")) && (/* @__PURE__ */ new Date(value + "T12:00:00Z")).toISOString().slice(0, 10) === value;
 }
 function normalize3(input = {}, branches2 = []) {
@@ -1134,8 +1804,8 @@ function normalize3(input = {}, branches2 = []) {
   out.dateMode = input.dateMode ?? "local";
   if (!["local", "today", "fixed"].includes(out.dateMode)) bad("\u0648\u0636\u0639 \u062A\u0627\u0631\u064A\u062E \u0627\u0644\u0634\u0627\u0634\u0629 \u063A\u064A\u0631 \u0635\u062D\u064A\u062D");
   out.date = input.date ?? "";
-  if (typeof out.date !== "string" || out.date !== "" && !validDate(out.date)) bad("\u062A\u0627\u0631\u064A\u062E \u0634\u0627\u0634\u0629 \u0627\u0644\u062F\u0648\u0631 \u063A\u064A\u0631 \u0635\u062D\u064A\u062D");
-  if (out.dateMode === "fixed" && !validDate(out.date)) bad("\u0627\u062E\u062A\u0631 \u062A\u0627\u0631\u064A\u062E\u064B\u0627 \u0635\u062D\u064A\u062D\u064B\u0627 \u0644\u062A\u062B\u0628\u064A\u062A \u0634\u0627\u0634\u0629 \u0627\u0644\u062F\u0648\u0631");
+  if (typeof out.date !== "string" || out.date !== "" && !validDate2(out.date)) bad("\u062A\u0627\u0631\u064A\u062E \u0634\u0627\u0634\u0629 \u0627\u0644\u062F\u0648\u0631 \u063A\u064A\u0631 \u0635\u062D\u064A\u062D");
+  if (out.dateMode === "fixed" && !validDate2(out.date)) bad("\u0627\u062E\u062A\u0631 \u062A\u0627\u0631\u064A\u062E\u064B\u0627 \u0635\u062D\u064A\u062D\u064B\u0627 \u0644\u062A\u062B\u0628\u064A\u062A \u0634\u0627\u0634\u0629 \u0627\u0644\u062F\u0648\u0631");
   for (const [key, fallback, min, max] of noticeNumbers) {
     const value = input[key] ?? fallback;
     if (!Number.isInteger(value) || value < min || value > max) bad("\u0631\u0627\u062C\u0639 \u0645\u0642\u0627\u0633 \u0628\u0631\u0648\u0627\u0632 \u0627\u0644\u0637\u0648\u0627\u0631\u0626: " + key);
@@ -1319,7 +1989,7 @@ function site(value, fail4) {
   for (const k of ["bookingPhone", "emergencyPhone"]) if (result[k] && !/^\+?[0-9]{7,15}$/.test(result[k])) fail4("\u0631\u0642\u0645 \u0627\u0644\u0647\u0627\u062A\u0641 \u063A\u064A\u0631 \u0635\u062D\u064A\u062D");
   result.branches = {};
   for (const b of Object.keys(value.branches || {})) {
-    if (!validId2(b)) fail4("\u0631\u0645\u0632 \u0641\u0631\u0639 \u063A\u064A\u0631 \u0635\u062D\u064A\u062D");
+    if (!validId(b)) fail4("\u0631\u0645\u0632 \u0641\u0631\u0639 \u063A\u064A\u0631 \u0635\u062D\u064A\u062D");
     const x = value.branches?.[b];
     if (!x) continue;
     result.branches[b] = {};
@@ -1507,46 +2177,6 @@ function mutate(original, uid, input, core) {
     return s;
   }
   core.fail("\u0639\u0645\u0644\u064A\u0629 \u063A\u064A\u0631 \u0645\u0633\u0645\u0648\u062D\u0629", 403);
-}
-
-// supabase/functions/clinic-api/schedule.js
-function validDate2(date2) {
-  const parsed = /* @__PURE__ */ new Date(date2 + "T12:00:00Z");
-  return /^\d{4}-\d{2}-\d{2}$/.test(date2) && Number.isFinite(parsed.getTime()) && parsed.toISOString().slice(0, 10) === date2;
-}
-function availability(registry, schedules, date2) {
-  const result = { scheduled: [], flexible: [] };
-  if (!validDate2(date2)) return result;
-  const day = (/* @__PURE__ */ new Date(date2 + "T12:00:00Z")).getUTCDay();
-  for (const [id2, branch] of Object.entries(registry)) {
-    if (branch.enabled === false) continue;
-    const schedule3 = schedules[id2];
-    if (Object.hasOwn(schedule3?.exceptions || {}, date2)) {
-      const slots2 = schedule3.exceptions[date2];
-      if (slots2.length) result.scheduled.push({ id: id2, slots: slots2 });
-      continue;
-    }
-    if (schedule3?.mode === "days") {
-      if (schedule3.d?.includes(day)) result.scheduled.push({ id: id2, slots: [], dayOnly: true });
-      continue;
-    }
-    if (!schedule3 || schedule3.mode === "flexible") {
-      result.flexible.push(id2);
-      continue;
-    }
-    const slots = schedule3.mode === "weekly" ? schedule3.weekly?.[day] || [] : schedule3.d?.includes(day) ? [{ f: schedule3.f, t: schedule3.t }] : [];
-    if (slots.length) result.scheduled.push({ id: id2, slots });
-  }
-  return result;
-}
-function choose(registry, schedules, date2, time) {
-  const items = availability(registry, schedules, date2).scheduled;
-  if (items.length === 1) return items[0].id;
-  if (time && items.every((item) => !item.dayOnly)) {
-    const active = items.filter((item) => item.slots.some((slot) => slot.f <= time && time < slot.t));
-    if (active.length === 1) return active[0].id;
-  }
-  return null;
 }
 
 // supabase/functions/clinic-api/clinic-features.js
@@ -1945,7 +2575,7 @@ function createService(baseAdapter) {
     const { action } = input || {};
     const adapter2 = { ...baseAdapter, mutate: (fn) => baseAdapter.mutate((original) => {
       const before = structuredClone(original);
-      return record(before, fn(original), input, uid);
+      return record(before, reconcile(before, fn(original)), input, uid);
     }) };
     if (action === "normalizeDemoNames") {
       let summary;
@@ -1972,6 +2602,58 @@ function createService(baseAdapter) {
     if (action === "attachmentExport") return exportImage(adapter2, input, uid);
     if (["attachmentList", "attachmentUpload", "attachmentRead", "attachmentDelete"].includes(action)) return handleAttachments(adapter2, input, uid);
     const readFields = (fields, day = null, entity = null) => adapter2.readFields ? adapter2.readFields(fields, day, entity) : adapter2.read();
+    if (action === "organizeTrainingPreview" || action === "organizeTrainingApply") {
+      const plan2 = preview2(await adapter2.read(), uid, input.accounts), previewToken = JSON.stringify(plan2);
+      if (action === "organizeTrainingPreview") return { ...plan2, previewToken };
+      if (input.previewToken !== previewToken) fail2("\u062A\u063A\u064A\u0631\u062A \u0627\u0644\u062D\u0633\u0627\u0628\u0627\u062A \u0623\u0648 \u0627\u0644\u062D\u0627\u0644\u0627\u062A\u061B \u0623\u0639\u062F \u0627\u0644\u0645\u0639\u0627\u064A\u0646\u0629", 409);
+      if (plan2.missing) fail2("\u0627\u0633\u062A\u0648\u0631\u062F \u0627\u0644\u062D\u0627\u0644\u0627\u062A \u0627\u0644\u062A\u062F\u0631\u064A\u0628\u064A\u0629 \u0627\u0644\u0646\u0627\u0642\u0635\u0629 \u0623\u0648\u0644\u064B\u0627. \u0627\u0644\u0639\u062F\u062F \u0627\u0644\u0646\u0627\u0642\u0635: " + plan2.missing, 409);
+      await adapter2.mutate((s) => organize(s, uid));
+      const results = [];
+      for (const item of plan2.roles) {
+        try {
+          const current = await adapter2.read();
+          if (JSON.stringify(current.roles[item.uid]) !== JSON.stringify(item.before)) fail2("\u062A\u063A\u064A\u0631 \u0627\u0644\u062D\u0633\u0627\u0628 \u0623\u062B\u0646\u0627\u0621 \u0627\u0644\u062A\u0646\u0641\u064A\u0630", 409);
+          await handle2({ action: "userSave", uid: item.uid, role: item.role }, uid, client);
+          results.push({ username: item.role.u, ok: true });
+        } catch (e) {
+          results.push({ username: item.role.u, ok: false, error: e.status ? e.message : "\u062A\u0639\u0630\u0631 \u062A\u062D\u062F\u064A\u062B \u0627\u0644\u062D\u0633\u0627\u0628" });
+          break;
+        }
+      }
+      return { ok: results.every((x) => x.ok), dataOrganized: true, counts: plan2.counts, results };
+    }
+    if (action === "staffAccessPreview" || action === "staffAccessApply") {
+      const plan2 = plan(await adapter2.read(), uid, core_exports), previewToken = JSON.stringify(plan2);
+      if (action === "staffAccessPreview") return { ...plan2, previewToken };
+      if (input.previewToken !== previewToken) fail2("\u062A\u063A\u064A\u0631\u062A \u062D\u0633\u0627\u0628\u0627\u062A \u0627\u0644\u0645\u0633\u062A\u062E\u062F\u0645\u064A\u0646\u061B \u0627\u0641\u062A\u062D \u0636\u0628\u0637 \u0627\u0644\u062D\u0633\u0627\u0628\u0627\u062A \u0645\u0646 \u062C\u062F\u064A\u062F", 409);
+      if (typeof input.password !== "string" || input.password.length < 6 || input.password.length > 128) fail2("\u0643\u0644\u0645\u0629 \u0627\u0644\u0633\u0631 \u0645\u0646 6 \u0625\u0644\u0649 128 \u062D\u0631\u0641\u064B\u0627");
+      const results = [];
+      for (const item of plan2.staff) {
+        let credentialsSaved = false;
+        try {
+          const current = await adapter2.read();
+          if (role(current, uid).r !== "admin") fail2("\u0627\u0646\u062A\u0647\u062A \u0635\u0644\u0627\u062D\u064A\u0629 \u0627\u0644\u0623\u062F\u0645\u0646", 403);
+          if (item.uid && JSON.stringify(current.roles[item.uid]) !== JSON.stringify(item.before)) fail2("\u062A\u063A\u064A\u0631 \u0627\u0644\u062D\u0633\u0627\u0628 \u0623\u062B\u0646\u0627\u0621 \u0627\u0644\u062A\u0646\u0641\u064A\u0630", 409);
+          if (item.create) {
+            await handle2({ action: "userCreate", u: item.username, p: input.password, role: item.role }, uid, client);
+          } else {
+            if (item.role.r === "sec") {
+              const result = await handle2({ action: "userCredentials", uid: item.uid, username: item.username, password: input.password }, uid, client);
+              credentialsSaved = true;
+              if (result.warning) results.push({ username: item.username, warning: result.warning });
+            }
+            const latest = await adapter2.read(), expected = credentialsSaved ? { ...item.before, u: item.username } : item.before;
+            if (JSON.stringify(latest.roles[item.uid]) !== JSON.stringify(expected)) fail2("\u062A\u063A\u064A\u0631\u062A \u0627\u0644\u0635\u0644\u0627\u062D\u064A\u0627\u062A \u0623\u062B\u0646\u0627\u0621 \u0627\u0644\u062A\u0646\u0641\u064A\u0630\u061B \u0623\u0639\u062F \u0627\u0644\u0645\u0639\u0627\u064A\u0646\u0629", 409);
+            await handle2({ action: "userSave", uid: item.uid, role: item.role }, uid, client);
+          }
+          results.push({ username: item.username, ok: true });
+        } catch (e) {
+          results.push({ username: item.username, ok: false, error: (credentialsSaved ? "\u062A\u0645 \u062D\u0641\u0638 \u0628\u064A\u0627\u0646\u0627\u062A \u0627\u0644\u062F\u062E\u0648\u0644\u061B \u062A\u0639\u0630\u0631 \u062D\u0641\u0638 \u0627\u0644\u0635\u0644\u0627\u062D\u064A\u0627\u062A: " : "") + (e.status ? e.message : "\u062A\u0639\u0630\u0631 \u062A\u0646\u0641\u064A\u0630 \u062A\u062D\u062F\u064A\u062B \u0627\u0644\u062D\u0633\u0627\u0628") });
+          break;
+        }
+      }
+      return { ok: results.every((x) => x.ok !== false), results };
+    }
     if (action === "patientPrintData") return build(await readFields(["roles", "patients", "bookings", "settings", "files", "complaints"], null, phone(input.phone)), uid, input.phone);
     if (action === "displayCapabilities") {
       requirePermission(role(await readFields(["roles"]), uid), "display.manage");
@@ -1982,17 +2664,17 @@ function createService(baseAdapter) {
       return { familyMetadata: 1 };
     }
     if (action === "importPreview") {
-      const plan = prepare(await adapter2.read(), uid, input.data, input.options);
-      return { summary: plan.summary, token: plan.token };
+      const plan2 = prepare(await adapter2.read(), uid, input.data, input.options);
+      return { summary: plan2.summary, token: plan2.token };
     }
     if (action === "importApply") {
       if (input.confirmation !== "IMPORT_CLINIC_DATA" || typeof input.previewToken !== "string") fail2("\u0631\u0627\u062C\u0639 \u0627\u0644\u0645\u0639\u0627\u064A\u0646\u0629 \u0648\u0623\u0643\u062F \u0627\u0644\u0627\u0633\u062A\u064A\u0631\u0627\u062F \u0623\u0648\u0644\u064B\u0627");
       let summary;
       await adapter2.mutate((s) => {
-        const plan = prepare(s, uid, input.data, input.options);
-        if (plan.token !== input.previewToken) fail2("\u062A\u063A\u064A\u0631\u062A \u0628\u064A\u0627\u0646\u0627\u062A \u0627\u0644\u0639\u064A\u0627\u062F\u0629 \u0623\u0648 \u0627\u0644\u0645\u0644\u0641 \u0645\u0646\u0630 \u0627\u0644\u0645\u0639\u0627\u064A\u0646\u0629\u061B \u0623\u0639\u062F \u0627\u0644\u0645\u0639\u0627\u064A\u0646\u0629 \u0623\u0648\u0644\u064B\u0627", 409);
-        summary = plan.summary;
-        return plan.state;
+        const plan2 = prepare(s, uid, input.data, input.options);
+        if (plan2.token !== input.previewToken) fail2("\u062A\u063A\u064A\u0631\u062A \u0628\u064A\u0627\u0646\u0627\u062A \u0627\u0644\u0639\u064A\u0627\u062F\u0629 \u0623\u0648 \u0627\u0644\u0645\u0644\u0641 \u0645\u0646\u0630 \u0627\u0644\u0645\u0639\u0627\u064A\u0646\u0629\u061B \u0623\u0639\u062F \u0627\u0644\u0645\u0639\u0627\u064A\u0646\u0629 \u0623\u0648\u0644\u064B\u0627", 409);
+        summary = plan2.summary;
+        return plan2.state;
       });
       return { ok: true, summary };
     }
@@ -2051,10 +2733,22 @@ function createService(baseAdapter) {
       });
       return { ok: true, archived };
     }
+    if (action === "scheduleTransferDay") {
+      let result;
+      await adapter2.mutate((s) => {
+        requirePermission(role(s, uid), "clinic.manage");
+        const before = structuredClone(s), next = reconcile(before, transferDay(s, input.from, input.to, input.day));
+        let transferCount = 0;
+        for (const [date2, rows] of Object.entries(next.bookings || {})) for (const row of Object.values(rows)) if (before.bookings?.[date2]?.[row.id]?.b !== row.b) transferCount++;
+        result = { transferCount, pendingCount: Object.keys(next.scheduleTransferPending || {}).length };
+        return next;
+      });
+      return { ok: true, ...result };
+    }
     if (action === "schedulePreview") {
       const state = await adapter2.read();
       requirePermission(role(state, uid), "clinic.manage");
-      return review(state, input.branch, input.schedule);
+      return { ...review(state, input.branch, input.schedule), ...preview(state, input.branch, input.schedule) };
     }
     if (action === "branchDaysSet") {
       await adapter2.mutate((original) => {
@@ -2074,7 +2768,7 @@ function createService(baseAdapter) {
     }
     if (action === "publicQueue") {
       const d = date(input.date || today());
-      if (!validId2(input.branch)) fail2("\u0627\u062E\u062A\u0631 \u0627\u0644\u0641\u0631\u0639");
+      if (!validId(input.branch)) fail2("\u0627\u062E\u062A\u0631 \u0627\u0644\u0641\u0631\u0639");
       await adapter2.limit?.(client, "display:" + input.branch);
       return publicQueue(await (adapter2.readDay ? adapter2.readDay(d) : adapter2.read()), input.branch, d);
     }
@@ -2099,7 +2793,7 @@ function createService(baseAdapter) {
       if (input.tab === "cases") fields.push("patients");
       if (input.tab === "audit") fields.push("audit");
       if (input.tab === "deleted") fields.push("deletedBookings");
-      const s = await readFields(fields, input.tab === "cases" ? null : d), r = role(s, uid), result = { role: normalize(r), settings: publicSettings(s) || {}, sessions: {}, bookings: null };
+      const s = await readFields(fields, input.tab === "cases" ? null : d), r = role(s, uid), result = { role: normalize(r), settings: publicSettings(s) || {}, sessions: {}, bookings: null, transferPendingCount: can(r, "clinic.manage") ? s.settings?.scheduleTransferPendingCount || 0 : 0 };
       if (can(r, "bookings.read")) {
         result.bookings = read2(s, uid, d ? "bookings/" + d : "bookings");
         result.sessions = { ...s.sessions };
@@ -2246,7 +2940,15 @@ function createService(baseAdapter) {
       });
       return { ok: true };
     }
-    if (["watermarkSave", "aboutSave", "displaySave", "headerSave", "siteContentSave", "siteSave", "userSave", "patientSave", "patientDelete", "dataClear"].includes(action)) {
+    if (action === "userSave") {
+      const state = await adapter2.read(), old = state.roles?.[input.uid];
+      mutate(state, uid, { ...input, role: { ...input.role, u: old?.u } }, core_exports);
+      const next = validateRole(input.role, fail2, branchIds(state));
+      if (next.u !== old.u) await handle2({ action: "userCredentials", uid: input.uid, username: next.u }, uid, client);
+      await adapter2.mutate((s) => mutate(s, uid, { ...input, role: next }, core_exports));
+      return { ok: true, username: next.u };
+    }
+    if (["watermarkSave", "aboutSave", "displaySave", "headerSave", "siteContentSave", "siteSave", "patientSave", "patientDelete", "dataClear"].includes(action)) {
       await adapter2.mutate((s) => mutate(s, uid, input, core_exports));
       return { ok: true, ...["patientDelete", "dataClear"].includes(action) ? { cleanupPending: await drain(adapter2) } : {} };
     }

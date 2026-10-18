@@ -2,10 +2,10 @@ const keys=['bookings.read','bookings.create','bookings.edit','bookings.status',
 keys.push('patients.print','display.manage','data.import','data.restore','audit.details','attachments.read','attachments.create','attachments.delete','attachments.own.delete','sessions.manage','queue.configure','reports.export','audit.read');
 
 const administrative=['display.manage','data.import','data.restore','audit.details','attachments.own.delete','users.manage','clinic.manage','site.manage','data.export','data.delete','audit.read','patients.delete'];
-const defaults={doctor:keys.filter(k=>!administrative.includes(k)),sec:['patients.print','bookings.read','bookings.create','bookings.status'],nurse:['patients.print','patients.read','complaints.read','complaints.create','attachments.read','attachments.create','attachments.own.delete'],staff:['patients.print']};
+const defaults={doctor:keys.filter(k=>!administrative.includes(k)),sec:['patients.print','bookings.read','bookings.create','bookings.status'],nurse:['bookings.read','bookings.create','bookings.status','patients.print','patients.read','complaints.read','complaints.create','attachments.read','attachments.create','attachments.own.delete'],staff:['patients.print']};
 function can(r,key){if(!keys.includes(key))return false;if(r.r==='admin')return keys.includes(key);return typeof r.permissions?.[key]==='boolean'?r.permissions[key]:(defaults[r.r]||[]).includes(key);}
 function requirePermission(r,key){if(!can(r,key)){const e=new Error('ليس لديك صلاحية لهذه العملية');e.status=403;throw e;}}
-function allBranches(r){return r.r==='admin'||r.scope==='all'||r.r==='doctor'&&r.scope===undefined;}
+function allBranches(r){return r.r==='admin'||r.scope==='all'||['doctor','nurse'].includes(r.r)&&r.scope===undefined;}
 function normalize(r){return {...r,permissions:Object.fromEntries(keys.map(k=>[k,can(r,k)]))};}
 function validateRole(r,fail,branches=['dmn','alex']){
  if(!r||!['admin','doctor','sec','nurse','staff'].includes(r.r)||!/^[a-z0-9._-]{3,64}$/.test(r.u||''))fail('بيانات المستخدم غير صحيحة');

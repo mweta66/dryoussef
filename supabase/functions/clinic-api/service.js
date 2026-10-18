@@ -1,3 +1,6 @@
+import * as scheduleTransfers from './schedule-transfers.js';
+import * as trainingAssignment from './training-assignment.js';
+import * as staffAccess from './staff-access.js';
 import * as patientPrint from './patient-print.js';
 import * as demoNames from './demo-names.js';
 import * as history from './history.js';
@@ -16,7 +19,7 @@ function createService(baseAdapter) {
  return async function handle(input,uid,client='local') {
   const {action}=input||{};
   const adapter={...baseAdapter,mutate:fn=>baseAdapter.mutate(original=>{
-   const before=structuredClone(original);return history.record(before,fn(original),input,uid);
+   const before=structuredClone(original);return history.record(before,scheduleTransfers.reconcile(before,fn(original)),input,uid);
   })};
   if(action==='normalizeDemoNames'){let summary;await adapter.mutate(s=>{const result=demoNames.normalize(s,uid);summary=result.summary;return result.state;});return {ok:true,...summary,profileMigrationVersion:1};}
   if(action==='trashList')return history.list(await adapter.read(),uid,input);
@@ -25,6 +28,40 @@ function createService(baseAdapter) {
   if(action==='attachmentExport')return backup.exportImage(adapter,input,uid);
   if(['attachmentList','attachmentUpload','attachmentRead','attachmentDelete'].includes(action))return attachments.handleAttachments(adapter,input,uid);
   const readFields=(fields,day=null,entity=null)=>adapter.readFields?adapter.readFields(fields,day,entity):adapter.read();
+  if(action==='organizeTrainingPreview'||action==='organizeTrainingApply'){
+   const plan=trainingAssignment.preview(await adapter.read(),uid,input.accounts),previewToken=JSON.stringify(plan);
+   if(action==='organizeTrainingPreview')return {...plan,previewToken};
+   if(input.previewToken!==previewToken)core.fail('تغيرت الحسابات أو الحالات؛ أعد المعاينة',409);
+   if(plan.missing)core.fail('استورد الحالات التدريبية الناقصة أولًا. العدد الناقص: '+plan.missing,409);
+   await adapter.mutate(s=>trainingAssignment.organize(s,uid));const results=[];
+   for(const item of plan.roles){try{
+    const current=await adapter.read();if(JSON.stringify(current.roles[item.uid])!==JSON.stringify(item.before))core.fail('تغير الحساب أثناء التنفيذ',409);
+    await handle({action:'userSave',uid:item.uid,role:item.role},uid,client);results.push({username:item.role.u,ok:true});
+   }catch(e){results.push({username:item.role.u,ok:false,error:e.status?e.message:'تعذر تحديث الحساب'});break;}}
+   return {ok:results.every(x=>x.ok),dataOrganized:true,counts:plan.counts,results};
+  }
+  if(action==='staffAccessPreview'||action==='staffAccessApply'){
+   const plan=staffAccess.plan(await adapter.read(),uid,core),previewToken=JSON.stringify(plan);
+   if(action==='staffAccessPreview')return {...plan,previewToken};
+   if(input.previewToken!==previewToken)core.fail('تغيرت حسابات المستخدمين؛ افتح ضبط الحسابات من جديد',409);
+   if(typeof input.password!=='string'||input.password.length<6||input.password.length>128)core.fail('كلمة السر من 6 إلى 128 حرفًا');
+   const results=[];
+   for(const item of plan.staff){
+    let credentialsSaved=false;
+    try{
+     const current=await adapter.read();if(core.role(current,uid).r!=='admin')core.fail('انتهت صلاحية الأدمن',403);
+     if(item.uid&&JSON.stringify(current.roles[item.uid])!==JSON.stringify(item.before))core.fail('تغير الحساب أثناء التنفيذ',409);
+     if(item.create){await handle({action:'userCreate',u:item.username,p:input.password,role:item.role},uid,client);}
+     else{
+      if(item.role.r==='sec'){const result=await handle({action:'userCredentials',uid:item.uid,username:item.username,password:input.password},uid,client);credentialsSaved=true;if(result.warning)results.push({username:item.username,warning:result.warning});}
+      const latest=await adapter.read(),expected=credentialsSaved?{...item.before,u:item.username}:item.before;if(JSON.stringify(latest.roles[item.uid])!==JSON.stringify(expected))core.fail('تغيرت الصلاحيات أثناء التنفيذ؛ أعد المعاينة',409);
+      await handle({action:'userSave',uid:item.uid,role:item.role},uid,client);
+     }
+     results.push({username:item.username,ok:true});
+    }catch(e){results.push({username:item.username,ok:false,error:(credentialsSaved?'تم حفظ بيانات الدخول؛ تعذر حفظ الصلاحيات: ':'')+(e.status?e.message:'تعذر تنفيذ تحديث الحساب')});break;}
+   }
+   return {ok:results.every(x=>x.ok!==false),results};
+  }
   if(action==='patientPrintData')return patientPrint.build(await readFields(['roles','patients','bookings','settings','files','complaints'],null,core.phone(input.phone)),uid,input.phone);
   if(action==='displayCapabilities'){perms.requirePermission(core.role(await readFields(['roles']),uid),'display.manage');return {noticeAppearanceVersion:1};}
   if(action==='bookingCapabilities'){core.role(await readFields(['roles']),uid);return {familyMetadata:1};}
@@ -37,7 +74,10 @@ function createService(baseAdapter) {
   if(action==='lookupHistory'){const p=core.phone(input.phone);if(!/^01[0125]\d{8}$/.test(p))return [];await adapter.limit(client,p);const s=await(adapter.readHistory?adapter.readHistory(p):adapter.read());return Object.entries(s.bookings||{}).flatMap(([d,rows])=>Object.values(rows).filter(x=>core.phone(x.phone)===p&&core.branchIds(s,true).includes(x.b)).map(x=>({date:d,no:x.no,b:x.b,s:x.s}))).sort((a,b)=>b.date.localeCompare(a.date));}
   if(action==='designRestore'){await adapter.mutate(original=>{const s=structuredClone(original);perms.requirePermission(core.role(s,uid),'site.manage');if(!s.settings?.previousDesign)core.fail('لا يوجد تصميم سابق',404);const current=s.settings.site?.design||{};s.settings.site||={};s.settings.site.design=s.settings.previousDesign;s.settings.previousDesign=current;return s;});return {ok:true};}
   if(action==='branchDelete'){let archived=false;await adapter.mutate(original=>{let s=structuredClone(original);perms.requirePermission(core.role(s,uid),'clinic.manage');const b=input.branch,registry=branchConfig.branches(s);if(!Object.hasOwn(registry,b))core.fail('الفرع غير موجود',404);const linked=Object.values(s.bookings||{}).some(rows=>Object.values(rows).some(x=>x.b===b))||Object.values(s.roles||{}).some(x=>x.br===b)||Object.keys(s.sessions||{}).some(key=>key.endsWith('_'+b))||Object.values(s.deletedBookings||{}).some(x=>x.booking?.b===b);if(linked){archived=true;return branchConfig.save(s,uid,{branch:b,details:{...registry[b],enabled:false}},core,perms)}if(Object.keys(registry).length===1||registry[b].enabled!==false&&!Object.entries(registry).some(([id,x])=>id!==b&&x.enabled!==false))core.fail('يجب إبقاء فرع فعال');s.settings||={};s.settings.branches={...registry};delete s.settings.branches[b];delete s.settings.sched?.[b];delete s.settings.site?.branches?.[b];if(s.sessions?.[core.today()+'_presence']?.branch===b)delete s.sessions[core.today()+'_presence'];return s;});return {ok:true,archived};}
-  if(action==='schedulePreview'){const state=await adapter.read();perms.requirePermission(core.role(state,uid),'clinic.manage');return scheduleReview.review(state,input.branch,input.schedule)}
+  if(action==='scheduleTransferDay'){
+   let result;await adapter.mutate(s=>{perms.requirePermission(core.role(s,uid),'clinic.manage');const before=structuredClone(s),next=scheduleTransfers.reconcile(before,scheduleTransfers.transferDay(s,input.from,input.to,input.day));let transferCount=0;for(const [date,rows]of Object.entries(next.bookings||{}))for(const row of Object.values(rows))if(before.bookings?.[date]?.[row.id]?.b!==row.b)transferCount++;result={transferCount,pendingCount:Object.keys(next.scheduleTransferPending||{}).length};return next;});return {ok:true,...result};
+  }
+  if(action==='schedulePreview'){const state=await adapter.read();perms.requirePermission(core.role(state,uid),'clinic.manage');return {...scheduleReview.review(state,input.branch,input.schedule),...scheduleTransfers.preview(state,input.branch,input.schedule)}}
   if(action==='branchDaysSet'){await adapter.mutate(original=>{perms.requirePermission(core.role(original,uid),'clinic.manage');if(!Object.hasOwn(branchConfig.branches(original),input.branch))core.fail('الفرع غير موجود',404);const s=structuredClone(original);s.settings||={};s.settings.sched||={};s.settings.sched[input.branch]=core.schedule({mode:'days',d:input.days,exceptions:s.settings.sched[input.branch]?.exceptions||{}});return s;});return {ok:true};}
   if(action==='branchSave'){await adapter.mutate(s=>branchConfig.save(s,uid,input,core,perms));return {ok:true};}
   if(action==='publicQueue'){const d=core.date(input.date||core.today());if(!branchConfig.validId(input.branch))core.fail('اختر الفرع');await adapter.limit?.(client,'display:'+input.branch);return features.publicQueue(await (adapter.readDay?adapter.readDay(d):adapter.read()),input.branch,d);}
@@ -45,7 +85,7 @@ function createService(baseAdapter) {
   if(action==='retryAttachmentCleanup'){perms.requirePermission(core.role(await adapter.read(),uid),'data.delete');return {cleanupPending:await cleanup.drain(adapter)}}
   if(action==='systemHealth'||action==='backupDownload'){const s=await readFields(['roles']);perms.requirePermission(core.role(s,uid),'data.export');if(action==='systemHealth'){const health=adapter.systemHealth?await adapter.systemHealth():{lastBackup:null,retentionDays:14,errors:[]};return {...health,cleanupPending:Object.keys((await adapter.read()).attachmentGarbage||{}).length}}const backup=await adapter.latestBackup?.();if(!backup)core.fail('لا توجد نسخة آلية بعد',404);return backup;}
   if(action==='workspace'){
-   const d=input.date?core.date(input.date):null,fields=['roles','settings','sessions','inbox','bookings'];if(input.tab==='cases')fields.push('patients');if(input.tab==='audit')fields.push('audit');if(input.tab==='deleted')fields.push('deletedBookings');const s=await readFields(fields,input.tab==='cases'?null:d),r=core.role(s,uid),result={role:perms.normalize(r),settings:core.publicSettings(s)||{},sessions:{},bookings:null};
+   const d=input.date?core.date(input.date):null,fields=['roles','settings','sessions','inbox','bookings'];if(input.tab==='cases')fields.push('patients');if(input.tab==='audit')fields.push('audit');if(input.tab==='deleted')fields.push('deletedBookings');const s=await readFields(fields,input.tab==='cases'?null:d),r=core.role(s,uid),result={role:perms.normalize(r),settings:core.publicSettings(s)||{},sessions:{},bookings:null,transferPendingCount:perms.can(r,'clinic.manage')?s.settings?.scheduleTransferPendingCount||0:0};
    if(perms.can(r,'bookings.read')){result.bookings=core.read(s,uid,d?'bookings/'+d:'bookings');result.sessions={...s.sessions};const present=core.presence(s,core.today());if(present)result.sessions[core.today()+'_presence']={...s.sessions?.[core.today()+'_presence'],branch:present};}
    if(input.tab==='users'&&perms.can(r,'users.manage'))result.roles=core.read(s,uid,'roles');if(input.tab==='cases'&&perms.can(r,'patients.read'))result.patients=core.read(s,uid,'patients');
    if(perms.can(r,'notifications.read'))result.inbox=core.read(s,uid,'inbox');if(input.tab==='audit'&&perms.can(r,'audit.read'))result.audit=s.audit||[];if(input.tab==='deleted'&&perms.can(r,'bookings.delete'))result.deletedBookings=core.read(s,uid,'deletedBookings');return result;
@@ -100,7 +140,15 @@ function createService(baseAdapter) {
     state.settings||={};state.settings.demoPurged=true;core.rebuild(state);return state;
    });return {ok:true};
   }
-  if(['watermarkSave','aboutSave','displaySave','headerSave','siteContentSave','siteSave','userSave','patientSave','patientDelete','dataClear'].includes(action)){await adapter.mutate(s=>management.mutate(s,uid,input,core));return {ok:true,...(['patientDelete','dataClear'].includes(action)?{cleanupPending:await cleanup.drain(adapter)}:{})};}
+  if(action==='userSave'){
+   const state=await adapter.read(),old=state.roles?.[input.uid];
+   // Validate all role changes before changing the authentication identity.
+   management.mutate(state,uid,{...input,role:{...input.role,u:old?.u}},core);
+   const next=perms.validateRole(input.role,core.fail,core.branchIds(state));
+   if(next.u!==old.u)await handle({action:'userCredentials',uid:input.uid,username:next.u},uid,client);
+   await adapter.mutate(s=>management.mutate(s,uid,{...input,role:next},core));return {ok:true,username:next.u};
+  }
+  if(['watermarkSave','aboutSave','displaySave','headerSave','siteContentSave','siteSave','patientSave','patientDelete','dataClear'].includes(action)){await adapter.mutate(s=>management.mutate(s,uid,input,core));return {ok:true,...(['patientDelete','dataClear'].includes(action)?{cleanupPending:await cleanup.drain(adapter)}:{})};}
   if(action==='userRevokeSessions'){const state=await adapter.read();perms.requirePermission(core.role(state,uid),'users.manage');if(!state.roles?.[input.uid])core.fail('المستخدم غير موجود',404);await adapter.revokeUserSessions(input.uid);await adapter.mutate(s=>structuredClone(s));return {ok:true};}
   if(action==='userPassword'){const state=await adapter.read();perms.requirePermission(core.role(state,uid),'users.manage');if(!input.uid||typeof input.password!=='string'||input.password.length<6||input.password.length>128)core.fail('كلمة السر من 6 إلى 128 حرفاً');const target=state.roles?.[input.uid];if(!target)core.fail('المستخدم غير موجود',404);try{await adapter.updateUser(input.uid,input.password)}catch(e){if(e.status>=500)core.fail('تعذر تأكيد نتيجة تغيير كلمة السر لحساب '+target.u+'. تحقق من تسجيل الدخول قبل إعادة المحاولة.',503);throw e}let warning='';try{await adapter.revokeUserSessions(input.uid)}catch(e){warning='تم حفظ كلمة السر، لكن تعذر إنهاء الجلسات القديمة. أعد محاولة إنهائها.'}await adapter.mutate(s=>structuredClone(s));return {ok:true,username:target.u,enabled:target.enabled!==false,warning};}
   if(action==='userCredentials'){

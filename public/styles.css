@@ -167,3 +167,46 @@ html[data-watermark-hidden] .card::before,html[data-watermark-hidden] #app::befo
 .notice-preview-area{padding:20px;display:flex;justify-content:center;overflow:hidden}
 .notice-preview-area .display-emergency-notice{margin:0;max-width:min(100%,var(--notice-max-width,620px));min-width:0;font-size:var(--notice-font-size,18px);font-weight:700;line-height:1.6;overflow-wrap:anywhere;white-space:pre-wrap;text-align:var(--notice-align,center);padding:var(--notice-padding,10px);border:var(--notice-border-width,2px) solid var(--notice-border,#ad362e);border-radius:var(--notice-radius,12px);background:var(--notice-background,#fcecea);color:var(--notice-text,#ad362e)}
 .notice-preview-area .display-emergency-notice[data-notice-neon]{box-shadow:0 0 var(--notice-neon-size,18px) var(--notice-neon-color,#ef4444),inset 0 0 calc(var(--notice-neon-size,18px)/2) var(--notice-neon-color,#ef4444)}
+
+/* Use each theme's colors consistently, with readable action labels. */
+:root{--accentink:var(--custom-accent-ink,#111827);--secondaryink:var(--statusink)}
+.btn.a{color:var(--accentink)}
+.btn.x{color:var(--secondaryink)}
+.hero{border-bottom-color:var(--acc)}
+.hero .bar a{color:var(--header-ink,#fff)}
+.logo .ph{border-color:var(--acc);box-shadow:0 0 0 3px color-mix(in srgb,var(--acc) 30%,transparent)}
+.cbtn:not(.em) .ci{background:var(--btn);color:var(--btnink)}
+:focus-visible{outline-color:var(--pri)}
+.staff-access-setup{padding:16px}
+.staff-access-setup p{overflow-wrap:anywhere}
+.nurse-directory{margin-block:14px;padding:10px;border:1px solid var(--line);border-radius:12px}
+.nurse-directory>summary{cursor:pointer;color:var(--pri);font-weight:700;line-height:1.8}
+#notice{pointer-events:none;display:flex;align-items:flex-start;gap:16px;max-height:35dvh;overflow:auto}
+#notice>span{min-width:0;overflow-wrap:anywhere}
+#notice>button{pointer-events:auto;flex:none;border:1px solid var(--line);border-radius:8px;background:var(--bar);color:var(--ink);font:inherit;font-size:13px;padding:4px 10px;cursor:pointer}
+
+/* Complaint columns must not inherit the 42% width of lookup row headers. */
+.complaints-scroll{min-width:0}
+.complaints-table{table-layout:fixed;min-width:0}
+.complaints-table th{width:auto;color:var(--ink);background:var(--bar);font-size:13px}
+.complaints-table td{font-size:14px;text-align:start;line-height:1.8}
+.complaints-table caption{text-align:start;color:var(--mut);font-size:13px;padding:12px 0}
+.complaints-table .complaint-number{width:7%}
+.complaints-table .complaint-date{width:21%}
+.complaints-table .complaint-author{width:15%}
+.complaints-table tbody tr:nth-child(even){background:color-mix(in srgb,var(--soft) 55%,var(--card))}
+.complaint-stamp{display:block;color:var(--mut);font-size:12px;margin-top:6px}
+.complaint-value{white-space:pre-wrap;overflow-wrap:anywhere}
+.complaints-table .acts{margin-top:8px}
+.mod:has(.complaints-table){max-width:1000px}
+@media(max-width:700px){
+ .complaints-table,.complaints-table tbody,.complaints-table tr,.complaints-table td{display:block;width:100%}
+ .complaints-table colgroup{display:none}
+ .complaints-table thead{position:absolute;width:1px;height:1px;overflow:hidden;clip-path:inset(50%)}
+ .complaints-table tbody{display:grid;gap:12px}
+ .complaints-table tbody tr{border:1px solid var(--line);border-radius:12px;overflow:hidden;background:var(--card)}
+ .complaints-table td{display:grid;grid-template-columns:minmax(85px,32%) minmax(0,1fr);gap:10px;border:0;border-bottom:1px solid var(--line);padding:10px}
+ .complaints-table tr:last-child td{border-bottom:1px solid var(--line)}
+ .complaints-table td:last-child{border-bottom:0!important}
+ .complaints-table td::before{content:attr(data-label);font-weight:700;color:var(--mut);font-size:12px}
+}

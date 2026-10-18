@@ -36,7 +36,7 @@ test('clinic day uses Cairo across midnight', () => {
   vm.runInContext('Date = class extends Date { constructor(){ super("2026-10-13T22:30:00Z") } }',c);
   assert.equal(c.today(),'2026-10-14');
 });
-test('booking commits go through the protected gateway and refresh from the server',async()=>{const {context:c}=clinic();let payload,refreshed=false;c.gateway=async(action,input,auth)=>{assert.equal(action,'commit');assert.equal(auth,true);payload=input};c.refreshData=async()=>{refreshed=true};const puts=[{n:{id:'one'}}];await c.commit(puts,[]);assert.equal(payload.puts,puts);assert.ok(refreshed)});
+test('booking commits go through the protected gateway and refresh from the server',async()=>{const {context:c}=clinic();let payload,refreshed=false;c.gateway=async(action,input,auth)=>{assert.equal(action,'commit');assert.equal(auth,true);payload=input};c.refreshData=async()=>{refreshed=true};c.notify=()=>{};const puts=[{n:{id:'one'}}];await c.commit(puts,[]);assert.equal(payload.puts,puts);assert.ok(refreshed)});
 test('booking duplicates are rejected before writing', async () => {
   const {context:c}=clinic(); c.me={role:'doctor'}; const d=c.today();
   c.S.bk=[{id:'existing',date:d,phone:'01275884716'}];

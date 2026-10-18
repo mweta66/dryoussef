@@ -34,7 +34,8 @@ function topbar(){var t='<span class="sp"></span><button class="gb" onclick="tog
 function toggleTheme(){var r=document.documentElement,d=r.getAttribute("data-theme")==="dark"||(!r.getAttribute("data-theme")&&matchMedia("(prefers-color-scheme:dark)").matches);r.setAttribute("data-theme",d?"light":"dark");try{localStorage.setItem("clinic_theme",d?"light":"dark")}catch(e){}}
 function chk(){var p=document.getElementById("ph");document.getElementById("go").disabled=!validPhone(p.value);p.removeAttribute("aria-invalid")}
 function look(){var p=document.getElementById("ph");if(!validPhone(p.value)){p.setAttribute("aria-invalid","true");p.focus();return}shown++;lastPh=norm(p.value);document.getElementById("booking-history")?.remove();document.getElementById("res").textContent="جارٍ البحث عن حجزك…";findPhoneBookings()}
-function notify(message){var el=document.getElementById("notice");if(!el)return;el.textContent=message||"";el.dataset.kind=/^(تم|تمت)/.test(message||"")?"success":/تعذر|غير صحيح|NOAUTH|صلاحية|خطأ/.test(message||"")?"error":"info"}
+var noticeTimer;
+function notify(message){var el=document.getElementById("notice");if(!el)return;clearTimeout(noticeTimer);el.replaceChildren();el.dataset.kind=/^(تم|تمت)/.test(message||"")?"success":/تعذر|غير صحيح|NOAUTH|صلاحية|خطأ/.test(message||"")?"error":"info";if(!message)return;var text=document.createElement("span"),close=document.createElement("button");text.textContent=message;close.type="button";close.textContent="إغلاق";close.setAttribute("aria-label","إغلاق التنبيه");close.onclick=function(){notify("")};el.append(text,close);if(el.dataset.kind!=="error")noticeTimer=setTimeout(function(){notify("")},8000)}
 function go(v){location.hash=v==="patient"?"":v}
 function branches(){var h='<h2>'+ic("pin",20)+'الفروع ومواعيد العمل</h2><div class="branches">';for(var k in BR){var b=BR[k],s=sched(k);h+='<div class="br"><div><span class="ib">'+ic("pin")+'</span><b>'+esc(b.name)+'</b></div><p>'+esc(b.addr)+'</p><p>'+ic("phone",16)+' <a href="tel:'+b.tel+'">'+b.tel+'</a></p><div class="chips">'+s.chips+'</div><p>'+ic("clock",16)+' '+s.time+'</p></div>'}return h+'</div>'}
 function doctor(){var n=Object.keys(INBOX).length,h='<h2>'+ic("chart",20)+'إدارة العيادة</h2><div class="tabs">';
@@ -209,19 +210,39 @@ function qList(){var q=digits(QS).trim().toLowerCase();if(!PT)return'<p class="s
  var L=Object.keys(PT).filter(function(k){return k.indexOf(q)>=0||PT[k].n.toLowerCase().indexOf(q)>=0}).sort(function(a,b){return PT[b].d<PT[a].d?-1:1}).slice(0,30);
  if(!L.length)return'<p class="sub">لا توجد حالة بهذا الاسم أو الرقم.</p>';var dr=can("notes.read");
  return L.map(function(k){return'<div class="item"><div class="m"><b>'+esc(PT[k].n)+'</b><small dir="ltr" style="text-align:right">'+k+'</small></div><button class="btn sm" data-a="'+(dr?"cf":"ns")+'" data-id="'+k+'">'+(dr?"ملف الحالة":"اختيار")+'</button></div>'}).join("")}
-function qRes(){var e=document.getElementById("qres");if(e)e.innerHTML=qList()}
-function cList(edit){if(!CL.length)return '<p class="sub">لا توجد شكاوى أو ملاحظات مسجلة.</p>';return '<div class="complaints-scroll"><table class="complaints-table"><thead><tr><th>رقم الشكوى</th><th>التاريخ ووقت التسجيل</th><th>السبب</th><th>الشكوى</th><th>العلاج الموصوف</th><th>سجلها / الإجراءات</th></tr></thead><tbody>'+CL.map(function(c){return '<tr><td>'+esc(c.no||'—')+'</td><td>'+esc(c.date)+'<br><small>'+esc(c.at?new Date(c.at).toLocaleString('ar-EG',{timeZone:'Africa/Cairo'}):'—')+'</small>'+(c.editedAt?'<br><small>تعديل: '+esc(new Date(c.editedAt).toLocaleString('ar-EG',{timeZone:'Africa/Cairo'}))+'</small>':'')+'</td><td>'+esc(c.reason||'—')+'</td><td>'+esc(c.text)+'</td><td>'+esc(c.tx||'—')+'</td><td>'+esc(c.by)+(edit?'<div class="acts"><button class="btn sm" data-a="ce" data-id="'+c.id+'" data-p="'+SEL+'">تعديل</button><button class="btn sm r" data-a="cd" data-id="'+c.id+'" data-p="'+SEL+'">حذف</button></div>':'')+'</td></tr>'}).join('')+'</tbody></table></div>';}
+function qRes(){var e=document.getElementById("qres");if(e)e.innerHTML=qList();var directory=document.getElementById("nurse-directory");if(directory)directory.open=true}
+function cList(edit){
+ if(!CL.length)return '<p class="sub">لا توجد شكاوى أو ملاحظات مسجلة.</p>';
+ return '<div class="complaints-scroll"><table class="complaints-table"><caption>سجل الشكاوى — الأحدث تسجيلًا أولًا</caption><colgroup><col class="complaint-number"><col class="complaint-date"><col><col><col><col class="complaint-author"></colgroup><thead><tr>'+['رقم الشكوى','التاريخ ووقت التسجيل','السبب','الشكوى','العلاج الموصوف','سجلها / الإجراءات'].map(function(label){return '<th scope="col">'+label+'</th>'}).join('')+'</tr></thead><tbody>'+CL.map(function(c){
+  var stamp=esc(c.date)+'<small class="complaint-stamp">تسجيل: '+esc(c.at?new Date(c.at).toLocaleString('ar-EG',{timeZone:'Africa/Cairo'}):'—')+'</small>'+(c.editedAt?'<small class="complaint-stamp">تعديل: '+esc(new Date(c.editedAt).toLocaleString('ar-EG',{timeZone:'Africa/Cairo'}))+'</small>':'');
+  var actions=edit?'<div class="acts"><button class="btn sm" data-a="ce" data-id="'+c.id+'" data-p="'+SEL+'">تعديل</button><button class="btn sm r" data-a="cd" data-id="'+c.id+'" data-p="'+SEL+'">حذف</button></div>':'';
+  return '<tr>'+[["رقم الشكوى",'<b>'+esc(c.no||'—')+'</b>'],['التاريخ ووقت التسجيل',stamp],['السبب',esc(c.reason||'—')],['الشكوى',esc(c.text)],['العلاج الموصوف',esc(c.tx||'—')],['سجلها / الإجراءات',esc(c.by)+actions]].map(function(cell){return '<td data-label="'+cell[0]+'"><div class="complaint-value">'+cell[1]+'</div></td>'}).join('')+'</tr>';
+ }).join('')+'</tbody></table></div>';
+}
 /* ---- nurse ---- */
-function nurse(){var h='<h2>'+ic("users",20)+'الممرضة المساعدة</h2><label for="qs">ابحثي عن الحالة بالاسم أو رقم الهاتف</label><input id="qs" type="search" autocomplete="off" value="'+esc(QS)+'" oninput="QS=this.value;qRes()"><div id="qres">'+qList()+'</div>';
- var p=PT&&PT[SEL];if(p)h+='<div class="box" style="padding:14px"><h3>'+esc(p.n)+' <small dir="ltr">'+SEL+'</small></h3><button class="btn a" data-a="ca" data-id="'+SEL+'">'+ic("plus")+' إضافة شكوى / ملاحظة</button><h2>السجل السابق</h2>'+cList(false)+'</div>';return h}
-async function pick(ph){SEL=ph;setStatus("جارٍ التحميل…","load");try{await loadCL(ph);setStatus("")}catch(e){setStatus(errMsg(e),"err",function(){pick(ph)})}draw()}
-function cForm(ph,c){if(typeof confirmMedicalTransition==='function'&&!confirmMedicalTransition())return;var isNew=!c;
+function nurse(){var p=PT&&PT[SEL],h='<h2>'+ic("users",20)+'الممرضة المساعدة</h2><label for="qs">ابحثي عن الحالة بالاسم أو رقم الهاتف</label><input id="qs" type="search" autocomplete="off" value="'+esc(QS)+'" oninput="QS=this.value;qRes()">';
+ h+=(p?'<details id="nurse-directory" class="nurse-directory"><summary>اختيار حالة أخرى / إظهار نتائج البحث</summary>':'')+'<div id="qres">'+qList()+'</div>'+(p?'</details>':'');
+ if(p)h+='<section id="nurse-selected-case" class="box" style="padding:14px"><h3>'+esc(p.n)+' <small dir="ltr">'+SEL+'</small></h3><button class="btn a" data-a="ca" data-id="'+SEL+'">'+ic("plus")+' إضافة شكوى / ملاحظة</button><h2>السجل السابق</h2>'+cList(false)+'</section>';return h}
+async function pick(ph){SEL=ph;setStatus("جارٍ التحميل…","load");try{await loadCL(ph);setStatus("")}catch(e){setStatus(errMsg(e),"err",function(){pick(ph)})}draw();document.getElementById("nurse-selected-case")?.scrollIntoView({block:"start"})}
+async function saveComplaintRecord(ph,id,record,isNew){
+ var updates={['complaints/'+ph+'/'+id]:record};
+ if(isNew)updates['inbox/'+id]={p:ph,n:PT?.[ph]?.n||'',by:record.by,at:record.at,d:record.date};
+ try{await jpatch(updates)}catch(error){
+  if(!isNew)throw error;
+  // A lost response must not create a second complaint on retry.
+  var saved;try{saved=(await jget('complaints/'+ph,true))?.[id]}catch(readError){throw error}
+  if(!saved||saved.by!==me.u||['date','reason','text','tx'].some(key=>String(saved[key]||'')!==String(record[key]||'').trim()))throw error;
+ }
+}
+function cForm(ph,c){if(typeof confirmMedicalTransition==='function'&&!confirmMedicalTransition())return;var isNew=!c,id=isNew?newId():c.id;
  openForm(isNew?"إضافة شكوى / ملاحظة":"تعديل الشكوى",[{k:"date",l:"تاريخ الشكوى",t:"date",v:isNew?today():c.date},{k:"reason",l:"سبب الشكوى / سبب الزيارة",t:"area",v:isNew?"":c.reason||""},{k:"text",l:"الشكوى أو الملاحظة",t:"area",v:isNew?"":c.text},{k:"tx",l:"العلاج الذي حدده الدكتور وقتها",t:"area",v:isNew?"":c.tx}],function(o){
   if(!o.text||o.text.length>2000)return"اكتب الشكوى (حتى 2000 حرف)";if(o.tx.length>1000)return"العلاج طويل (حتى 1000 حرف)";
   if(!/^\d{4}-\d{2}-\d{2}$/.test(o.date)||o.date>today())return"اختر تاريخاً صحيحاً (لا يكون في المستقبل)";
-  return guard(async function(){var id=isNew?newId():c.id,up={},rec={id:id,date:o.date,reason:o.reason,text:o.text,tx:o.tx,by:isNew?me.u:c.by,at:isNew?new Date().toISOString():c.at};
-   up["complaints/"+ph+"/"+id]=rec;if(isNew)up["inbox/"+id]={p:ph,n:(PT&&PT[ph]?PT[ph].n:""),by:me.u,at:rec.at,d:o.date};
-   await jpatch(up);await loadCL(ph);var savedBox=document.querySelector('.mod');if(savedBox)savedBox.dataset.complaintDirty='false';if(me.role==="doctor")setTimeout(function(){openCase(ph)},60)},isNew?"تم تسجيل الشكوى وإرسالها للدكتور":"تم حفظ التعديل")})}
+  return (async function(){var rec={id:id,date:o.date,reason:o.reason,text:o.text,tx:o.tx,by:isNew?me.u:c.by,at:isNew?new Date().toISOString():c.at};
+   await saveComplaintRecord(ph,id,rec,isNew);var savedBox=document.querySelector('.mod');if(savedBox)savedBox.dataset.complaintDirty='false';
+   try{await loadCL(ph)}catch(error){return {successMessage:'تم حفظ الشكوى. تعذر تحديث السجل؛ أعد اختيار الحالة لعرضها.'};}
+   if(can('notes.read'))setTimeout(function(){openCase(ph)},60);return {successMessage:isNew?'تم تسجيل الشكوى وإرسالها للدكتور':'تم حفظ التعديل'};
+  })()})}
 /* ---- doctor: case file ---- */
 async function openCase(ph){modalReturn=document.activeElement;var m=document.getElementById("modal");SEL=ph;M=null;
  m.innerHTML='<div class="ov" onclick="if(event.target===this)closeM()"><div class="mod" role="dialog" aria-modal="true" aria-label="ملف الحالة" tabindex="-1"><p class="hint" role="status">جارٍ التحميل…</p></div></div>';
