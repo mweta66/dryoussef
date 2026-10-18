@@ -21,5 +21,8 @@ saveNotes=function(ph){var t=document.getElementById('cn');if(!t)return;var box=
 Object.assign(ACTION_NAMES,{branchSave:"تعديل فرع ومواعيده",branchDelete:"حذف أو أرشفة فرع",designRestore:"استرجاع تصميم سابق",resetSyntheticData:"استبدال بيانات تجريبية",presenceSet:"تحديد فرع الطبيب",userRevokeSessions:"إنهاء جلسات مستخدم"});
 
 document.addEventListener('input',e=>{if(e.target.id==='cn'||e.target.id.startsWith('clinical_')){const box=e.target.closest('.mod');if(box)box.dataset.medicalDirty='true'}});
-var clinicalCloseModal=closeM;closeM=function(){if(document.querySelector('.mod')?.dataset.medicalDirty==='true'&&!confirm('توجد تعديلات طبية لم تحفظ. إغلاق الملف بدون حفظ؟'))return;clinicalCloseModal()};
-window.addEventListener('beforeunload',e=>{if(document.querySelector('.mod')?.dataset.medicalDirty==='true'){e.preventDefault();e.returnValue=''}});
+function confirmMedicalTransition(){return document.querySelector('.mod')?.dataset.medicalDirty!=='true'||confirm('توجد تعديلات طبية لم تحفظ. متابعة بدون حفظ؟');}
+function trackComplaintDraft(e){if(['f_date','f_reason','f_text','f_tx'].includes(e.target.id)){const box=e.target.closest('.mod');if(box?.querySelector('#f_text'))box.dataset.complaintDirty='true';}}
+document.addEventListener('input',trackComplaintDraft);document.addEventListener('change',trackComplaintDraft);
+var clinicalCloseModal=closeM;closeM=function(){if(!confirmMedicalTransition())return;if(document.querySelector('.mod')?.dataset.complaintDirty==='true'&&!confirm('توجد شكوى لم تحفظ. إغلاقها بدون حفظ؟'))return;clinicalCloseModal()};
+window.addEventListener('beforeunload',e=>{const box=document.querySelector('.mod');if(box?.dataset.medicalDirty==='true'||box?.dataset.complaintDirty==='true'){e.preventDefault();e.returnValue=''}});

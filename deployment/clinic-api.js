@@ -203,9 +203,9 @@ __export(permissions_exports, {
   validateRole: () => validateRole
 });
 var keys = ["bookings.read", "bookings.create", "bookings.edit", "bookings.status", "bookings.delete", "patients.read", "patients.edit", "patients.delete", "complaints.read", "complaints.create", "complaints.edit", "complaints.delete", "notes.read", "notes.edit", "notifications.read", "users.manage", "clinic.manage", "site.manage", "data.export", "data.delete"];
-keys.push("display.manage", "data.import", "data.restore", "audit.details", "attachments.read", "attachments.create", "attachments.delete", "attachments.own.delete", "sessions.manage", "queue.configure", "reports.export", "audit.read");
+keys.push("patients.print", "display.manage", "data.import", "data.restore", "audit.details", "attachments.read", "attachments.create", "attachments.delete", "attachments.own.delete", "sessions.manage", "queue.configure", "reports.export", "audit.read");
 var administrative = ["display.manage", "data.import", "data.restore", "audit.details", "attachments.own.delete", "users.manage", "clinic.manage", "site.manage", "data.export", "data.delete", "audit.read", "patients.delete"];
-var defaults = { doctor: keys.filter((k) => !administrative.includes(k)), sec: ["bookings.read", "bookings.create", "bookings.status"], nurse: ["patients.read", "complaints.read", "complaints.create", "attachments.read", "attachments.create", "attachments.own.delete"], staff: [] };
+var defaults = { doctor: keys.filter((k) => !administrative.includes(k)), sec: ["patients.print", "bookings.read", "bookings.create", "bookings.status"], nurse: ["patients.print", "patients.read", "complaints.read", "complaints.create", "attachments.read", "attachments.create", "attachments.own.delete"], staff: ["patients.print"] };
 function can(r, key) {
   if (!keys.includes(key)) return false;
   if (r.r === "admin") return keys.includes(key);
@@ -759,6 +759,29 @@ function lookup(state, p, now = today(), clock = Date.now()) {
 }
 var coreExports = { publicSettings, branchIds, presence, canExamine, assertExamine, phone, today, date, role, booking, commit, read: read2, patch: patch2, lookup, rebuild, fail: fail2, schedule: schedule2, queueOrder, queueTrack };
 
+// supabase/functions/clinic-api/patient-print.js
+function build(state, uid, value) {
+  const r = role(state, uid);
+  requirePermission(r, "patients.print");
+  if (!can(r, "patients.read") && !can(r, "bookings.read")) fail2("\u064A\u0644\u0632\u0645 \u0627\u0644\u0633\u0645\u0627\u062D \u0628\u0639\u0631\u0636 \u0627\u0644\u062D\u0627\u0644\u0627\u062A \u0623\u0648 \u0627\u0644\u062D\u062C\u0648\u0632\u0627\u062A \u0644\u0644\u0637\u0628\u0627\u0639\u0629", 403);
+  const phone3 = phone(value);
+  if (!/^01[0125]\d{8}$/.test(phone3)) fail2("\u0631\u0642\u0645 \u0627\u0644\u0647\u0627\u062A\u0641 \u063A\u064A\u0631 \u0635\u062D\u064A\u062D");
+  assertAccess(state, r, phone3);
+  const source = state.patients?.[phone3], rows = Object.values(state.bookings || {}).flatMap(Object.values).filter((x) => x.phone === phone3 && (allPatients(r) || x.b === r.br));
+  if (!source && !rows.length) fail2("\u0627\u0644\u062D\u0627\u0644\u0629 \u063A\u064A\u0631 \u0645\u0648\u062C\u0648\u062F\u0629", 404);
+  const patient = { name: source?.n || rows[0]?.name || "", phone: phone3 };
+  if (can(r, "patients.read")) for (const key of ["spouseName", "spouseJob", "spousePhone"]) patient[key] = source?.[key] || "";
+  const notes = can(r, "notes.read"), bookings = can(r, "bookings.read") ? rows.map((x) => ({ date: x.date, no: x.no, b: x.b, v: x.v, s: x.s, ...notes ? { nt: x.nt || "" } : {} })).sort((a, b) => b.date.localeCompare(a.date) || a.no - b.no) : [];
+  let file = null;
+  if (notes && state.files?.[phone3]) {
+    file = {};
+    for (const key of ["n", "allergies", "chronic", "diagnosis", "treatment"]) file[key] = state.files[phone3][key] || "";
+  }
+  const complaints = can(r, "complaints.read") ? Object.values(numberComplaints(structuredClone({ complaints: { [phone3]: state.complaints?.[phone3] || {} }, complaintSequences: { [phone3]: state.complaintSequences?.[phone3] || 0 } })).complaints[phone3]).map((x) => ({ no: x.no, date: x.date, reason: x.reason || "", text: x.text || "", tx: x.tx || "", by: x.by || "", at: x.at || "" })).sort((a, b) => b.date.localeCompare(a.date) || b.no - a.no) : [];
+  const branches2 = branchIds(state).filter((b) => allPatients(r) || b === r.br), registry = state.settings?.branches || state.settings?.site?.branches || {};
+  return { patient, bookings, file, complaints, branches: Object.fromEntries(branches2.map((b) => [b, registry[b]?.name || b])), site: { clinicName: state.settings?.site?.clinicName || "\u0639\u064A\u0627\u062F\u0629 \u062F. \u064A\u0648\u0633\u0641 \u0639\u0632 \u0627\u0644\u0631\u062C\u0627\u0644", doctorName: state.settings?.site?.doctorName || "" }, generatedAt: (/* @__PURE__ */ new Date()).toISOString() };
+}
+
 // supabase/functions/clinic-api/demo-profiles.js
 var profiles = [
   { reason: "\u0645\u062A\u0627\u0628\u0639\u0629 \u062D\u0645\u0644", text: "\u0645\u062A\u0627\u0628\u0639\u0629 \u062F\u0648\u0631\u064A\u0629 \u0644\u0644\u062D\u0645\u0644 \u0645\u0639 \u063A\u062B\u064A\u0627\u0646 \u0645\u062A\u0642\u0637\u0639 \u062F\u0648\u0646 \u0646\u0632\u064A\u0641 \u0623\u0648 \u0623\u0644\u0645 \u0634\u062F\u064A\u062F.", diagnosis: "\u0645\u062A\u0627\u0628\u0639\u0629 \u062D\u0645\u0644 \u062F\u0627\u062E\u0644 \u0627\u0644\u0631\u062D\u0645", treatment: "\u0627\u0633\u062A\u0645\u0631\u0627\u0631 \u0627\u0644\u0645\u062A\u0627\u0628\u0639\u0629 \u0627\u0644\u062F\u0648\u0631\u064A\u0629 \u0648\u0645\u0631\u0627\u062C\u0639\u0629 \u0646\u062A\u0627\u0626\u062C \u0627\u0644\u062A\u062D\u0627\u0644\u064A\u0644 \u0627\u0644\u0645\u0637\u0644\u0648\u0628\u0629.", notes: "\u0645\u0631\u0627\u062C\u0639\u0629 \u0635\u0648\u0631\u0629 \u0627\u0644\u062F\u0645 \u0648\u062A\u062D\u0644\u064A\u0644 \u0627\u0644\u0628\u0648\u0644 \u0648\u0627\u0644\u0633\u0648\u0646\u0627\u0631 \u0641\u064A \u0627\u0644\u0632\u064A\u0627\u0631\u0629 \u0627\u0644\u0642\u0627\u062F\u0645\u0629." },
@@ -984,6 +1007,10 @@ function record(before, next, input, uid) {
   if (input.action !== "siteContentSave" && changes.some((x) => x.path[0] === "settings" && x.path[1] === "site" && ["sections", "layout"].includes(x.path[2]))) {
     next.settings.contentRev = (before.settings?.contentRev || 0) + 1;
   }
+  const watermarkState = (x) => Object.fromEntries(Object.entries(x.settings?.site?.design || {}).filter(([key]) => key.startsWith("watermark")));
+  if (input.action !== "watermarkSave" && JSON.stringify(watermarkState(before)) !== JSON.stringify(watermarkState(next))) next.settings.watermarkRev = (before.settings?.watermarkRev || 0) + 1;
+  const aboutState = (x) => [x.settings?.site?.about, Object.fromEntries(Object.entries(x.settings?.site?.design || {}).filter(([key]) => key.startsWith("about")))];
+  if (input.action !== "aboutSave" && JSON.stringify(aboutState(before)) !== JSON.stringify(aboutState(next))) next.settings.aboutRev = (before.settings?.aboutRev || 0) + 1;
   if (input.action !== "headerSave" && changes.some((x) => x.path[0] === "settings" && x.path[1] === "site" && (!x.path[2] || ["design", "headerTitle", "headerSubtitle", "headerText", "doctorName", "specialty"].includes(x.path[2])))) {
     next.settings.headerRev = (before.settings?.headerRev || 0) + 1;
   }
@@ -1081,6 +1108,9 @@ function bad(message) {
   e.status = 400;
   throw e;
 }
+function validDate(value) {
+  return /^\d{4}-\d{2}-\d{2}$/.test(value) && Number.isFinite(Date.parse(value + "T12:00:00Z")) && (/* @__PURE__ */ new Date(value + "T12:00:00Z")).toISOString().slice(0, 10) === value;
+}
 function normalize3(input = {}, branches2 = []) {
   if (!input || typeof input !== "object" || Array.isArray(input)) bad("\u0625\u0639\u062F\u0627\u062F\u0627\u062A \u0634\u0627\u0634\u0629 \u0627\u0644\u062F\u0648\u0631 \u063A\u064A\u0631 \u0635\u062D\u064A\u062D\u0629");
   const out = {};
@@ -1099,6 +1129,11 @@ function normalize3(input = {}, branches2 = []) {
     if (typeof value !== "string" || value.length > 160) bad("\u0646\u0635 \u0627\u0644\u0634\u0627\u0634\u0629 \u064A\u062C\u0628 \u0623\u0644\u0627 \u064A\u062A\u062C\u0627\u0648\u0632 160 \u062D\u0631\u0641\u064B\u0627");
     out[key] = value;
   }
+  out.dateMode = input.dateMode ?? "local";
+  if (!["local", "today", "fixed"].includes(out.dateMode)) bad("\u0648\u0636\u0639 \u062A\u0627\u0631\u064A\u062E \u0627\u0644\u0634\u0627\u0634\u0629 \u063A\u064A\u0631 \u0635\u062D\u064A\u062D");
+  out.date = input.date ?? "";
+  if (typeof out.date !== "string" || out.date !== "" && !validDate(out.date)) bad("\u062A\u0627\u0631\u064A\u062E \u0634\u0627\u0634\u0629 \u0627\u0644\u062F\u0648\u0631 \u063A\u064A\u0631 \u0635\u062D\u064A\u062D");
+  if (out.dateMode === "fixed" && !validDate(out.date)) bad("\u0627\u062E\u062A\u0631 \u062A\u0627\u0631\u064A\u062E\u064B\u0627 \u0635\u062D\u064A\u062D\u064B\u0627 \u0644\u062A\u062B\u0628\u064A\u062A \u0634\u0627\u0634\u0629 \u0627\u0644\u062F\u0648\u0631");
   out.branchMode = input.branchMode || "local";
   if (!["local", "doctor", "fixed"].includes(out.branchMode)) bad("\u0648\u0636\u0639 \u0641\u0631\u0639 \u0627\u0644\u0634\u0627\u0634\u0629 \u063A\u064A\u0631 \u0635\u062D\u064A\u062D");
   if (input.branch !== void 0 && typeof input.branch !== "string") bad("\u0641\u0631\u0639 \u0627\u0644\u0634\u0627\u0634\u0629 \u063A\u064A\u0631 \u0635\u062D\u064A\u062D");
@@ -1181,13 +1216,29 @@ function validate2(d) {
     if (!["system", "light", "dark"].includes(d.defaultMode)) fail3("\u0648\u0636\u0639 \u063A\u064A\u0631 \u0635\u062D\u064A\u062D");
     out.defaultMode = d.defaultMode;
   }
-  for (const [k, min, max] of [["headerWidth", 50, 100], ["headerRadius", 0, 48], ["headerHeight", 80, 420], ["logoSize", 40, 180], ["photoSize", 40, 160], ["aboutFontSize", 16, 32], ["headerTitleSize", 18, 64], ["headerSubtitleSize", 12, 36], ["headerTextSize", 12, 36], ["headerPadding", 0, 60], ["headerGap", 0, 48]]) if (d[k] !== void 0) {
+  for (const [k, min, max] of [["headerWidth", 50, 100], ["headerRadius", 0, 48], ["headerHeight", 80, 420], ["logoSize", 40, 180], ["photoSize", 40, 160], ["aboutFontSize", 16, 48], ["aboutBorderWidth", 0, 8], ["aboutRadius", 0, 48], ["aboutPadding", 8, 48], ["aboutNeonSize", 0, 40], ["watermarkOpacity", 0, 100], ["watermarkSize", 100, 1200], ["headerTitleSize", 18, 64], ["headerSubtitleSize", 12, 36], ["headerTextSize", 12, 36], ["headerPadding", 0, 60], ["headerGap", 0, 48]]) if (d[k] !== void 0) {
     if (!Number.isInteger(d[k]) || d[k] < min || d[k] > max) fail3("\u0645\u0642\u0627\u0633 \u062A\u0635\u0645\u064A\u0645 \u063A\u064A\u0631 \u0635\u062D\u064A\u062D");
     out[k] = d[k];
   }
   if (d.headerAlign !== void 0) {
     if (!["start", "center", "end"].includes(d.headerAlign)) fail3("\u0645\u062D\u0627\u0630\u0627\u0629 \u0627\u0644\u0647\u064A\u062F\u0631 \u063A\u064A\u0631 \u0635\u062D\u064A\u062D\u0629");
     out.headerAlign = d.headerAlign;
+  }
+  for (const key of ["aboutTextColor", "aboutBackground", "aboutBorderColor", "aboutNeonColor"]) if (d[key] !== void 0) {
+    if (!/^#[0-9a-f]{6}$/i.test(d[key])) fail3("\u0644\u0648\u0646 \u0627\u0644\u0646\u0628\u0630\u0629 \u063A\u064A\u0631 \u0635\u062D\u064A\u062D");
+    out[key] = d[key];
+  }
+  if (d.watermarkEnabled !== void 0) {
+    if (typeof d.watermarkEnabled !== "boolean") fail3("\u062E\u064A\u0627\u0631 \u0627\u0644\u0644\u0648\u062C\u0648 \u0627\u0644\u062E\u0644\u0641\u064A\u0629 \u063A\u064A\u0631 \u0635\u062D\u064A\u062D");
+    out.watermarkEnabled = d.watermarkEnabled;
+  }
+  if (d.watermarkPosition !== void 0) {
+    if (!["center", "top", "bottom"].includes(d.watermarkPosition)) fail3("\u0645\u0643\u0627\u0646 \u0627\u0644\u0644\u0648\u062C\u0648 \u0627\u0644\u062E\u0644\u0641\u064A\u0629 \u063A\u064A\u0631 \u0635\u062D\u064A\u062D");
+    out.watermarkPosition = d.watermarkPosition;
+  }
+  if (d.aboutNeonEnabled !== void 0) {
+    if (typeof d.aboutNeonEnabled !== "boolean") fail3("\u062E\u064A\u0627\u0631 \u0627\u0644\u0646\u064A\u0648\u0646 \u063A\u064A\u0631 \u0635\u062D\u064A\u062D");
+    out.aboutNeonEnabled = d.aboutNeonEnabled;
   }
   if (d.aboutAlign !== void 0) {
     if (!["start", "center", "end"].includes(d.aboutAlign)) fail3("\u0645\u062D\u0627\u0630\u0627\u0629 \u063A\u064A\u0631 \u0635\u062D\u064A\u062D\u0629");
@@ -1279,7 +1330,7 @@ function site(value, fail4) {
     if (typeof d.showBackground !== "boolean") fail4("\u062E\u064A\u0627\u0631 \u0627\u0644\u062E\u0644\u0641\u064A\u0629 \u063A\u064A\u0631 \u0635\u062D\u064A\u062D");
     result.design.showBackground = d.showBackground;
   }
-  for (const k of ["logo", "doctorPhoto"]) if (d[k] !== void 0) {
+  for (const k of ["logo", "doctorPhoto", "watermarkImage"]) if (d[k] !== void 0) {
     if (d[k] === "") {
       result.design[k] = "";
       continue;
@@ -1311,6 +1362,33 @@ function mutate(original, uid, input, core) {
     s.settings ||= {};
     s.settings.site = { ...s.settings.site, ...content };
     s.settings.contentRev = (s.settings.contentRev || 0) + 1;
+    return s;
+  }
+  if (input.action === "watermarkSave") {
+    requirePermission(r, "site.manage");
+    if (input.revision !== (s.settings?.watermarkRev || 0)) core.fail("\u062A\u0645 \u062A\u0639\u062F\u064A\u0644 \u0627\u0644\u0644\u0648\u062C\u0648 \u0627\u0644\u062E\u0644\u0641\u064A\u0629 \u0645\u0646 \u062C\u0644\u0633\u0629 \u0623\u062E\u0631\u0649\u061B \u0623\u0639\u062F \u062A\u062D\u0645\u064A\u0644 \u0627\u0644\u0625\u0639\u062F\u0627\u062F\u0627\u062A \u0623\u0648\u0644\u064B\u0627", 409);
+    const incoming = site({ design: input.design }, core.fail);
+    s.settings ||= {};
+    const current = s.settings.site || {}, design = { ...current.design };
+    for (const key of Object.keys(design)) if (key.startsWith("watermark")) delete design[key];
+    for (const [key, value] of Object.entries(incoming.design)) if (key.startsWith("watermark")) design[key] = value;
+    s.settings.previousDesign = structuredClone(current.design || {});
+    s.settings.site = { ...current, design };
+    s.settings.watermarkRev = (s.settings.watermarkRev || 0) + 1;
+    return s;
+  }
+  if (input.action === "aboutSave") {
+    requirePermission(r, "site.manage");
+    if (input.revision !== (s.settings?.aboutRev || 0)) core.fail("\u062A\u0645 \u062A\u0639\u062F\u064A\u0644 \u0646\u0628\u0630\u0629 \u0627\u0644\u0639\u064A\u0627\u062F\u0629 \u0645\u0646 \u062C\u0644\u0633\u0629 \u0623\u062E\u0631\u0649\u061B \u0623\u0639\u062F \u062A\u062D\u0645\u064A\u0644 \u0627\u0644\u0625\u0639\u062F\u0627\u062F\u0627\u062A \u0623\u0648\u0644\u064B\u0627", 409);
+    if (typeof input.text !== "string") core.fail("\u0646\u0635 \u0627\u0644\u0646\u0628\u0630\u0629 \u063A\u064A\u0631 \u0635\u062D\u064A\u062D");
+    const incoming = site({ about: input.text, design: input.design }, core.fail);
+    s.settings ||= {};
+    const current = s.settings.site || {}, design = { ...current.design };
+    for (const key of Object.keys(design)) if (key.startsWith("about")) delete design[key];
+    for (const [key, value] of Object.entries(incoming.design)) if (key.startsWith("about")) design[key] = value;
+    if (JSON.stringify(current.design) !== JSON.stringify(design)) s.settings.previousDesign = structuredClone(current.design || {});
+    s.settings.site = { ...current, about: incoming.about, design };
+    s.settings.aboutRev = (s.settings.aboutRev || 0) + 1;
     return s;
   }
   if (input.action === "headerSave") {
@@ -1416,13 +1494,13 @@ function mutate(original, uid, input, core) {
 }
 
 // supabase/functions/clinic-api/schedule.js
-function validDate(date2) {
+function validDate2(date2) {
   const parsed = /* @__PURE__ */ new Date(date2 + "T12:00:00Z");
   return /^\d{4}-\d{2}-\d{2}$/.test(date2) && Number.isFinite(parsed.getTime()) && parsed.toISOString().slice(0, 10) === date2;
 }
 function availability(registry, schedules, date2) {
   const result = { scheduled: [], flexible: [] };
-  if (!validDate(date2)) return result;
+  if (!validDate2(date2)) return result;
   const day = (/* @__PURE__ */ new Date(date2 + "T12:00:00Z")).getUTCDay();
   for (const [id2, branch] of Object.entries(registry)) {
     if (branch.enabled === false) continue;
@@ -1878,6 +1956,7 @@ function createService(baseAdapter) {
     if (action === "attachmentExport") return exportImage(adapter2, input, uid);
     if (["attachmentList", "attachmentUpload", "attachmentRead", "attachmentDelete"].includes(action)) return handleAttachments(adapter2, input, uid);
     const readFields = (fields, day = null, entity = null) => adapter2.readFields ? adapter2.readFields(fields, day, entity) : adapter2.read();
+    if (action === "patientPrintData") return build(await readFields(["roles", "patients", "bookings", "settings", "files", "complaints"], null, phone(input.phone)), uid, input.phone);
     if (action === "bookingCapabilities") {
       role(await readFields(["roles"]), uid);
       return { familyMetadata: 1 };
@@ -2147,7 +2226,7 @@ function createService(baseAdapter) {
       });
       return { ok: true };
     }
-    if (["displaySave", "headerSave", "siteContentSave", "siteSave", "userSave", "patientSave", "patientDelete", "dataClear"].includes(action)) {
+    if (["watermarkSave", "aboutSave", "displaySave", "headerSave", "siteContentSave", "siteSave", "userSave", "patientSave", "patientDelete", "dataClear"].includes(action)) {
       await adapter2.mutate((s) => mutate(s, uid, input, core_exports));
       return { ok: true, ...["patientDelete", "dataClear"].includes(action) ? { cleanupPending: await drain(adapter2) } : {} };
     }
