@@ -1527,6 +1527,14 @@ function normalize4(input, state = {}, withSettings = false) {
     const n = text(x.n, 120, "\u0627\u0633\u0645 \u0627\u0644\u0645\u0631\u064A\u0636").trim();
     if (!n) bad2("\u0627\u0644\u0627\u0633\u0645", "\u0627\u0633\u0645 \u0627\u0644\u062D\u0627\u0644\u0629 \u0645\u0637\u0644\u0648\u0628");
     out.patients[p] = { n, d: x.d ? date(x.d) : today() };
+    if (x.br !== void 0) {
+      if (!branchIds(state).includes(x.br)) bad2("\u0641\u0631\u0639 \u0627\u0644\u062D\u0627\u0644\u0629", "\u0641\u0631\u0639 \u063A\u064A\u0631 \u0645\u0639\u0631\u0648\u0641");
+      out.patients[p].br = x.br;
+    }
+    if (x.visitType !== void 0) {
+      if (!["exam", "cons", "follow", "emergency"].includes(x.visitType)) bad2("\u0646\u0648\u0639 \u0627\u0644\u0632\u064A\u0627\u0631\u0629", "\u0642\u064A\u0645\u0629 \u063A\u064A\u0631 \u0635\u062D\u064A\u062D\u0629");
+      out.patients[p].visitType = x.visitType;
+    }
     for (const k of ["spouseName", "spouseJob", "spousePhone"]) if (x[k] !== void 0) out.patients[p][k] = k === "spousePhone" ? x[k] ? phone2(x[k], k) : "" : text(x[k], 120, k);
   });
   const seenIds = /* @__PURE__ */ new Set(), seenPhones = /* @__PURE__ */ new Set();

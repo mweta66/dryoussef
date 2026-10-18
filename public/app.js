@@ -199,7 +199,7 @@ function secretary(){var d=SD,L=S.bk.filter(function(x){return x.b===me.br&&x.da
  if(!L.length)h+='<p class="sub" style="margin-top:14px">لا توجد حجوزات في هذا اليوم.</p>';L.forEach(function(x){h+=bkItem(x,false)});return h}
 
 async function loadPatients(force){if(PT&&!force&&Date.now()-PTt<60000)return;var owner=me,o=(await jget("patients",true))||{},m={};if(me!==owner)return;
- for(var k in o)if(/^01[0125]\d{8}$/.test(k)&&o[k]&&typeof o[k].n==="string")m[k]={spouseName:String(o[k].spouseName||""),spouseJob:String(o[k].spouseJob||""),spousePhone:String(o[k].spousePhone||""),n:o[k].n.slice(0,80),d:String(o[k].d||"").slice(0,10)};PT=m;PTt=Date.now()}
+ for(var k in o)if(/^01[0125]\d{8}$/.test(k)&&o[k]&&typeof o[k].n==="string")m[k]={br:o[k].br,visitType:o[k].visitType,spouseName:String(o[k].spouseName||""),spouseJob:String(o[k].spouseJob||""),spousePhone:String(o[k].spousePhone||""),n:o[k].n.slice(0,80),d:String(o[k].d||"").slice(0,10)};PT=m;PTt=Date.now()}
 function cleanComplaints(o){var L=[];for(var k in (o||{})){var c=o[k];if(c&&ID.test(k)&&/^\d{4}-\d{2}-\d{2}$/.test(String(c.date))&&typeof c.text==="string")
  L.push({id:k,no:Number(c.no)||0,reason:String(c.reason||'').slice(0,2000),editedAt:c.editedAt,editedBy:c.editedBy,date:c.date,text:c.text.slice(0,2000),tx:String(c.tx||"").slice(0,1000),by:String(c.by||"").slice(0,30),at:String(c.at||"").slice(0,40)})}
  return L.sort(function(a,b){if(a.no&&b.no&&a.no!==b.no)return b.no-a.no;return a.date<b.date?1:a.date>b.date?-1:a.at<b.at?1:-1})}

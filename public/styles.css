@@ -1,4 +1,4 @@
-:root{--bg:var(--custom-background,#eef2f6);--card:var(--custom-card,#ffffff);--ink:var(--custom-text,#1d2a44);--mut:#53647b;--line:#ccd5e1;--bar:#f3f6f9;--pri:var(--custom-primary,#25406b);--pri2:#0f1b38;--acc:var(--custom-accent,#c9a24f);--soft:#e9eff6;--btn:var(--custom-primary,#25406b);--btnink:var(--custom-button-ink,#fff);--ok:#21734c;--okbg:#e4f4ec;--bad:#ad362e;--badbg:#fcecea;--amb:#79520b;--ambbg:#fff5dc;--ambbd:#d7b563;--statusink:#fff;--secondary:#53647b;--wm:.10;--wmk:url("brand-1.png");color-scheme:light}
+:root{--bg:var(--custom-background,#eef2f6);--card:var(--custom-card,#ffffff);--ink:var(--custom-text,#1d2a44);--mut:#53647b;--line:#ccd5e1;--bar:#f3f6f9;--pri:var(--custom-primary,#25406b);--pri2:#0f1b38;--acc:var(--custom-accent,#c9a24f);--soft:#e9eff6;--btn:var(--custom-primary,#25406b);--btnink:var(--custom-button-ink,#fff);--ok:#21734c;--okbg:#e4f4ec;--bad:#ad362e;--badbg:#fcecea;--amb:#79520b;--ambbg:#fff5dc;--ambbd:#d7b563;--statusink:#fff;--secondary:#53647b;--wm:.10;--wmk:url("brand-current.webp");color-scheme:light}
 @media(prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#0e1424;--card:#171f35;--ink:#eef1f6;--mut:#b1bed1;--line:#43506a;--bar:#202b44;--pri:#e2bc73;--pri2:#0f1b38;--acc:#e2bc73;--soft:#26334e;--btn:#e2bc73;--btnink:#14203c;--ok:#79d6a8;--okbg:#17342a;--bad:#ffa196;--badbg:#3a2220;--amb:#edcb7f;--ambbg:#352d17;--ambbd:#887036;--statusink:#14203c;--secondary:#b1bed1;--wm:.06;color-scheme:dark}}
 :root[data-theme="dark"]{--bg:#0e1424;--card:#171f35;--ink:#eef1f6;--mut:#b1bed1;--line:#43506a;--bar:#202b44;--pri:#e2bc73;--pri2:#0f1b38;--acc:#e2bc73;--soft:#26334e;--btn:#e2bc73;--btnink:#14203c;--ok:#79d6a8;--okbg:#17342a;--bad:#ffa196;--badbg:#3a2220;--amb:#edcb7f;--ambbg:#352d17;--ambbd:#887036;--statusink:#14203c;--secondary:#b1bed1;--wm:.06;color-scheme:dark}
 
@@ -122,3 +122,6 @@ html[data-clinic-public][data-hide-header] .hero .logo,html[data-clinic-public][
 #app .tab{display:inline-flex;align-items:center;justify-content:center;gap:6px}
 #app .acts>.btn,.mod .acts>.btn{min-width:0;flex-shrink:1}
 #app .chip,#app .badge{line-height:1.7;max-width:100%;white-space:normal;overflow-wrap:anywhere}
+
+/* The clinic mark keeps its own proportions and transparency. */
+.logo img.fl{display:block;aspect-ratio:auto;height:auto;padding:0;background:none!important;border:0;border-radius:0;box-shadow:none;object-fit:contain}
