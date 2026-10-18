@@ -6,7 +6,7 @@ Inside **إعدادات الشاشة**, choose a branch, sound and date. The dat
 
 The screen fills the viewport. The current ticket is larger than the next ticket. Fullscreen toggles entry/exit. Staff can hide all controls using patient mode.
 
-The clinic logo sits at the top right of the queue header. Queue headers and cards suppress the shared background watermark even when it is enabled globally; patient and staff pages retain their configured watermark. This layout-only change needs a frontend deployment, with no backend update. Browser checks at 320, 390, 1366 and 1920 pixels verified logo alignment, no horizontal overflow, hidden queue watermarks and preserved watermarks on other pages.
+The clinic logo sits in the exact center of the queue header, with equal-width columns for clinic text on the right and clock/date on the left. Queue headers and cards suppress the shared background watermark even when it is enabled globally; patient and staff pages retain their configured watermark. This layout-only change needs a frontend deployment, with no backend update. Browser checks at 320, 390, 1366 and 1920 pixels verify logo alignment, no horizontal overflow, hidden queue watermarks and preserved watermarks on other pages.
 
 The emergency-priority notice appears in a bordered box beside the branch name above the queue, instead of the footer. Its existing administrator text and visibility setting still apply. The setup panel opens as a scrollable dialog with close and patient-mode actions, so expanded controls do not squeeze the current/next ticket cards or become inaccessible on short mobile screens. Authorized branch links also open the authenticated setup window; the explicitly labelled patient display link remains a public view.
 
