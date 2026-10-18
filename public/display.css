@@ -136,3 +136,9 @@ html[data-display-hide-showControls] .display-controls-toggle{display:none!impor
 .notice-preview-area{padding:20px;display:flex;justify-content:center;overflow:hidden}
 .notice-preview-area .display-emergency-notice{max-height:none}
 @media(max-width:600px){.display-emergency-notice{font-size:min(var(--notice-font-size,18px),24px)}}
+
+/* Queue screens use the header logo only; shared watermarks remain on other pages. */
+.queue-display .display-header{direction:rtl;align-items:flex-start}
+.queue-display .display-identity{flex:1;flex-direction:row;align-items:flex-start}
+.queue-display #display-logo{align-self:flex-start}
+.queue-display .display-header::before,.queue-display .card::before{content:none;display:none!important}
