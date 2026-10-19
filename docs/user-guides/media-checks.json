@@ -1,23 +1,42 @@
 [
   {
+    "role": "المرضى",
     "file": "01-patients.mp4",
-    "duration_seconds": 187.0,
-    "bytes": 1075860,
-    "chapters": 20,
-    "sha256": "79a53a132c9d72dd2c5731c04801dbe54fabe5b1f5962d5a653dd17af501fa97"
+    "duration_seconds": 150.04,
+    "width": 720,
+    "height": 1280,
+    "audio": false,
+    "bytes": 3030992,
+    "sha256": "b1957b6ffe0233a717075f253259fe1c6b99d70b2f328574045403f12be40edc"
   },
   {
+    "role": "الدكتور",
     "file": "02-doctor.mp4",
-    "duration_seconds": 427.0,
-    "bytes": 2183376,
-    "chapters": 45,
-    "sha256": "0d9bc5b65997ffc692573a7a27403d131f892c5d84b99f7c62c98fb9379b380f"
+    "duration_seconds": 150.04,
+    "width": 720,
+    "height": 1280,
+    "audio": false,
+    "bytes": 3542437,
+    "sha256": "7ad46a39570ed3d68d60018e91bf4247e5b3d677cd645d85f51c08f3df5108d4"
   },
   {
-    "file": "03-secretary-nurse.mp4",
-    "duration_seconds": 392.0,
-    "bytes": 2126809,
-    "chapters": 41,
-    "sha256": "ed087c5d728ac194a2e7abce43e5aedd8bc86c17bb796eb16c47b7bb63fcf4a4"
+    "role": "السكرتارية",
+    "file": "03-secretary.mp4",
+    "duration_seconds": 150.04,
+    "width": 720,
+    "height": 1280,
+    "audio": false,
+    "bytes": 3452684,
+    "sha256": "c99bcec4ffa08825ec04dd8cab48c8c705efa350ee61afece9b9513ccb56c160"
+  },
+  {
+    "role": "الممرضة",
+    "file": "04-nurse.mp4",
+    "duration_seconds": 150.04,
+    "width": 720,
+    "height": 1280,
+    "audio": false,
+    "bytes": 3101323,
+    "sha256": "ae29c98eeab3ffa522afe0306d33fd7edb2adefdaf3b3e9199bd60a73c328511"
   }
 ]
