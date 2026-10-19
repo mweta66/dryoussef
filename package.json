@@ -11,7 +11,9 @@
     "demo:seed": "node scripts/seed.cjs",
     "demo:reset": "node scripts/reset.cjs",
     "demo": "node scripts/demo-server.cjs",
-    "build": "node scripts/sync-release.cjs && node scripts/build-branches.cjs"
+    "build": "node scripts/sync-release.cjs && node scripts/build-branches.cjs",
+    "build:site": "node scripts/sync-release.cjs --public-only && node scripts/build-branches.cjs",
+    "check:vercel": "node scripts/verify-vercel-package.cjs"
   },
   "dependencies": {
     "read-excel-file": "9.3.12"

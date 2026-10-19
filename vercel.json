@@ -41,5 +41,5 @@
       "destination": "/api/branch?branch=:branch"
     }
   ],
-  "buildCommand": "npm run build"
+  "buildCommand": "npm run build:site"
 }

@@ -1,4 +1,4 @@
-const fs=require('node:fs'),{names,renderPage}=require('../server/public-branch-page.cjs');
+const fs=require('node:fs'),{names,renderPage}=require('../public/clinic-branch-pages.js');
 fs.mkdirSync('public/branches',{recursive:true});for(const id of Object.keys(names))fs.writeFileSync('public/branches/'+id+'.html',renderPage({},id,{pending:true}));
 const source=fs.readFileSync('public/config.js','utf8'),match=source.match(/window\.CLINIC_CONFIG\s*=\s*(\{[^;]+\})/);if(!match)throw Error('Public API config is missing');const config=JSON.parse(match[1]);fs.writeFileSync('public/clinic-public-config.json',JSON.stringify({endpoint:config.endpoint,publishableKey:config.publishableKey})+'\n');
 const urls=['/','/privacy.html',...Object.keys(names).map(id=>'/branches/'+id)];fs.writeFileSync('public/sitemap.xml','<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">'+urls.map(url=>'<url><loc>https://dryoussef.vercel.app'+url+'</loc></url>').join('')+'</urlset>\n');
