@@ -29,7 +29,7 @@ function booking(n,state={}) {
  const p=phone(n.phone);
  if(!/^01[0125]\d{8}$/.test(p)||!branchIds(state).includes(n.b)||!['exam','cons','follow','emergency'].includes(n.v)||!STATES.includes(n.s||'wait'))fail('بيانات الحجز غير صحيحة');
  const name=String(n.name||'').trim(),nt=String(n.nt||'').trim();
- if(!name||name.length>120||nt.length>2000)fail('راجع الاسم والملاحظات');
+ if(!name)fail('اسم الحالة مطلوب');if(name.length>120)fail('اسم الحالة حتى 120 حرفًا');if(nt.length>2000)fail('ملاحظات الحجز حتى 2000 حرف');
  return {id:id(n.id),name,phone:p,b:n.b,v:n.v,s:n.s||'wait',date:date(n.date),nt};
 }
 function queueOrder(a,b){const rank=x=>x.s==='exam'?0:x.s==='wait'?(x.v==='emergency'?1:2):3;return rank(a)-rank(b)||a.no-b.no;}
@@ -106,7 +106,7 @@ function commit(state, uid, puts, dels, now=today()) {
   const max=Math.max(state.sequences[seqKey]||0,0,...Object.values(rows).filter(x=>x.b===n.b).map(x=>Number(x.no)||0));
   n.no=moved?max+1:old.no;
   state.sequences[seqKey]=Math.max(max,n.no);
-  n.rev=(old?.rev||0)+1;if(old?.scheduleMove)n.scheduleMove=old.scheduleMove;
+  n.createdAt=old?.createdAt||new Date().toISOString();n.createdBy=old?.createdBy||r.u;n.updatedAt=new Date().toISOString();n.updatedBy=r.u;n.rev=(old?.rev||0)+1;if(old?.scheduleMove)n.scheduleMove=old.scheduleMove;
   if(Object.hasOwn(p,'patient')){
    if(!p.patient||typeof p.patient!=='object'||Array.isArray(p.patient)||Object.keys(p.patient).some(k=>!['spouseName','spouseJob','spousePhone'].includes(k)))fail('راجع بيانات الزوج');
    const existing=state.patients?.[n.phone],family={};
@@ -168,5 +168,5 @@ function lookup(state,p,now=today(),clock=Date.now()) {
  const x=Object.values(state.bookings?.[now]||{}).find(x=>x.phone===p);
  if(!x)return null;return queueTrack(state,Object.values(state.bookings[now]||{}),x,clock);
 }
-const coreExports={publicSettings,branchIds,presence,canExamine,assertExamine,phone,today,date,role,booking,commit,read,patch,lookup,rebuild,fail,schedule,queueOrder,queueTrack};
-export {publicSettings,branchIds,presence,canExamine,assertExamine,phone,today,date,role,booking,commit,read,patch,lookup,rebuild,fail,schedule,queueOrder,queueTrack};
+const coreExports={allowed,publicSettings,branchIds,presence,canExamine,assertExamine,phone,today,date,role,booking,commit,read,patch,lookup,rebuild,fail,schedule,queueOrder,queueTrack};
+export {allowed,publicSettings,branchIds,presence,canExamine,assertExamine,phone,today,date,role,booking,commit,read,patch,lookup,rebuild,fail,schedule,queueOrder,queueTrack};

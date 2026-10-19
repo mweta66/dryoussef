@@ -1,0 +1,2 @@
+/* Staff tools have a separate entry point; patient pages do not load their editors. */
+(function(){function route(){if(location.hash==='#staff'||location.hash==='#admin'){location.replace('staff.html'+location.search+location.hash);return true}return false}if(!route())try{if(sessionStorage.getItem('clinic_supabase_auth'))location.replace('staff.html'+location.search+'#staff')}catch{}window.addEventListener('hashchange',route)})();

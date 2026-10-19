@@ -1,5 +1,5 @@
 /* A complete portable backup contains clinical JSON plus the actual private images. */
-async function downloadCompleteBackup(){
+async function downloadCompleteBackup(encrypted=false){
  const error=await guard(async()=>{
   const snapshot=await gateway('exportData',{},true),images=[];let bytes=new TextEncoder().encode(JSON.stringify(snapshot)).length;
   for(const [phone,items]of Object.entries(snapshot.attachments||{}))for(const item of Object.values(items)){
@@ -7,7 +7,7 @@ async function downloadCompleteBackup(){
    if(bytes>64000000)throw Error('النسخة أكبر من 64 ميجابايت. لم يتم تنزيل نسخة ناقصة؛ تواصل مع الإدارة لتصدير أرشيف التخزين.');images.push(image);
   }
   const latest=await gateway('exportData',{},true);if(JSON.stringify(latest.attachments)!==JSON.stringify(snapshot.attachments))throw Error('تغيرت صور التقارير أثناء التنزيل. أعد إنشاء النسخة للاحتفاظ بنسخة متسقة.');
-  const bundle={format:'clinic-complete-backup',schemaVersion:1,exportedAt:snapshot.exportedAt,clinic:snapshot,images};const url=URL.createObjectURL(new Blob([JSON.stringify(bundle)],{type:'application/json'})),a=document.createElement('a');a.href=url;a.download='clinic-complete-backup-'+today()+'.json';a.click();setTimeout(()=>URL.revokeObjectURL(url),2000);
+  const bundle={format:'clinic-complete-backup',schemaVersion:1,exportedAt:snapshot.exportedAt,clinic:snapshot,images};let output=bundle;if(encrypted){const password=prompt('كلمة تشفير لا تقل عن 12 حرفًا. احتفظ بها؛ لا يمكن استعادة الملف بدونها.');if(password===null)return;if(password!==prompt('أعد كتابة كلمة التشفير'))throw Error('كلمتا التشفير غير متطابقتين');output=await ClinicBackupCrypto.encrypt(bundle,password)}const url=URL.createObjectURL(new Blob([JSON.stringify(output)],{type:'application/json'})),a=document.createElement('a');a.href=url;a.download=(encrypted?'clinic-encrypted-backup-':'clinic-complete-backup-')+today()+'.json';a.click();setTimeout(()=>URL.revokeObjectURL(url),2000);
  },'تم تنزيل نسخة كاملة بالصور');if(error)notify(error);
 }
 function validateCompleteBackup(bundle){

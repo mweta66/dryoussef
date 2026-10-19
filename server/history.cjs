@@ -1,5 +1,5 @@
 const core=require('./core.cjs'),perms=require('./permissions.cjs');
-const ROOTS=['patients','files','complaints','attachments','bookings','inbox','followups','deletedBookings','sessions','complaintSequences','settings','roles'];
+const ROOTS=['patients','files','complaints','attachments','bookings','inbox','followups','deletedBookings','sessions','complaintSequences','settings','roles','tasks','checkins','appointmentRequests','waitingList','slotOpenings','dayClosures','patientMerges','userPreferences'];
 const object=x=>x!==null&&typeof x==='object'&&!Array.isArray(x);
 const same=(a,b)=>JSON.stringify(a)===JSON.stringify(b);
 function diff(before,after,path=[],out=[]){

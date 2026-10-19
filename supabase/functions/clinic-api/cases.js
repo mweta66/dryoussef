@@ -39,7 +39,7 @@ function patch(state,r,updates,core){
   if(state.patients[ph])assertAccess(state,r,ph);
   if(kind==='patients'){
    perms.requirePermission(r,kind==='patients'?'patients.edit':'notes.edit');if(key)fail('غير مصرح',403);
-   if(value===null){delete state.patients[ph];continue;}
+   if(value===null)fail('استخدم إجراء حذف الحالة الكامل؛ مسار التعديل لا يقبل الحذف',403);
    if(typeof value?.n!=='string'||!value.n.trim()||value.n.length>120)fail('اسم غير صحيح');core.date(value.d);state.patients[ph]={...state.patients[ph],n:value.n,d:value.d,...(!allPatients(r)?{br:r.br}:{})};continue;
   }
   if(!state.patients[ph])fail('الحالة غير موجودة',404);assertAccess(state,r,ph);
@@ -47,7 +47,7 @@ function patch(state,r,updates,core){
    perms.requirePermission(r,'notes.edit');if(key)fail('غير مصرح',403);
    const currentVersion=state.files[ph]?.rev||0;if((value?.rev??0)!==currentVersion)fail('تم تعديل الملف الطبي من مستخدم آخر. أعد فتح الملف لمراجعة التغييرات قبل الحفظ.',409);
    if(value===null){if(currentVersion)fail('استخدم حذف الحالة لإزالة ملف محفوظ',409);delete state.files[ph];continue;}
-   if(typeof value?.n!=='string'||value.n.length>5000)fail('الملاحظات طويلة');const next={...state.files[ph],n:value.n,rev:currentVersion+1,t:new Date().toISOString()};for(const k of ['allergies','chronic','diagnosis','treatment'])if(value[k]!==undefined){if(typeof value[k]!=='string'||value[k].length>2000)fail('بيانات طبية غير صحيحة');next[k]=value[k];}state.files[ph]=next;continue;
+   if(typeof value?.n!=='string'||value.n.length>5000)fail('الملاحظات طويلة');const next={...state.files[ph],n:value.n,rev:currentVersion+1,by:r.u,t:new Date().toISOString()};for(const k of ['allergies','chronic','diagnosis','treatment'])if(value[k]!==undefined){if(typeof value[k]!=='string'||value[k].length>2000)fail('بيانات طبية غير صحيحة');next[k]=value[k];}state.files[ph]=next;continue;
   }
   if(kind==='complaints'){
    if(!validId(key))fail('معرّف غير صحيح');const rows=state.complaints[ph]||={},old=rows[key];

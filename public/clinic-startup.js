@@ -14,7 +14,7 @@ window.addEventListener('DOMContentLoaded',async()=>{
    if(AUTH!==owner)return;
    if(!workspaceLast)throw Error('Workspace not loaded');
    if(me.role==='admin'&&!adminPage()){openAdmin();return;}
-   if(me.role!=='admin'&&adminPage()){location.replace('index.html#staff');return;}
+   if(me.role!=='admin'&&adminPage()){location.replace('staff.html#staff');return;}
    const tabs=workspaceTabs();if(!tabs.some(x=>x[0]===tab))tab=tabs[0]?.[0]||'set';
    if(tab!==initialTab)await refreshWorkspaceData();
    ClinicBoot.ready('settings');

@@ -110,7 +110,14 @@ function supabaseAdapter(url, secret, fetcher = fetch) {
     readHistory: async (p) => rpc("clinic_patient_history", { patient_phone: p }),
     readDay: async (day) => rpc("clinic_read_day", { selected_day: day }),
     readLookup: async (p, day) => rpc("clinic_read_day", { selected_day: day, patient_phone: p }),
-    systemHealth: async () => rpc("clinic_health_metadata", {}),
+    systemHealth: async () => {
+      const health = await rpc("clinic_health_metadata", {});
+      try {
+        health.backupCheck = await rpc("clinic_backup_check_status", {});
+      } catch {
+      }
+      return health;
+    },
     latestBackup: async () => {
       const rows = await call("/rest/v1/clinic_backups?select=created_at,version,payload,checksum&order=created_at.desc&limit=1");
       return rows?.[0] || null;
@@ -153,12 +160,12 @@ function supabaseAdapter(url, secret, fetcher = fetch) {
     },
     verify: async (token) => {
       const user = await call("/auth/v1/user", { method: "GET" }, token);
-      let session;
+      let session2;
       try {
-        session = JSON.parse(atob(token.split(".")[1].replace(/-/g, "+").replace(/_/g, "/"))).session_id;
+        session2 = JSON.parse(atob(token.split(".")[1].replace(/-/g, "+").replace(/_/g, "/"))).session_id;
       } catch {
       }
-      if (!user?.id || !session || !await rpc("clinic_session_active", { session_uuid: session, user_uuid: user.id })) {
+      if (!user?.id || !session2 || !await rpc("clinic_session_active", { session_uuid: session2, user_uuid: user.id })) {
         const e = new Error("NOAUTH");
         e.status = 401;
         throw e;
@@ -168,145 +175,10 @@ function supabaseAdapter(url, secret, fetcher = fetch) {
   };
 }
 
-// supabase/functions/clinic-api/schedule.js
-function validDate(date2) {
-  const parsed = /* @__PURE__ */ new Date(date2 + "T12:00:00Z");
-  return /^\d{4}-\d{2}-\d{2}$/.test(date2) && Number.isFinite(parsed.getTime()) && parsed.toISOString().slice(0, 10) === date2;
-}
-function availability(registry, schedules, date2) {
-  const result = { scheduled: [], flexible: [] };
-  if (!validDate(date2)) return result;
-  const day = (/* @__PURE__ */ new Date(date2 + "T12:00:00Z")).getUTCDay();
-  for (const [id2, branch] of Object.entries(registry)) {
-    if (branch.enabled === false) continue;
-    const schedule3 = schedules[id2];
-    if (Object.hasOwn(schedule3?.exceptions || {}, date2)) {
-      const slots2 = schedule3.exceptions[date2];
-      if (slots2.length) result.scheduled.push({ id: id2, slots: slots2 });
-      continue;
-    }
-    if (schedule3?.mode === "days") {
-      if (schedule3.d?.includes(day)) result.scheduled.push({ id: id2, slots: [], dayOnly: true });
-      continue;
-    }
-    if (!schedule3 || schedule3.mode === "flexible") {
-      result.flexible.push(id2);
-      continue;
-    }
-    const slots = schedule3.mode === "weekly" ? schedule3.weekly?.[day] || [] : schedule3.d?.includes(day) ? [{ f: schedule3.f, t: schedule3.t }] : [];
-    if (slots.length) result.scheduled.push({ id: id2, slots });
-  }
-  return result;
-}
-function choose(registry, schedules, date2, time) {
-  const items = availability(registry, schedules, date2).scheduled;
-  if (items.length === 1) return items[0].id;
-  if (time && items.every((item) => !item.dayOnly)) {
-    const active = items.filter((item) => item.slots.some((slot) => slot.f <= time && time < slot.t));
-    if (active.length === 1) return active[0].id;
-  }
-  return null;
-}
-
-// supabase/functions/clinic-api/branches.js
-var DEFAULTS = { dmn: { name: "\u0641\u0631\u0639 \u062F\u0645\u0646\u0647\u0648\u0631", address: "", phone: "", enabled: true }, alex: { name: "\u0641\u0631\u0639 \u0627\u0644\u0625\u0633\u0643\u0646\u062F\u0631\u064A\u0629", address: "", phone: "", enabled: true } };
-var validId = (b) => typeof b === "string" && /^[a-z][a-z0-9-]{1,31}$/.test(b) && !["all", "presence", "constructor", "prototype"].includes(b);
-function branches(state = {}) {
-  const configured = state.settings?.branches;
-  if (configured && Object.keys(configured).length) return configured;
-  const legacy = state.settings?.site?.branches || {};
-  return Object.fromEntries(Object.entries({ ...DEFAULTS, ...legacy }).filter(([b]) => validId(b)).map(([b, x]) => [b, { ...DEFAULTS[b], ...x, enabled: x.enabled !== false }]));
-}
-function ids(state, active = false) {
-  return Object.keys(branches(state)).filter((b) => !active || branches(state)[b].enabled !== false);
-}
-function schedule(s, fail4) {
-  if (!s || typeof s !== "object" || Array.isArray(s)) fail4("\u0645\u0648\u0627\u0639\u064A\u062F \u063A\u064A\u0631 \u0635\u062D\u064A\u062D\u0629");
-  const slots = (value) => {
-    if (!Array.isArray(value) || value.length > 6) fail4("\u0641\u062A\u0631\u0627\u062A \u063A\u064A\u0631 \u0635\u062D\u064A\u062D\u0629");
-    const out2 = value.map((x) => {
-      if (!x || !/^([01]\d|2[0-3]):[0-5]\d$/.test(x.f) || !/^([01]\d|2[0-3]):[0-5]\d$/.test(x.t) || x.f >= x.t) fail4("\u0648\u0642\u062A \u0627\u0644\u0646\u0647\u0627\u064A\u0629 \u064A\u062C\u0628 \u0623\u0646 \u064A\u0643\u0648\u0646 \u0628\u0639\u062F \u0627\u0644\u0628\u062F\u0627\u064A\u0629");
-      return { f: x.f, t: x.t };
-    }).sort((a, b) => a.f.localeCompare(b.f));
-    if (out2.some((x, i) => i && x.f < out2[i - 1].t)) fail4("\u0641\u062A\u0631\u0627\u062A \u0627\u0644\u0645\u0648\u0627\u0639\u064A\u062F \u0645\u062A\u062F\u0627\u062E\u0644\u0629");
-    return out2;
-  };
-  if (s.mode === void 0) {
-    if (!Array.isArray(s.d) || !s.d.length || !s.d.every((d) => Number.isInteger(d) && d >= 0 && d <= 6)) fail4("\u0645\u0648\u0627\u0639\u064A\u062F \u063A\u064A\u0631 \u0635\u062D\u064A\u062D\u0629");
-    const pair = slots([{ f: s.f, t: s.t }])[0];
-    return { d: [...new Set(s.d)], ...pair };
-  }
-  if (!["flexible", "weekly", "days"].includes(s.mode)) fail4("\u0646\u0648\u0639 \u0645\u0648\u0627\u0639\u064A\u062F \u063A\u064A\u0631 \u0635\u062D\u064A\u062D");
-  const out = { mode: s.mode, weekly: {}, exceptions: {} };
-  if (s.mode === "days") {
-    if (!Array.isArray(s.d) || s.d.length > 7 || s.d.some((d) => !Number.isInteger(d) || d < 0 || d > 6)) fail4("\u0623\u064A\u0627\u0645 \u0627\u0644\u062A\u0648\u0627\u062C\u062F \u063A\u064A\u0631 \u0635\u062D\u064A\u062D\u0629");
-    out.d = [...new Set(s.d)].sort((a, b) => (a + 1) % 7 - (b + 1) % 7);
-  }
-  if (s.mode === "weekly") {
-    if (!s.weekly || typeof s.weekly !== "object" || Array.isArray(s.weekly) || Object.keys(s.weekly).some((k) => !/^[0-6]$/.test(k))) fail4("\u0623\u064A\u0627\u0645 \u063A\u064A\u0631 \u0635\u062D\u064A\u062D\u0629");
-    for (let d = 0; d < 7; d++) out.weekly[d] = slots(s.weekly[d] || []);
-  }
-  if (s.exceptions !== void 0) {
-    if (!s.exceptions || typeof s.exceptions !== "object" || Array.isArray(s.exceptions) || Object.keys(s.exceptions).length > 366) fail4("\u0627\u0633\u062A\u062B\u0646\u0627\u0621\u0627\u062A \u063A\u064A\u0631 \u0635\u062D\u064A\u062D\u0629");
-    for (const [d, x] of Object.entries(s.exceptions)) {
-      const parsed = /* @__PURE__ */ new Date(d + "T12:00:00Z");
-      if (!/^\d{4}-\d{2}-\d{2}$/.test(d) || !Number.isFinite(parsed.getTime()) || parsed.toISOString().slice(0, 10) !== d) fail4("\u062A\u0627\u0631\u064A\u062E \u0627\u0644\u0627\u0633\u062A\u062B\u0646\u0627\u0621 \u063A\u064A\u0631 \u0635\u062D\u064A\u062D");
-      out.exceptions[d] = slots(x);
-    }
-  }
-  return out;
-}
-function save(original, uid, input, core, perms) {
-  const s = structuredClone(original);
-  perms.requirePermission(core.role(s, uid), "clinic.manage");
-  const b = input.branch;
-  if (!validId(b)) core.fail("\u0631\u0645\u0632 \u0627\u0644\u0641\u0631\u0639: \u062D\u0631\u0648\u0641 \u0625\u0646\u062C\u0644\u064A\u0632\u064A\u0629 \u0635\u063A\u064A\u0631\u0629 \u0648\u0623\u0631\u0642\u0627\u0645 \u0648\u0634\u0631\u0637\u0629\u060C \u0645\u0646 2 \u0625\u0644\u0649 32 \u062D\u0631\u0641\u064B\u0627");
-  const x = input.details;
-  if (!x || typeof x !== "object") core.fail("\u0628\u064A\u0627\u0646\u0627\u062A \u0627\u0644\u0641\u0631\u0639 \u063A\u064A\u0631 \u0635\u062D\u064A\u062D\u0629");
-  const current = branches(s), old = current[b];
-  if (input.create === true && old) core.fail("\u0631\u0645\u0632 \u0627\u0644\u0641\u0631\u0639 \u0645\u0633\u062A\u062E\u062F\u0645 \u0628\u0627\u0644\u0641\u0639\u0644\u061B \u0627\u062E\u062A\u0631 \u0631\u0645\u0632\u064B\u0627 \u062C\u062F\u064A\u062F\u064B\u0627", 409);
-  if (!old && Object.keys(current).length >= 25) core.fail("\u0627\u0644\u062D\u062F \u0627\u0644\u0623\u0642\u0635\u0649 25 \u0641\u0631\u0639\u064B\u0627");
-  const next = {};
-  for (const k of ["name", "address", "phone"]) {
-    if (typeof x[k] !== "string" || x[k].length > 300 || k === "name" && !x[k].trim()) core.fail("\u0631\u0627\u062C\u0639 \u0627\u0633\u0645 \u0648\u0639\u0646\u0648\u0627\u0646 \u0627\u0644\u0641\u0631\u0639");
-    next[k] = x[k].trim();
-  }
-  if (next.phone && !/^\+?[0-9]{7,15}$/.test(next.phone)) core.fail("\u0647\u0627\u062A\u0641 \u0627\u0644\u0641\u0631\u0639 \u063A\u064A\u0631 \u0635\u062D\u064A\u062D");
-  if (typeof x.enabled !== "boolean") core.fail("\u062D\u0627\u0644\u0629 \u0641\u0631\u0639 \u063A\u064A\u0631 \u0635\u062D\u064A\u062D\u0629");
-  next.enabled = x.enabled;
-  if (x.maxBookings !== void 0) {
-    if (!Number.isInteger(x.maxBookings) || x.maxBookings < 0 || x.maxBookings > 1e3) core.fail("\u062D\u062F \u0627\u0644\u062D\u062C\u0648\u0632\u0627\u062A \u0645\u0646 0 \u0625\u0644\u0649 1000");
-    next.maxBookings = x.maxBookings;
-  } else if (old?.maxBookings !== void 0) next.maxBookings = old.maxBookings;
-  if (!next.enabled && (Object.values(s.bookings?.[core.today()] || {}).some((x2) => x2.b === b && x2.s === "exam") || Object.entries(s.sessions || {}).some(([key, v]) => key.endsWith("_" + b) && key.startsWith(core.today()) && ["running", "paused"].includes(v.status)))) core.fail("\u0623\u0646\u0647 \u062C\u0644\u0633\u0629 \u0627\u0644\u0641\u0631\u0639 \u0642\u0628\u0644 \u062A\u0639\u0637\u064A\u0644\u0647", 409);
-  const all = { ...current, [b]: next };
-  if (!Object.values(all).some((x2) => x2.enabled)) core.fail("\u064A\u062C\u0628 \u0625\u0628\u0642\u0627\u0621 \u0641\u0631\u0639 \u0641\u0639\u0627\u0644 \u0648\u0627\u062D\u062F \u0639\u0644\u0649 \u0627\u0644\u0623\u0642\u0644");
-  s.settings ||= {};
-  s.settings.branches = all;
-  if (!next.enabled && s.sessions?.[core.today() + "_presence"]?.branch === b) delete s.sessions[core.today() + "_presence"];
-  s.settings.sched ||= {};
-  s.settings.sched[b] = input.schedule ? schedule(input.schedule, core.fail) : s.settings.sched[b] || { mode: "flexible", weekly: {}, exceptions: {} };
-  s.settings.site ||= {};
-  s.settings.site.branches = Object.fromEntries(Object.entries(all).map(([id2, x2]) => [id2, { name: x2.name, address: x2.address, phone: x2.phone }]));
-  return s;
-}
-function validateRegistry(value, fail4) {
-  if (!value || typeof value !== "object" || Array.isArray(value) || !Object.keys(value).length || Object.keys(value).length > 25) fail4("\u0628\u064A\u0627\u0646\u0627\u062A \u0627\u0644\u0641\u0631\u0648\u0639 \u063A\u064A\u0631 \u0635\u062D\u064A\u062D\u0629");
-  const out = {};
-  for (const [id2, x] of Object.entries(value)) {
-    if (!validId(id2) || !x || typeof x !== "object") fail4("\u0631\u0645\u0632 \u0641\u0631\u0639 \u063A\u064A\u0631 \u0635\u062D\u064A\u062D");
-    for (const k of ["name", "address", "phone"]) if (typeof x[k] !== "string" || x[k].length > 300 || k === "name" && !x[k].trim()) fail4("\u0628\u064A\u0627\u0646\u0627\u062A \u0641\u0631\u0639 \u063A\u064A\u0631 \u0635\u062D\u064A\u062D\u0629");
-    if (x.phone && !/^\+?[0-9]{7,15}$/.test(x.phone) || typeof x.enabled !== "boolean") fail4("\u062D\u0627\u0644\u0629 \u0623\u0648 \u0647\u0627\u062A\u0641 \u0641\u0631\u0639 \u063A\u064A\u0631 \u0635\u062D\u064A\u062D");
-    if (x.maxBookings !== void 0 && (!Number.isInteger(x.maxBookings) || x.maxBookings < 0 || x.maxBookings > 1e3)) fail4("\u062D\u062F \u062D\u062C\u0648\u0632\u0627\u062A \u063A\u064A\u0631 \u0635\u062D\u064A\u062D");
-    out[id2] = { ...x.maxBookings !== void 0 ? { maxBookings: x.maxBookings } : {}, name: x.name.trim(), address: x.address.trim(), phone: x.phone.trim(), enabled: x.enabled };
-  }
-  if (!Object.values(out).some((x) => x.enabled)) fail4("\u064A\u062C\u0628 \u0625\u0628\u0642\u0627\u0621 \u0641\u0631\u0639 \u0641\u0639\u0627\u0644");
-  return out;
-}
-
 // supabase/functions/clinic-api/core.js
 var core_exports = {};
 __export(core_exports, {
+  allowed: () => allowed,
   assertExamine: () => assertExamine,
   booking: () => booking,
   branchIds: () => branchIds,
@@ -340,8 +212,9 @@ __export(permissions_exports, {
 });
 var keys = ["bookings.read", "bookings.create", "bookings.edit", "bookings.status", "bookings.delete", "patients.read", "patients.edit", "patients.delete", "complaints.read", "complaints.create", "complaints.edit", "complaints.delete", "notes.read", "notes.edit", "notifications.read", "users.manage", "clinic.manage", "site.manage", "data.export", "data.delete"];
 keys.push("patients.print", "display.manage", "data.import", "data.restore", "audit.details", "attachments.read", "attachments.create", "attachments.delete", "attachments.own.delete", "sessions.manage", "queue.configure", "reports.export", "audit.read");
-var administrative = ["display.manage", "data.import", "data.restore", "audit.details", "attachments.own.delete", "users.manage", "clinic.manage", "site.manage", "data.export", "data.delete", "audit.read", "patients.delete"];
-var defaults = { doctor: keys.filter((k) => !administrative.includes(k)), sec: ["patients.print", "bookings.read", "bookings.create", "bookings.status"], nurse: ["bookings.read", "bookings.create", "bookings.status", "patients.print", "patients.read", "complaints.read", "complaints.create", "attachments.read", "attachments.create", "attachments.own.delete"], staff: ["patients.print"] };
+keys.push("tasks.read", "tasks.manage", "requests.read", "requests.manage", "waitinglist.manage", "day.close", "patients.merge");
+var administrative = ["patients.merge", "display.manage", "data.import", "data.restore", "audit.details", "attachments.own.delete", "users.manage", "clinic.manage", "site.manage", "data.export", "data.delete", "audit.read", "patients.delete"];
+var defaults = { doctor: keys.filter((k) => !administrative.includes(k)), sec: ["tasks.read", "tasks.manage", "requests.read", "requests.manage", "waitinglist.manage", "day.close", "patients.print", "bookings.read", "bookings.create", "bookings.status"], nurse: ["tasks.read", "tasks.manage", "day.close", "bookings.read", "bookings.create", "bookings.status", "patients.print", "patients.read", "complaints.read", "complaints.create", "attachments.read", "attachments.create", "attachments.own.delete"], staff: ["patients.print"] };
 function can(r, key) {
   if (!keys.includes(key)) return false;
   if (r.r === "admin") return keys.includes(key);
@@ -376,7 +249,7 @@ var fail = (m, s = 400) => {
   throw e;
 };
 var validPhone = (p) => /^01[0125]\d{8}$/.test(p);
-var validId2 = (p) => /^[A-Za-z0-9_-]{1,128}$/.test(p);
+var validId = (p) => /^[A-Za-z0-9_-]{1,128}$/.test(p);
 function indexPatients(state) {
   state.patients ||= {};
   for (const rows of Object.values(state.bookings || {})) for (const x of Object.values(rows || {})) {
@@ -447,7 +320,7 @@ function patch(state, r, updates, core) {
   for (const [path, value] of entries) {
     const [kind, ph, key, extra] = path.split("/");
     if (kind === "inbox") {
-      if (!validId2(ph) || key) fail("\u0645\u0633\u0627\u0631 \u063A\u064A\u0631 \u0635\u062D\u064A\u062D");
+      if (!validId(ph) || key) fail("\u0645\u0633\u0627\u0631 \u063A\u064A\u0631 \u0635\u062D\u064A\u062D");
       if (value !== null) {
         if (!entries.some(([p, v]) => p.startsWith("complaints/") && p.endsWith("/" + ph) && v)) fail("\u0625\u0634\u0639\u0627\u0631 \u063A\u064A\u0631 \u0635\u062D\u064A\u062D");
         continue;
@@ -462,10 +335,7 @@ function patch(state, r, updates, core) {
     if (kind === "patients") {
       requirePermission(r, kind === "patients" ? "patients.edit" : "notes.edit");
       if (key) fail("\u063A\u064A\u0631 \u0645\u0635\u0631\u062D", 403);
-      if (value === null) {
-        delete state.patients[ph];
-        continue;
-      }
+      if (value === null) fail("\u0627\u0633\u062A\u062E\u062F\u0645 \u0625\u062C\u0631\u0627\u0621 \u062D\u0630\u0641 \u0627\u0644\u062D\u0627\u0644\u0629 \u0627\u0644\u0643\u0627\u0645\u0644\u061B \u0645\u0633\u0627\u0631 \u0627\u0644\u062A\u0639\u062F\u064A\u0644 \u0644\u0627 \u064A\u0642\u0628\u0644 \u0627\u0644\u062D\u0630\u0641", 403);
       if (typeof value?.n !== "string" || !value.n.trim() || value.n.length > 120) fail("\u0627\u0633\u0645 \u063A\u064A\u0631 \u0635\u062D\u064A\u062D");
       core.date(value.d);
       state.patients[ph] = { ...state.patients[ph], n: value.n, d: value.d, ...!allPatients(r) ? { br: r.br } : {} };
@@ -484,7 +354,7 @@ function patch(state, r, updates, core) {
         continue;
       }
       if (typeof value?.n !== "string" || value.n.length > 5e3) fail("\u0627\u0644\u0645\u0644\u0627\u062D\u0638\u0627\u062A \u0637\u0648\u064A\u0644\u0629");
-      const next = { ...state.files[ph], n: value.n, rev: currentVersion + 1, t: (/* @__PURE__ */ new Date()).toISOString() };
+      const next = { ...state.files[ph], n: value.n, rev: currentVersion + 1, by: r.u, t: (/* @__PURE__ */ new Date()).toISOString() };
       for (const k of ["allergies", "chronic", "diagnosis", "treatment"]) if (value[k] !== void 0) {
         if (typeof value[k] !== "string" || value[k].length > 2e3) fail("\u0628\u064A\u0627\u0646\u0627\u062A \u0637\u0628\u064A\u0629 \u063A\u064A\u0631 \u0635\u062D\u064A\u062D\u0629");
         next[k] = value[k];
@@ -493,7 +363,7 @@ function patch(state, r, updates, core) {
       continue;
     }
     if (kind === "complaints") {
-      if (!validId2(key)) fail("\u0645\u0639\u0631\u0651\u0641 \u063A\u064A\u0631 \u0635\u062D\u064A\u062D");
+      if (!validId(key)) fail("\u0645\u0639\u0631\u0651\u0641 \u063A\u064A\u0631 \u0635\u062D\u064A\u062D");
       const rows = state.complaints[ph] ||= {}, old = rows[key];
       requirePermission(r, value === null ? "complaints.delete" : old ? "complaints.edit" : "complaints.create");
       if (value === null) {
@@ -516,6 +386,102 @@ function patch(state, r, updates, core) {
     fail("\u0645\u0633\u0627\u0631 \u0643\u062A\u0627\u0628\u0629 \u063A\u064A\u0631 \u0645\u0633\u0645\u0648\u062D", 403);
   }
   return state;
+}
+
+// supabase/functions/clinic-api/branches.js
+var DEFAULTS = { dmn: { name: "\u0641\u0631\u0639 \u062F\u0645\u0646\u0647\u0648\u0631", address: "", phone: "", enabled: true }, alex: { name: "\u0641\u0631\u0639 \u0627\u0644\u0625\u0633\u0643\u0646\u062F\u0631\u064A\u0629", address: "", phone: "", enabled: true } };
+var validId2 = (b) => typeof b === "string" && /^[a-z][a-z0-9-]{1,31}$/.test(b) && !["all", "presence", "constructor", "prototype"].includes(b);
+function branches(state = {}) {
+  const configured = state.settings?.branches;
+  if (configured && Object.keys(configured).length) return configured;
+  const legacy = state.settings?.site?.branches || {};
+  return Object.fromEntries(Object.entries({ ...DEFAULTS, ...legacy }).filter(([b]) => validId2(b)).map(([b, x]) => [b, { ...DEFAULTS[b], ...x, enabled: x.enabled !== false }]));
+}
+function ids(state, active = false) {
+  return Object.keys(branches(state)).filter((b) => !active || branches(state)[b].enabled !== false);
+}
+function schedule(s, fail4) {
+  if (!s || typeof s !== "object" || Array.isArray(s)) fail4("\u0645\u0648\u0627\u0639\u064A\u062F \u063A\u064A\u0631 \u0635\u062D\u064A\u062D\u0629");
+  const slots = (value) => {
+    if (!Array.isArray(value) || value.length > 6) fail4("\u0641\u062A\u0631\u0627\u062A \u063A\u064A\u0631 \u0635\u062D\u064A\u062D\u0629");
+    const out2 = value.map((x) => {
+      if (!x || !/^([01]\d|2[0-3]):[0-5]\d$/.test(x.f) || !/^([01]\d|2[0-3]):[0-5]\d$/.test(x.t) || x.f >= x.t) fail4("\u0648\u0642\u062A \u0627\u0644\u0646\u0647\u0627\u064A\u0629 \u064A\u062C\u0628 \u0623\u0646 \u064A\u0643\u0648\u0646 \u0628\u0639\u062F \u0627\u0644\u0628\u062F\u0627\u064A\u0629");
+      return { f: x.f, t: x.t };
+    }).sort((a, b) => a.f.localeCompare(b.f));
+    if (out2.some((x, i) => i && x.f < out2[i - 1].t)) fail4("\u0641\u062A\u0631\u0627\u062A \u0627\u0644\u0645\u0648\u0627\u0639\u064A\u062F \u0645\u062A\u062F\u0627\u062E\u0644\u0629");
+    return out2;
+  };
+  if (s.mode === void 0) {
+    if (!Array.isArray(s.d) || !s.d.length || !s.d.every((d) => Number.isInteger(d) && d >= 0 && d <= 6)) fail4("\u0645\u0648\u0627\u0639\u064A\u062F \u063A\u064A\u0631 \u0635\u062D\u064A\u062D\u0629");
+    const pair = slots([{ f: s.f, t: s.t }])[0];
+    return { d: [...new Set(s.d)], ...pair };
+  }
+  if (!["flexible", "weekly", "days"].includes(s.mode)) fail4("\u0646\u0648\u0639 \u0645\u0648\u0627\u0639\u064A\u062F \u063A\u064A\u0631 \u0635\u062D\u064A\u062D");
+  const out = { mode: s.mode, weekly: {}, exceptions: {} };
+  if (s.mode === "days") {
+    if (!Array.isArray(s.d) || s.d.length > 7 || s.d.some((d) => !Number.isInteger(d) || d < 0 || d > 6)) fail4("\u0623\u064A\u0627\u0645 \u0627\u0644\u062A\u0648\u0627\u062C\u062F \u063A\u064A\u0631 \u0635\u062D\u064A\u062D\u0629");
+    out.d = [...new Set(s.d)].sort((a, b) => (a + 1) % 7 - (b + 1) % 7);
+  }
+  if (s.mode === "weekly") {
+    if (!s.weekly || typeof s.weekly !== "object" || Array.isArray(s.weekly) || Object.keys(s.weekly).some((k) => !/^[0-6]$/.test(k))) fail4("\u0623\u064A\u0627\u0645 \u063A\u064A\u0631 \u0635\u062D\u064A\u062D\u0629");
+    for (let d = 0; d < 7; d++) out.weekly[d] = slots(s.weekly[d] || []);
+  }
+  if (s.exceptions !== void 0) {
+    if (!s.exceptions || typeof s.exceptions !== "object" || Array.isArray(s.exceptions) || Object.keys(s.exceptions).length > 366) fail4("\u0627\u0633\u062A\u062B\u0646\u0627\u0621\u0627\u062A \u063A\u064A\u0631 \u0635\u062D\u064A\u062D\u0629");
+    for (const [d, x] of Object.entries(s.exceptions)) {
+      const parsed = /* @__PURE__ */ new Date(d + "T12:00:00Z");
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(d) || !Number.isFinite(parsed.getTime()) || parsed.toISOString().slice(0, 10) !== d) fail4("\u062A\u0627\u0631\u064A\u062E \u0627\u0644\u0627\u0633\u062A\u062B\u0646\u0627\u0621 \u063A\u064A\u0631 \u0635\u062D\u064A\u062D");
+      out.exceptions[d] = slots(x);
+    }
+  }
+  return out;
+}
+function save(original, uid, input, core, perms) {
+  const s = structuredClone(original);
+  perms.requirePermission(core.role(s, uid), "clinic.manage");
+  const b = input.branch;
+  if (!validId2(b)) core.fail("\u0631\u0645\u0632 \u0627\u0644\u0641\u0631\u0639: \u062D\u0631\u0648\u0641 \u0625\u0646\u062C\u0644\u064A\u0632\u064A\u0629 \u0635\u063A\u064A\u0631\u0629 \u0648\u0623\u0631\u0642\u0627\u0645 \u0648\u0634\u0631\u0637\u0629\u060C \u0645\u0646 2 \u0625\u0644\u0649 32 \u062D\u0631\u0641\u064B\u0627");
+  const x = input.details;
+  if (!x || typeof x !== "object") core.fail("\u0628\u064A\u0627\u0646\u0627\u062A \u0627\u0644\u0641\u0631\u0639 \u063A\u064A\u0631 \u0635\u062D\u064A\u062D\u0629");
+  const current = branches(s), old = current[b];
+  if (input.create === true && old) core.fail("\u0631\u0645\u0632 \u0627\u0644\u0641\u0631\u0639 \u0645\u0633\u062A\u062E\u062F\u0645 \u0628\u0627\u0644\u0641\u0639\u0644\u061B \u0627\u062E\u062A\u0631 \u0631\u0645\u0632\u064B\u0627 \u062C\u062F\u064A\u062F\u064B\u0627", 409);
+  if (!old && Object.keys(current).length >= 25) core.fail("\u0627\u0644\u062D\u062F \u0627\u0644\u0623\u0642\u0635\u0649 25 \u0641\u0631\u0639\u064B\u0627");
+  const next = {};
+  for (const k of ["name", "address", "phone"]) {
+    if (typeof x[k] !== "string" || x[k].length > 300 || k === "name" && !x[k].trim()) core.fail("\u0631\u0627\u062C\u0639 \u0627\u0633\u0645 \u0648\u0639\u0646\u0648\u0627\u0646 \u0627\u0644\u0641\u0631\u0639");
+    next[k] = x[k].trim();
+  }
+  if (next.phone && !/^\+?[0-9]{7,15}$/.test(next.phone)) core.fail("\u0647\u0627\u062A\u0641 \u0627\u0644\u0641\u0631\u0639 \u063A\u064A\u0631 \u0635\u062D\u064A\u062D");
+  if (typeof x.enabled !== "boolean") core.fail("\u062D\u0627\u0644\u0629 \u0641\u0631\u0639 \u063A\u064A\u0631 \u0635\u062D\u064A\u062D\u0629");
+  next.enabled = x.enabled;
+  if (x.maxBookings !== void 0) {
+    if (!Number.isInteger(x.maxBookings) || x.maxBookings < 0 || x.maxBookings > 1e3) core.fail("\u062D\u062F \u0627\u0644\u062D\u062C\u0648\u0632\u0627\u062A \u0645\u0646 0 \u0625\u0644\u0649 1000");
+    next.maxBookings = x.maxBookings;
+  } else if (old?.maxBookings !== void 0) next.maxBookings = old.maxBookings;
+  if (!next.enabled && (Object.values(s.bookings?.[core.today()] || {}).some((x2) => x2.b === b && x2.s === "exam") || Object.entries(s.sessions || {}).some(([key, v]) => key.endsWith("_" + b) && key.startsWith(core.today()) && ["running", "paused"].includes(v.status)))) core.fail("\u0623\u0646\u0647 \u062C\u0644\u0633\u0629 \u0627\u0644\u0641\u0631\u0639 \u0642\u0628\u0644 \u062A\u0639\u0637\u064A\u0644\u0647", 409);
+  const all = { ...current, [b]: next };
+  if (!Object.values(all).some((x2) => x2.enabled)) core.fail("\u064A\u062C\u0628 \u0625\u0628\u0642\u0627\u0621 \u0641\u0631\u0639 \u0641\u0639\u0627\u0644 \u0648\u0627\u062D\u062F \u0639\u0644\u0649 \u0627\u0644\u0623\u0642\u0644");
+  s.settings ||= {};
+  s.settings.branches = all;
+  if (!next.enabled && s.sessions?.[core.today() + "_presence"]?.branch === b) delete s.sessions[core.today() + "_presence"];
+  s.settings.sched ||= {};
+  s.settings.sched[b] = input.schedule ? schedule(input.schedule, core.fail) : s.settings.sched[b] || { mode: "flexible", weekly: {}, exceptions: {} };
+  s.settings.site ||= {};
+  s.settings.site.branches = Object.fromEntries(Object.entries(all).map(([id2, x2]) => [id2, { name: x2.name, address: x2.address, phone: x2.phone }]));
+  return s;
+}
+function validateRegistry(value, fail4) {
+  if (!value || typeof value !== "object" || Array.isArray(value) || !Object.keys(value).length || Object.keys(value).length > 25) fail4("\u0628\u064A\u0627\u0646\u0627\u062A \u0627\u0644\u0641\u0631\u0648\u0639 \u063A\u064A\u0631 \u0635\u062D\u064A\u062D\u0629");
+  const out = {};
+  for (const [id2, x] of Object.entries(value)) {
+    if (!validId2(id2) || !x || typeof x !== "object") fail4("\u0631\u0645\u0632 \u0641\u0631\u0639 \u063A\u064A\u0631 \u0635\u062D\u064A\u062D");
+    for (const k of ["name", "address", "phone"]) if (typeof x[k] !== "string" || x[k].length > 300 || k === "name" && !x[k].trim()) fail4("\u0628\u064A\u0627\u0646\u0627\u062A \u0641\u0631\u0639 \u063A\u064A\u0631 \u0635\u062D\u064A\u062D\u0629");
+    if (x.phone && !/^\+?[0-9]{7,15}$/.test(x.phone) || typeof x.enabled !== "boolean") fail4("\u062D\u0627\u0644\u0629 \u0623\u0648 \u0647\u0627\u062A\u0641 \u0641\u0631\u0639 \u063A\u064A\u0631 \u0635\u062D\u064A\u062D");
+    if (x.maxBookings !== void 0 && (!Number.isInteger(x.maxBookings) || x.maxBookings < 0 || x.maxBookings > 1e3)) fail4("\u062D\u062F \u062D\u062C\u0648\u0632\u0627\u062A \u063A\u064A\u0631 \u0635\u062D\u064A\u062D");
+    out[id2] = { ...x.maxBookings !== void 0 ? { maxBookings: x.maxBookings } : {}, name: x.name.trim(), address: x.address.trim(), phone: x.phone.trim(), enabled: x.enabled };
+  }
+  if (!Object.values(out).some((x) => x.enabled)) fail4("\u064A\u062C\u0628 \u0625\u0628\u0642\u0627\u0621 \u0641\u0631\u0639 \u0641\u0639\u0627\u0644");
+  return out;
 }
 
 // supabase/functions/clinic-api/core.js
@@ -559,7 +525,9 @@ function booking(n, state = {}) {
   const p = phone(n.phone);
   if (!/^01[0125]\d{8}$/.test(p) || !branchIds(state).includes(n.b) || !["exam", "cons", "follow", "emergency"].includes(n.v) || !STATES.includes(n.s || "wait")) fail2("\u0628\u064A\u0627\u0646\u0627\u062A \u0627\u0644\u062D\u062C\u0632 \u063A\u064A\u0631 \u0635\u062D\u064A\u062D\u0629");
   const name = String(n.name || "").trim(), nt = String(n.nt || "").trim();
-  if (!name || name.length > 120 || nt.length > 2e3) fail2("\u0631\u0627\u062C\u0639 \u0627\u0644\u0627\u0633\u0645 \u0648\u0627\u0644\u0645\u0644\u0627\u062D\u0638\u0627\u062A");
+  if (!name) fail2("\u0627\u0633\u0645 \u0627\u0644\u062D\u0627\u0644\u0629 \u0645\u0637\u0644\u0648\u0628");
+  if (name.length > 120) fail2("\u0627\u0633\u0645 \u0627\u0644\u062D\u0627\u0644\u0629 \u062D\u062A\u0649 120 \u062D\u0631\u0641\u064B\u0627");
+  if (nt.length > 2e3) fail2("\u0645\u0644\u0627\u062D\u0638\u0627\u062A \u0627\u0644\u062D\u062C\u0632 \u062D\u062A\u0649 2000 \u062D\u0631\u0641");
   return { id: id(n.id), name, phone: p, b: n.b, v: n.v, s: n.s || "wait", date: date(n.date), nt };
 }
 function queueOrder(a, b) {
@@ -582,10 +550,10 @@ function assertExamine(state, d, b) {
 function queueTrack(state, list2, x, clock = Date.now(), prepared) {
   const ordered = prepared?.ordered || list2.filter((y) => y.b === x.b).sort(queueOrder), active = prepared ? prepared.active : ordered.find((y) => y.s === "exam"), waiting = prepared?.waiting || ordered.filter((y) => y.s === "wait");
   const avg = Math.max(1, Math.min(180, Number(state.settings?.avg) || 15)), index = Math.max(0, prepared ? prepared.positions.get(x.id) ?? 0 : waiting.findIndex((y) => y.id === x.id));
-  const selected = prepared ? prepared.presence : presence(state, x.date), session = state.sessions?.[x.date + "_" + x.b], blocked = session && session.status !== "running" || selected && selected !== x.b;
+  const selected = prepared ? prepared.presence : presence(state, x.date), session2 = state.sessions?.[x.date + "_" + x.b], blocked = session2 && session2.status !== "running" || selected && selected !== x.b;
   const started = !blocked && active && (prepared ? prepared.isToday : x.date === today(new Date(clock))) && Number.isFinite(Date.parse(active.startedAt)), remaining = started ? Math.max(0, avg * 6e4 - (clock - Date.parse(active.startedAt))) : avg * 6e4;
   const delay = x.s === "wait" ? (active ? remaining : 0) + index * avg * 6e4 : 0;
-  return { date: x.date, no: x.no, s: x.s, b: x.b, v: x.v, sessionStatus: session?.status || "not_started", ahead: x.s === "wait" ? index + (active ? 1 : 0) : 0, avg, queueStarted: !!started, estimatedWaitMinutes: started ? Math.ceil(delay / 6e4) : null, expectedAt: started ? x.s === "exam" ? active.startedAt : x.s === "wait" ? new Date(clock + delay).toISOString() : null : null };
+  return { date: x.date, no: x.no, s: x.s, b: x.b, v: x.v, sessionStatus: session2?.status || "not_started", ahead: x.s === "wait" ? index + (active ? 1 : 0) : 0, avg, queueStarted: !!started, estimatedWaitMinutes: started ? Math.ceil(delay / 6e4) : null, expectedAt: started ? x.s === "exam" ? active.startedAt : x.s === "wait" ? new Date(clock + delay).toISOString() : null : null };
 }
 function rebuild(state) {
   state.track = {};
@@ -643,15 +611,15 @@ function commit(state, uid, puts, dels, now = today()) {
     const limit = branches(state)[n.b]?.maxBookings || 0;
     if (limit && (!old || old.b !== n.b || old.date !== n.date || old.s === "cx" && n.s !== "cx") && n.s !== "cx" && n.v !== "emergency" && Object.values(state.bookings[n.date] || {}).filter((x) => x.b === n.b && x.id !== n.id && x.s !== "cx" && x.v !== "emergency").length >= limit) fail2("\u0627\u0643\u062A\u0645\u0644 \u0627\u0644\u062D\u062F \u0627\u0644\u064A\u0648\u0645\u064A \u0644\u0644\u062D\u062C\u0648\u0632\u0627\u062A \u0641\u064A \u0647\u0630\u0627 \u0627\u0644\u0641\u0631\u0639. \u0627\u062E\u062A\u0631 \u064A\u0648\u0645\u064B\u0627 \u0622\u062E\u0631 \u0623\u0648 \u0631\u0627\u062C\u0639 \u0627\u0644\u0625\u062F\u0627\u0631\u0629.", 409);
     const otherActive = Object.values(state.bookings[n.date] || {}).find((x) => x.b === n.b && x.s === "exam");
-    const sessionKey = n.date + "_" + n.b, session = state.sessions?.[sessionKey];
+    const sessionKey = n.date + "_" + n.b, session2 = state.sessions?.[sessionKey];
     if (n.v === "emergency" && (!old || old.v !== "emergency" || old.date !== n.date)) {
       requirePermission(r, "bookings.status");
       if (n.date !== now) fail2("\u062D\u062C\u0632 \u0627\u0644\u0637\u0648\u0627\u0631\u0626 \u0645\u062A\u0627\u062D \u0644\u0644\u064A\u0648\u0645 \u0627\u0644\u062D\u0627\u0644\u064A \u0641\u0642\u0637");
-      n.s = otherActive || !session || session.status !== "running" || !canExamine(state, n.date, n.b) ? "wait" : "exam";
+      n.s = otherActive || !session2 || session2.status !== "running" || !canExamine(state, n.date, n.b) ? "wait" : "exam";
     }
     if (n.s === "exam") assertExamine(state, n.date, n.b);
-    if (n.s === "exam" && !session) requirePermission(r, "sessions.manage");
-    if (n.s === "exam" && session && session.status !== "running") fail2("\u062C\u0644\u0633\u0629 \u0627\u0644\u0643\u0634\u0641 \u0645\u062A\u0648\u0642\u0641\u0629\u061B \u0627\u0637\u0644\u0628 \u0645\u0646 \u0627\u0644\u0637\u0628\u064A\u0628 \u0628\u062F\u0621 \u0627\u0644\u0639\u064A\u0627\u062F\u0629 \u0623\u0648\u0644\u064B\u0627", 409);
+    if (n.s === "exam" && !session2) requirePermission(r, "sessions.manage");
+    if (n.s === "exam" && session2 && session2.status !== "running") fail2("\u062C\u0644\u0633\u0629 \u0627\u0644\u0643\u0634\u0641 \u0645\u062A\u0648\u0642\u0641\u0629\u061B \u0627\u0637\u0644\u0628 \u0645\u0646 \u0627\u0644\u0637\u0628\u064A\u0628 \u0628\u062F\u0621 \u0627\u0644\u0639\u064A\u0627\u062F\u0629 \u0623\u0648\u0644\u064B\u0627", 409);
     if (!old && n.s !== "wait") requirePermission(r, "bookings.status");
     if (n.s === "exam" && otherActive) fail2("\u064A\u0648\u062C\u062F \u0643\u0634\u0641 \u062C\u0627\u0631\u064A \u0628\u0627\u0644\u0641\u0639\u0644. \u0623\u0646\u0647\u0650 \u0627\u0644\u062D\u0627\u0644\u0629 \u0627\u0644\u062D\u0627\u0644\u064A\u0629 \u0623\u0648\u0644\u064B\u0627.", 409);
     if (n.s === "exam" && old?.s !== "exam" && n.date !== now) fail2("\u0628\u062F\u0621 \u0627\u0644\u0643\u0634\u0641 \u0645\u062A\u0627\u062D \u0644\u0644\u064A\u0648\u0645 \u0627\u0644\u062D\u0627\u0644\u064A \u0641\u0642\u0637");
@@ -673,6 +641,10 @@ function commit(state, uid, puts, dels, now = today()) {
     const max = Math.max(state.sequences[seqKey] || 0, 0, ...Object.values(rows).filter((x) => x.b === n.b).map((x) => Number(x.no) || 0));
     n.no = moved ? max + 1 : old.no;
     state.sequences[seqKey] = Math.max(max, n.no);
+    n.createdAt = old?.createdAt || (/* @__PURE__ */ new Date()).toISOString();
+    n.createdBy = old?.createdBy || r.u;
+    n.updatedAt = (/* @__PURE__ */ new Date()).toISOString();
+    n.updatedBy = r.u;
     n.rev = (old?.rev || 0) + 1;
     if (old?.scheduleMove) n.scheduleMove = old.scheduleMove;
     if (Object.hasOwn(p, "patient")) {
@@ -715,8 +687,8 @@ function commit(state, uid, puts, dels, now = today()) {
 }
 function publicSettings(state) {
   if (!state.settings) return null;
-  const { previousDesign, ...settings } = state.settings;
-  return settings;
+  const { previousDesign, ...settings2 } = state.settings;
+  return settings2;
 }
 function read2(state, uid, path) {
   if (path === "settings") return publicSettings(state);
@@ -798,7 +770,1532 @@ function lookup(state, p, now = today(), clock = Date.now()) {
   if (!x) return null;
   return queueTrack(state, Object.values(state.bookings[now] || {}), x, clock);
 }
-var coreExports = { publicSettings, branchIds, presence, canExamine, assertExamine, phone, today, date, role, booking, commit, read: read2, patch: patch2, lookup, rebuild, fail: fail2, schedule: schedule2, queueOrder, queueTrack };
+var coreExports = { allowed, publicSettings, branchIds, presence, canExamine, assertExamine, phone, today, date, role, booking, commit, read: read2, patch: patch2, lookup, rebuild, fail: fail2, schedule: schedule2, queueOrder, queueTrack };
+
+// supabase/functions/clinic-api/data-import.js
+import { Buffer as Buffer3 } from "node:buffer";
+import { createHash as createHash2 } from "node:crypto";
+
+// supabase/functions/clinic-api/management.js
+import { Buffer as Buffer2 } from "node:buffer";
+
+// supabase/functions/clinic-api/display-options.js
+var numbers = [["currentShare", 71, 60, 85], ["currentScale", 72, 60, 85], ["nextScale", 24, 12, 28], ["radius", 22, 0, 40], ["gap", 18, 8, 40], ["pollSeconds", 5, 5, 30], ["musicVolume", 18, 0, 100], ["callVolume", 85, 0, 100], ["musicTrack", 0, 0, 113]];
+var noticeNumbers = [["noticeFontSize", 18, 12, 48], ["noticeMaxWidth", 620, 160, 1e3], ["noticeBorderWidth", 2, 0, 8], ["noticeRadius", 12, 0, 48], ["noticePadding", 10, 4, 48], ["noticeNeonSize", 18, 0, 40]];
+var noticeColors = { noticeTextColor: "#ad362e", noticeBackground: "#fcecea", noticeBorderColor: "#ad362e", noticeNeonColor: "#ef4444" };
+var flags = { showNext: true, showWaiting: true, showClock: true, showDate: true, showSchedule: true, showFooter: true, showConnection: true, showControls: true, showGuide: true, customColors: false, managedAudio: false };
+var texts = { currentLabel: "\u0631\u0642\u0645 \u0627\u0644\u062D\u0627\u0644\u0629 \u0627\u0644\u062D\u0627\u0644\u064A\u0629", nextLabel: "\u0627\u0644\u062F\u0648\u0631 \u0627\u0644\u062A\u0627\u0644\u064A", guideText: "\u064A\u0631\u062C\u0649 \u0627\u0644\u0627\u0646\u062A\u0638\u0627\u0631 \u062D\u062A\u0649 \u0638\u0647\u0648\u0631 \u0631\u0642\u0645\u0643 \u0639\u0644\u0649 \u0627\u0644\u0634\u0627\u0634\u0629", emptyText: "\u0644\u0627 \u062A\u0648\u062C\u062F \u062D\u0627\u0644\u0627\u062A \u0641\u064A \u0627\u0644\u0627\u0646\u062A\u0638\u0627\u0631", footerText: "\u0627\u0644\u0637\u0648\u0627\u0631\u0626 \u0644\u0647\u0627 \u0623\u0648\u0644\u0648\u064A\u0629 \u0628\u0639\u062F \u0627\u0644\u062D\u0627\u0644\u0629 \u0627\u0644\u062D\u0627\u0644\u064A\u0629", runningText: "\u062C\u0627\u0631\u064A \u0627\u0644\u0643\u0634\u0641 \u2014 \u062A\u0641\u0636\u0644 \u0628\u0627\u0644\u062F\u062E\u0648\u0644", pausedText: "\u0627\u0644\u0643\u0634\u0641 \u0645\u062A\u0648\u0642\u0641 \u0645\u0624\u0642\u062A\u064B\u0627", endedText: "\u0627\u0646\u062A\u0647\u062A \u062C\u0644\u0633\u0629 \u0627\u0644\u0643\u0634\u0641", idleText: "\u0627\u0644\u0637\u0628\u064A\u0628 \u0644\u0645 \u064A\u0628\u062F\u0623 \u0627\u0644\u0643\u0634\u0641 \u0628\u0639\u062F" };
+var colorKeys = ["background", "currentBackground", "currentText", "nextBackground", "nextText", "accent"];
+var colors = { light: { background: "#eef2f6", currentBackground: "#25406b", currentText: "#ffffff", nextBackground: "#ffffff", nextText: "#25406b", accent: "#c9a24f" }, dark: { background: "#0e1424", currentBackground: "#e2bc73", currentText: "#14203c", nextBackground: "#171f35", nextText: "#eef1f6", accent: "#e2bc73" } };
+function bad(message) {
+  const e = Error(message);
+  e.status = 400;
+  throw e;
+}
+function validDate(value) {
+  return /^\d{4}-\d{2}-\d{2}$/.test(value) && Number.isFinite(Date.parse(value + "T12:00:00Z")) && (/* @__PURE__ */ new Date(value + "T12:00:00Z")).toISOString().slice(0, 10) === value;
+}
+function normalize2(input = {}, branches2 = []) {
+  if (!input || typeof input !== "object" || Array.isArray(input)) bad("\u0625\u0639\u062F\u0627\u062F\u0627\u062A \u0634\u0627\u0634\u0629 \u0627\u0644\u062F\u0648\u0631 \u063A\u064A\u0631 \u0635\u062D\u064A\u062D\u0629");
+  const out = {};
+  for (const [key, fallback, min, max] of numbers) {
+    const value = input[key] ?? fallback;
+    if (!Number.isInteger(value) || value < min || value > max) bad("\u0631\u0627\u062C\u0639 \u0645\u0642\u0627\u0633 \u0623\u0648 \u0645\u0633\u062A\u0648\u0649 " + key + " (\u0645\u0646 " + min + " \u0625\u0644\u0649 " + max + ")");
+    out[key] = value;
+  }
+  for (const [key, fallback] of Object.entries(flags)) {
+    const value = input[key] ?? fallback;
+    if (typeof value !== "boolean") bad("\u062E\u064A\u0627\u0631 \u0639\u0631\u0636 \u063A\u064A\u0631 \u0635\u062D\u064A\u062D");
+    out[key] = value;
+  }
+  for (const [key, fallback] of Object.entries(texts)) {
+    const value = input[key] ?? fallback;
+    if (typeof value !== "string" || value.length > 160) bad("\u0646\u0635 \u0627\u0644\u0634\u0627\u0634\u0629 \u064A\u062C\u0628 \u0623\u0644\u0627 \u064A\u062A\u062C\u0627\u0648\u0632 160 \u062D\u0631\u0641\u064B\u0627");
+    out[key] = value;
+  }
+  out.dateMode = input.dateMode ?? "local";
+  if (!["local", "today", "fixed"].includes(out.dateMode)) bad("\u0648\u0636\u0639 \u062A\u0627\u0631\u064A\u062E \u0627\u0644\u0634\u0627\u0634\u0629 \u063A\u064A\u0631 \u0635\u062D\u064A\u062D");
+  out.date = input.date ?? "";
+  if (typeof out.date !== "string" || out.date !== "" && !validDate(out.date)) bad("\u062A\u0627\u0631\u064A\u062E \u0634\u0627\u0634\u0629 \u0627\u0644\u062F\u0648\u0631 \u063A\u064A\u0631 \u0635\u062D\u064A\u062D");
+  if (out.dateMode === "fixed" && !validDate(out.date)) bad("\u0627\u062E\u062A\u0631 \u062A\u0627\u0631\u064A\u062E\u064B\u0627 \u0635\u062D\u064A\u062D\u064B\u0627 \u0644\u062A\u062B\u0628\u064A\u062A \u0634\u0627\u0634\u0629 \u0627\u0644\u062F\u0648\u0631");
+  for (const [key, fallback, min, max] of noticeNumbers) {
+    const value = input[key] ?? fallback;
+    if (!Number.isInteger(value) || value < min || value > max) bad("\u0631\u0627\u062C\u0639 \u0645\u0642\u0627\u0633 \u0628\u0631\u0648\u0627\u0632 \u0627\u0644\u0637\u0648\u0627\u0631\u0626: " + key);
+    out[key] = value;
+  }
+  for (const [key, fallback] of Object.entries(noticeColors)) {
+    const value = input[key] ?? fallback;
+    if (!/^#[0-9a-f]{6}$/i.test(value)) bad("\u0644\u0648\u0646 \u0628\u0631\u0648\u0627\u0632 \u0627\u0644\u0637\u0648\u0627\u0631\u0626 \u063A\u064A\u0631 \u0635\u062D\u064A\u062D");
+    out[key] = value;
+  }
+  out.noticeNeonEnabled = input.noticeNeonEnabled ?? false;
+  if (typeof out.noticeNeonEnabled !== "boolean") bad("\u062E\u064A\u0627\u0631 \u0646\u064A\u0648\u0646 \u0627\u0644\u0637\u0648\u0627\u0631\u0626 \u063A\u064A\u0631 \u0635\u062D\u064A\u062D");
+  out.noticeAlign = input.noticeAlign ?? "center";
+  if (!["start", "center", "end"].includes(out.noticeAlign)) bad("\u0645\u062D\u0627\u0630\u0627\u0629 \u0631\u0633\u0627\u0644\u0629 \u0627\u0644\u0637\u0648\u0627\u0631\u0626 \u063A\u064A\u0631 \u0635\u062D\u064A\u062D\u0629");
+  out.branchMode = input.branchMode || "local";
+  if (!["local", "doctor", "fixed"].includes(out.branchMode)) bad("\u0648\u0636\u0639 \u0641\u0631\u0639 \u0627\u0644\u0634\u0627\u0634\u0629 \u063A\u064A\u0631 \u0635\u062D\u064A\u062D");
+  if (input.branch !== void 0 && typeof input.branch !== "string") bad("\u0641\u0631\u0639 \u0627\u0644\u0634\u0627\u0634\u0629 \u063A\u064A\u0631 \u0635\u062D\u064A\u062D");
+  out.branch = input.branch || "";
+  if (out.branch && !/^[a-z][a-z0-9-]{1,31}$/.test(out.branch)) bad("\u0641\u0631\u0639 \u0627\u0644\u0634\u0627\u0634\u0629 \u063A\u064A\u0631 \u0635\u062D\u064A\u062D");
+  if (out.branchMode === "fixed" && !branches2.includes(out.branch)) bad("\u0627\u062E\u062A\u0631 \u0641\u0631\u0639\u064B\u0627 \u0641\u0639\u0627\u0644\u064B\u0627 \u0644\u062A\u062B\u0628\u064A\u062A \u0627\u0644\u0634\u0627\u0634\u0629");
+  out.colors = {};
+  for (const mode of ["light", "dark"]) {
+    out.colors[mode] = {};
+    for (const key of colorKeys) {
+      const value = input.colors?.[mode]?.[key] ?? colors[mode][key];
+      if (!/^#[0-9a-f]{6}$/i.test(value)) bad("\u0644\u0648\u0646 \u0634\u0627\u0634\u0629 \u0627\u0644\u062F\u0648\u0631 \u063A\u064A\u0631 \u0635\u062D\u064A\u062D");
+      out.colors[mode][key] = value;
+    }
+  }
+  return out;
+}
+
+// supabase/functions/clinic-api/site-content.js
+var SECTION_KEYS = ["header", "contacts", "about", "branches", "lookup", "footer"];
+function validate(value, layout = {}, fail4) {
+  const rows = Array.isArray(value) ? value : Object.values(value || {});
+  if (rows.length > 24) fail4("\u0627\u0644\u062D\u062F \u0627\u0644\u0623\u0642\u0635\u0649 24 \u0642\u0633\u0645\u064B\u0627");
+  const sections = {};
+  for (const [order, x] of rows.entries()) {
+    if (!x || typeof x !== "object" || !/^[-_a-zA-Z0-9]{1,80}$/.test(x.id || "") || Object.hasOwn(sections, x.id) || ["__proto__", "constructor", "prototype"].includes(x.id)) fail4("\u0645\u0639\u0631\u0651\u0641 \u0642\u0633\u0645 \u063A\u064A\u0631 \u0635\u062D\u064A\u062D \u0623\u0648 \u0645\u0643\u0631\u0631");
+    const item = { id: x.id, order, visible: x.visible !== false };
+    for (const [key, max] of [["title", 120], ["body", 4e3], ["linkLabel", 80]]) {
+      if (x[key] !== void 0 && (typeof x[key] !== "string" || x[key].length > max)) fail4("\u0646\u0635 \u0627\u0644\u0642\u0633\u0645 \u0637\u0648\u064A\u0644 \u0623\u0648 \u063A\u064A\u0631 \u0635\u062D\u064A\u062D");
+      item[key] = x[key] || "";
+    }
+    if (x.visible !== void 0 && typeof x.visible !== "boolean") fail4("\u062D\u0627\u0644\u0629 \u0625\u0638\u0647\u0627\u0631 \u0627\u0644\u0642\u0633\u0645 \u063A\u064A\u0631 \u0635\u062D\u064A\u062D\u0629");
+    item.kind = x.kind || "text";
+    if (!["text", "notice", "image"].includes(item.kind)) fail4("\u0646\u0648\u0639 \u0627\u0644\u0642\u0633\u0645 \u063A\u064A\u0631 \u0635\u062D\u064A\u062D");
+    item.link = x.link || "";
+    if (typeof item.link !== "string" || item.link.length > 1e3) fail4("\u0631\u0627\u0628\u0637 \u063A\u064A\u0631 \u0635\u062D\u064A\u062D");
+    if (item.link) {
+      let valid = /^tel:\+?\d{7,15}$/.test(item.link);
+      try {
+        const url = new URL(item.link);
+        valid ||= url.protocol === "https:" && !url.username && !url.password;
+      } catch {
+      }
+      if (!valid) fail4("\u0627\u0644\u0631\u0627\u0628\u0637 \u064A\u062C\u0628 \u0623\u0646 \u064A\u0628\u062F\u0623 \u0628\u0640 https:// \u0623\u0648 tel:");
+    }
+    item.image = x.image || "";
+    if (item.image) {
+      const match = typeof item.image === "string" && item.image.match(/^data:image\/(png|jpeg|webp);base64,([A-Za-z0-9+/]+=*)$/);
+      if (!match || match[2].length > 267e3) fail4("\u0635\u0648\u0631\u0629 \u0627\u0644\u0642\u0633\u0645 \u064A\u062C\u0628 \u0623\u0646 \u062A\u0643\u0648\u0646 PNG \u0623\u0648 JPEG \u0623\u0648 WebP \u062D\u062A\u0649 200 \u0643\u064A\u0644\u0648\u0628\u0627\u064A\u062A");
+      let bytes;
+      try {
+        bytes = Uint8Array.from(atob(match[2]), (c) => c.charCodeAt(0));
+      } catch {
+        fail4("\u0645\u062D\u062A\u0648\u0649 \u0627\u0644\u0635\u0648\u0631\u0629 \u063A\u064A\u0631 \u0635\u062D\u064A\u062D");
+      }
+      const good = bytes.length >= 12 && bytes.length <= 2e5 && (match[1] === "png" ? [137, 80, 78, 71, 13, 10, 26, 10].every((v, i) => bytes[i] === v) : match[1] === "jpeg" ? bytes[0] === 255 && bytes[1] === 216 && bytes[2] === 255 : String.fromCharCode(...bytes.slice(0, 4)) === "RIFF" && String.fromCharCode(...bytes.slice(8, 12)) === "WEBP");
+      if (!good) fail4("\u0645\u062D\u062A\u0648\u0649 \u0627\u0644\u0635\u0648\u0631\u0629 \u0644\u0627 \u064A\u0637\u0627\u0628\u0642 \u0646\u0648\u0639\u0647\u0627");
+    }
+    sections[item.id] = item;
+  }
+  if (!layout || typeof layout !== "object" || Array.isArray(layout) || Object.entries(layout).some(([k, v]) => !SECTION_KEYS.includes(k) || typeof v !== "boolean")) fail4("\u0625\u0639\u062F\u0627\u062F\u0627\u062A \u0638\u0647\u0648\u0631 \u0627\u0644\u0623\u0642\u0633\u0627\u0645 \u063A\u064A\u0631 \u0635\u062D\u064A\u062D\u0629");
+  if (JSON.stringify(sections).length > 65e4) fail4("\u0635\u0648\u0631 \u0648\u0645\u062D\u062A\u0648\u0649 \u0627\u0644\u0623\u0642\u0633\u0627\u0645 \u0623\u0643\u0628\u0631 \u0645\u0646 \u0627\u0644\u062D\u062F \u0627\u0644\u0645\u0633\u0645\u0648\u062D");
+  return { sections, layout: { ...layout } };
+}
+
+// supabase/functions/clinic-api/design-options.js
+var fail3 = (message) => {
+  const e = Error(message);
+  e.status = 400;
+  throw e;
+};
+var COLOR_KEYS = ["background", "card", "text", "primary", "accent", "muted", "line", "headerBackground", "headerText"];
+function validate2(d) {
+  const out = {};
+  if (d.themePreset !== void 0) {
+    if (!Number.isInteger(d.themePreset) || d.themePreset < 0 || d.themePreset > 9) fail3("\u062B\u064A\u0645 \u063A\u064A\u0631 \u0635\u062D\u064A\u062D");
+    out.themePreset = d.themePreset;
+  }
+  if (d.defaultMode !== void 0) {
+    if (!["system", "light", "dark"].includes(d.defaultMode)) fail3("\u0648\u0636\u0639 \u063A\u064A\u0631 \u0635\u062D\u064A\u062D");
+    out.defaultMode = d.defaultMode;
+  }
+  for (const [k, min, max] of [["headerWidth", 50, 100], ["headerRadius", 0, 48], ["headerHeight", 80, 420], ["logoSize", 40, 180], ["photoSize", 40, 160], ["aboutFontSize", 16, 48], ["aboutBorderWidth", 0, 8], ["aboutRadius", 0, 48], ["aboutPadding", 8, 48], ["aboutNeonSize", 0, 40], ["watermarkOpacity", 0, 100], ["watermarkSize", 100, 1200], ["headerTitleSize", 18, 64], ["headerSubtitleSize", 12, 36], ["headerTextSize", 12, 36], ["headerPadding", 0, 60], ["headerGap", 0, 48]]) if (d[k] !== void 0) {
+    if (!Number.isInteger(d[k]) || d[k] < min || d[k] > max) fail3("\u0645\u0642\u0627\u0633 \u062A\u0635\u0645\u064A\u0645 \u063A\u064A\u0631 \u0635\u062D\u064A\u062D");
+    out[k] = d[k];
+  }
+  if (d.headerAlign !== void 0) {
+    if (!["start", "center", "end"].includes(d.headerAlign)) fail3("\u0645\u062D\u0627\u0630\u0627\u0629 \u0627\u0644\u0647\u064A\u062F\u0631 \u063A\u064A\u0631 \u0635\u062D\u064A\u062D\u0629");
+    out.headerAlign = d.headerAlign;
+  }
+  for (const key of ["aboutTextColor", "aboutBackground", "aboutBorderColor", "aboutNeonColor"]) if (d[key] !== void 0) {
+    if (!/^#[0-9a-f]{6}$/i.test(d[key])) fail3("\u0644\u0648\u0646 \u0627\u0644\u0646\u0628\u0630\u0629 \u063A\u064A\u0631 \u0635\u062D\u064A\u062D");
+    out[key] = d[key];
+  }
+  if (d.watermarkEnabled !== void 0) {
+    if (typeof d.watermarkEnabled !== "boolean") fail3("\u062E\u064A\u0627\u0631 \u0627\u0644\u0644\u0648\u062C\u0648 \u0627\u0644\u062E\u0644\u0641\u064A\u0629 \u063A\u064A\u0631 \u0635\u062D\u064A\u062D");
+    out.watermarkEnabled = d.watermarkEnabled;
+  }
+  if (d.watermarkPosition !== void 0) {
+    if (!["center", "top", "bottom"].includes(d.watermarkPosition)) fail3("\u0645\u0643\u0627\u0646 \u0627\u0644\u0644\u0648\u062C\u0648 \u0627\u0644\u062E\u0644\u0641\u064A\u0629 \u063A\u064A\u0631 \u0635\u062D\u064A\u062D");
+    out.watermarkPosition = d.watermarkPosition;
+  }
+  if (d.aboutNeonEnabled !== void 0) {
+    if (typeof d.aboutNeonEnabled !== "boolean") fail3("\u062E\u064A\u0627\u0631 \u0627\u0644\u0646\u064A\u0648\u0646 \u063A\u064A\u0631 \u0635\u062D\u064A\u062D");
+    out.aboutNeonEnabled = d.aboutNeonEnabled;
+  }
+  if (d.aboutAlign !== void 0) {
+    if (!["start", "center", "end"].includes(d.aboutAlign)) fail3("\u0645\u062D\u0627\u0630\u0627\u0629 \u063A\u064A\u0631 \u0635\u062D\u064A\u062D\u0629");
+    out.aboutAlign = d.aboutAlign;
+  }
+  if (d.headerColors !== void 0) {
+    if (!d.headerColors || typeof d.headerColors !== "object" || Array.isArray(d.headerColors)) fail3("\u0623\u0644\u0648\u0627\u0646 \u0627\u0644\u0647\u064A\u062F\u0631 \u063A\u064A\u0631 \u0635\u062D\u064A\u062D\u0629");
+    out.headerColors = {};
+    for (const mode of ["light", "dark"]) {
+      const p = d.headerColors[mode];
+      if (!p || !/^#[0-9a-f]{6}$/i.test(p.background) || !/^#[0-9a-f]{6}$/i.test(p.text)) fail3("\u0623\u0644\u0648\u0627\u0646 \u0627\u0644\u0647\u064A\u062F\u0631 \u063A\u064A\u0631 \u0635\u062D\u064A\u062D\u0629");
+      out.headerColors[mode] = { background: p.background, text: p.text };
+    }
+  }
+  if (d.palettes !== void 0) {
+    if (!d.palettes || typeof d.palettes !== "object") fail3("\u0623\u0644\u0648\u0627\u0646 \u063A\u064A\u0631 \u0635\u062D\u064A\u062D\u0629");
+    out.palettes = {};
+    for (const mode of ["light", "dark"]) {
+      if (!d.palettes[mode]) continue;
+      out.palettes[mode] = {};
+      for (const k of COLOR_KEYS) if (d.palettes[mode][k] !== void 0) {
+        if (!/^#[0-9a-f]{6}$/i.test(d.palettes[mode][k])) fail3("\u0644\u0648\u0646 \u063A\u064A\u0631 \u0635\u062D\u064A\u062D");
+        out.palettes[mode][k] = d.palettes[mode][k];
+      }
+    }
+  }
+  return out;
+}
+
+// supabase/functions/clinic-api/storage-cleanup.js
+function enqueue(state, items) {
+  state.attachmentGarbage ||= {};
+  for (const item of Object.values(items || {})) if (/^[0-9a-f-]{36}$/.test(item?.key)) state.attachmentGarbage[item.key] = { queuedAt: (/* @__PURE__ */ new Date()).toISOString() };
+}
+async function drain(adapter2) {
+  const snapshot = await adapter2.read(), keys2 = Object.keys(snapshot.attachmentGarbage || {});
+  for (const key of keys2) {
+    if (!adapter2.deleteAttachment) continue;
+    try {
+      await adapter2.deleteAttachment(key);
+      await adapter2.mutate((original) => {
+        const s = structuredClone(original);
+        delete s.attachmentGarbage?.[key];
+        return s;
+      });
+    } catch {
+    }
+  }
+  return Object.keys((await adapter2.read()).attachmentGarbage || {}).length;
+}
+
+// supabase/functions/clinic-api/management.js
+function site(value, fail4) {
+  if (!value || typeof value !== "object" || Array.isArray(value)) fail4("\u0628\u064A\u0627\u0646\u0627\u062A \u0627\u0644\u0645\u0648\u0642\u0639 \u063A\u064A\u0631 \u0635\u062D\u064A\u062D\u0629");
+  const result = {};
+  for (const k of ["doctorName", "specialty", "clinicName", "bookingPhone", "emergencyPhone", "about", "footer", "headerTitle", "headerSubtitle", "headerText"]) {
+    if (value[k] !== void 0) {
+      if (typeof value[k] !== "string" || value[k].length > (["about", "footer", "headerTitle", "headerSubtitle", "headerText"].includes(k) ? 2e3 : 160)) fail4("\u0627\u0644\u0646\u0635 \u0637\u0648\u064A\u0644 \u0623\u0648 \u063A\u064A\u0631 \u0635\u062D\u064A\u062D");
+      result[k] = value[k];
+    }
+  }
+  for (const k of ["bookingPhone", "emergencyPhone"]) if (result[k] && !/^\+?[0-9]{7,15}$/.test(result[k])) fail4("\u0631\u0642\u0645 \u0627\u0644\u0647\u0627\u062A\u0641 \u063A\u064A\u0631 \u0635\u062D\u064A\u062D");
+  result.branches = {};
+  for (const b of Object.keys(value.branches || {})) {
+    if (!validId2(b)) fail4("\u0631\u0645\u0632 \u0641\u0631\u0639 \u063A\u064A\u0631 \u0635\u062D\u064A\u062D");
+    const x = value.branches?.[b];
+    if (!x) continue;
+    result.branches[b] = {};
+    for (const k of ["name", "address", "phone"]) {
+      if (typeof x[k] !== "string" || x[k].length > 300) fail4("\u0628\u064A\u0627\u0646\u0627\u062A \u0627\u0644\u0641\u0631\u0639 \u063A\u064A\u0631 \u0635\u062D\u064A\u062D\u0629");
+      result.branches[b][k] = x[k];
+    }
+    if (x.phone && !/^\+?[0-9]{7,15}$/.test(x.phone)) fail4("\u0647\u0627\u062A\u0641 \u0627\u0644\u0641\u0631\u0639 \u063A\u064A\u0631 \u0635\u062D\u064A\u062D");
+  }
+  Object.assign(result, validate(value.sections, value.layout, fail4));
+  const d = value.design || {};
+  result.design = validate2(d);
+  for (const k of ["primary", "background", "text", "accent", "card"]) {
+    if (d[k] !== void 0) {
+      if (!/^#[0-9a-f]{6}$/i.test(d[k])) fail4("\u0644\u0648\u0646 \u063A\u064A\u0631 \u0635\u062D\u064A\u062D");
+      result.design[k] = d[k];
+    }
+  }
+  for (const [k, min, max] of [["radius", 0, 40], ["width", 600, 1200], ["fontSize", 14, 22]]) if (d[k] !== void 0) {
+    if (!Number.isInteger(d[k]) || d[k] < min || d[k] > max) fail4("\u0642\u064A\u0645\u0629 \u062A\u0635\u0645\u064A\u0645 \u063A\u064A\u0631 \u0635\u062D\u064A\u062D\u0629");
+    result.design[k] = d[k];
+  }
+  if (d.showBackground !== void 0) {
+    if (typeof d.showBackground !== "boolean") fail4("\u062E\u064A\u0627\u0631 \u0627\u0644\u062E\u0644\u0641\u064A\u0629 \u063A\u064A\u0631 \u0635\u062D\u064A\u062D");
+    result.design.showBackground = d.showBackground;
+  }
+  for (const k of ["logo", "doctorPhoto", "watermarkImage"]) if (d[k] !== void 0) {
+    if (d[k] === "") {
+      result.design[k] = "";
+      continue;
+    }
+    const match = String(d[k]).match(/^data:image\/(png|jpeg|webp);base64,([A-Za-z0-9+/]+=*)$/);
+    if (!match) fail4("\u0627\u0644\u0635\u0648\u0631\u0629 \u064A\u062C\u0628 \u0623\u0646 \u062A\u0643\u0648\u0646 PNG \u0623\u0648 JPEG \u0623\u0648 WebP");
+    const bytes = Buffer2.from(match[2], "base64");
+    if (bytes.length > 2e5 || bytes.length < 12) fail4("\u062D\u062C\u0645 \u0627\u0644\u0635\u0648\u0631\u0629 \u063A\u064A\u0631 \u0645\u0646\u0627\u0633\u0628");
+    const good = match[1] === "png" ? bytes.subarray(0, 8).equals(Buffer2.from([137, 80, 78, 71, 13, 10, 26, 10])) : match[1] === "jpeg" ? bytes[0] === 255 && bytes[1] === 216 : bytes.toString("ascii", 0, 4) === "RIFF" && bytes.toString("ascii", 8, 12) === "WEBP";
+    if (!good) fail4("\u0645\u062D\u062A\u0648\u0649 \u0627\u0644\u0635\u0648\u0631\u0629 \u063A\u064A\u0631 \u0635\u062D\u064A\u062D");
+    result.design[k] = d[k];
+  }
+  return result;
+}
+function mutate(original, uid, input, core) {
+  const s = structuredClone(original), r = core.role(s, uid);
+  if (input.action === "displaySave") {
+    requirePermission(r, "display.manage");
+    if (input.revision !== (s.settings?.displayRev || 0)) core.fail("\u062A\u063A\u064A\u0631\u062A \u0625\u0639\u062F\u0627\u062F\u0627\u062A \u0627\u0644\u0634\u0627\u0634\u0629 \u0645\u0646 \u062C\u0644\u0633\u0629 \u0623\u062E\u0631\u0649\u061B \u0623\u0639\u062F \u0627\u0644\u062A\u062D\u0645\u064A\u0644 \u0623\u0648\u0644\u064B\u0627", 409);
+    s.settings ||= {};
+    const normalized = normalize2(input.config, core.branchIds(s, true)), previous = normalize2(s.settings.display || {}, core.branchIds(s, true));
+    if (r.r !== "admin" && Object.keys(normalized).some((key) => (key === "footerText" || key.startsWith("notice")) && JSON.stringify(normalized[key]) !== JSON.stringify(previous[key]))) core.fail("\u062A\u0639\u062F\u064A\u0644 \u062A\u0635\u0645\u064A\u0645 \u0631\u0633\u0627\u0644\u0629 \u0627\u0644\u0637\u0648\u0627\u0631\u0626 \u0645\u062A\u0627\u062D \u0644\u0644\u0623\u062F\u0645\u0646 \u0641\u0642\u0637", 403);
+    s.settings.display = normalized;
+    s.settings.displayRev = (s.settings.displayRev || 0) + 1;
+    return s;
+  }
+  if (input.action === "siteContentSave") {
+    requirePermission(r, "site.manage");
+    if (input.revision !== (s.settings?.contentRev || 0)) core.fail("\u062A\u0645 \u062A\u0639\u062F\u064A\u0644 \u0627\u0644\u0645\u062D\u062A\u0648\u0649 \u0645\u0646 \u062C\u0644\u0633\u0629 \u0623\u062E\u0631\u0649\u061B \u0623\u0639\u062F \u0627\u0644\u062A\u062D\u0645\u064A\u0644 \u0642\u0628\u0644 \u0627\u0644\u062D\u0641\u0638", 409);
+    const content = validate(input.sections, input.layout, core.fail);
+    s.settings ||= {};
+    s.settings.site = { ...s.settings.site, ...content };
+    s.settings.contentRev = (s.settings.contentRev || 0) + 1;
+    return s;
+  }
+  if (input.action === "watermarkSave") {
+    requirePermission(r, "site.manage");
+    if (input.revision !== (s.settings?.watermarkRev || 0)) core.fail("\u062A\u0645 \u062A\u0639\u062F\u064A\u0644 \u0627\u0644\u0644\u0648\u062C\u0648 \u0627\u0644\u062E\u0644\u0641\u064A\u0629 \u0645\u0646 \u062C\u0644\u0633\u0629 \u0623\u062E\u0631\u0649\u061B \u0623\u0639\u062F \u062A\u062D\u0645\u064A\u0644 \u0627\u0644\u0625\u0639\u062F\u0627\u062F\u0627\u062A \u0623\u0648\u0644\u064B\u0627", 409);
+    const incoming = site({ design: input.design }, core.fail);
+    s.settings ||= {};
+    const current = s.settings.site || {}, design = { ...current.design };
+    for (const key of Object.keys(design)) if (key.startsWith("watermark")) delete design[key];
+    for (const [key, value] of Object.entries(incoming.design)) if (key.startsWith("watermark")) design[key] = value;
+    s.settings.previousDesign = structuredClone(current.design || {});
+    s.settings.site = { ...current, design };
+    s.settings.watermarkRev = (s.settings.watermarkRev || 0) + 1;
+    return s;
+  }
+  if (input.action === "aboutSave") {
+    requirePermission(r, "site.manage");
+    if (input.revision !== (s.settings?.aboutRev || 0)) core.fail("\u062A\u0645 \u062A\u0639\u062F\u064A\u0644 \u0646\u0628\u0630\u0629 \u0627\u0644\u0639\u064A\u0627\u062F\u0629 \u0645\u0646 \u062C\u0644\u0633\u0629 \u0623\u062E\u0631\u0649\u061B \u0623\u0639\u062F \u062A\u062D\u0645\u064A\u0644 \u0627\u0644\u0625\u0639\u062F\u0627\u062F\u0627\u062A \u0623\u0648\u0644\u064B\u0627", 409);
+    if (typeof input.text !== "string") core.fail("\u0646\u0635 \u0627\u0644\u0646\u0628\u0630\u0629 \u063A\u064A\u0631 \u0635\u062D\u064A\u062D");
+    const incoming = site({ about: input.text, design: input.design }, core.fail);
+    s.settings ||= {};
+    const current = s.settings.site || {}, design = { ...current.design };
+    for (const key of Object.keys(design)) if (key.startsWith("about")) delete design[key];
+    for (const [key, value] of Object.entries(incoming.design)) if (key.startsWith("about")) design[key] = value;
+    if (JSON.stringify(current.design) !== JSON.stringify(design)) s.settings.previousDesign = structuredClone(current.design || {});
+    s.settings.site = { ...current, about: incoming.about, design };
+    s.settings.aboutRev = (s.settings.aboutRev || 0) + 1;
+    return s;
+  }
+  if (input.action === "headerSave") {
+    requirePermission(r, "site.manage");
+    if (input.revision !== (s.settings?.headerRev || 0)) core.fail("\u062A\u0645 \u062A\u0639\u062F\u064A\u0644 \u0627\u0644\u0647\u064A\u062F\u0631 \u0645\u0646 \u062C\u0644\u0633\u0629 \u0623\u062E\u0631\u0649\u061B \u0623\u0639\u062F \u062A\u062D\u0645\u064A\u0644 \u0627\u0644\u0625\u0639\u062F\u0627\u062F\u0627\u062A \u0623\u0648\u0644\u064B\u0627", 409);
+    const incoming = site(input.site, core.fail);
+    s.settings ||= {};
+    const current = s.settings.site || {}, next = { ...current }, design = { ...current.design };
+    for (const key of ["headerTitle", "headerSubtitle", "headerText"]) if (incoming[key] !== void 0) next[key] = incoming[key];
+    for (const key of ["headerWidth", "headerRadius", "headerHeight", "headerTitleSize", "headerSubtitleSize", "headerTextSize", "logoSize", "photoSize", "headerPadding", "headerGap", "headerAlign", "logo", "doctorPhoto"]) if (incoming.design[key] !== void 0) design[key] = incoming.design[key];
+    if (incoming.design.headerColors) design.headerColors = incoming.design.headerColors;
+    if (incoming.design.palettes) {
+      design.palettes = structuredClone(current.design?.palettes || {});
+      for (const mode of ["light", "dark"]) if (incoming.design.palettes?.[mode]) {
+        const colors2 = incoming.design.palettes[mode];
+        design.palettes[mode] = { ...colors2, ...design.palettes[mode] };
+        for (const key of ["headerBackground", "headerText"]) if (colors2[key] !== void 0) design.palettes[mode][key] = colors2[key];
+      }
+    }
+    if (JSON.stringify(current.design) !== JSON.stringify(design)) s.settings.previousDesign = structuredClone(current.design || {});
+    next.design = design;
+    s.settings.site = next;
+    s.settings.headerRev = (s.settings.headerRev || 0) + 1;
+    return s;
+  }
+  if (input.action === "siteSave") {
+    requirePermission(r, "site.manage");
+    s.settings ||= {};
+    const nextSite = site(input.site, core.fail);
+    nextSite.sections = s.settings.site?.sections || {};
+    nextSite.layout = s.settings.site?.layout || {};
+    if (JSON.stringify(s.settings.site?.design) !== JSON.stringify(nextSite.design)) s.settings.previousDesign = structuredClone(s.settings.site?.design || {});
+    s.settings.site = nextSite;
+    if (s.settings.branches) for (const [b, x] of Object.entries(s.settings.site.branches)) {
+      if (s.settings.branches[b]) s.settings.branches[b] = { ...s.settings.branches[b], ...x };
+    }
+    return s;
+  }
+  if (input.action === "userSave") {
+    requirePermission(r, "users.manage");
+    if (!s.roles[input.uid]) core.fail("\u0627\u0644\u0645\u0633\u062A\u062E\u062F\u0645 \u063A\u064A\u0631 \u0645\u0648\u062C\u0648\u062F", 404);
+    if (s.roles[input.uid].deletePending) core.fail("\u062D\u0630\u0641 \u0627\u0644\u062D\u0633\u0627\u0628 \u0645\u0639\u0644\u0642\u061B \u0627\u0633\u062A\u0643\u0645\u0644 \u0627\u0644\u062D\u0630\u0641 \u0623\u0648\u0644\u064B\u0627", 409);
+    const next = validateRole(input.role, core.fail, core.branchIds(s));
+    if (next.u !== s.roles[input.uid].u) core.fail("\u0627\u0633\u0645 \u0627\u0644\u062F\u062E\u0648\u0644 \u062B\u0627\u0628\u062A\u061B \u064A\u0645\u0643\u0646\u0643 \u062A\u0639\u062F\u064A\u0644 \u0627\u0644\u0627\u0633\u0645 \u0627\u0644\u0638\u0627\u0647\u0631");
+    if (s.roles[input.uid].r === "admin" && (next.r !== "admin" || next.enabled === false) && !Object.entries(s.roles).some(([id2, x]) => id2 !== input.uid && x.r === "admin" && x.enabled !== false)) core.fail("\u064A\u062C\u0628 \u0625\u0628\u0642\u0627\u0621 \u062D\u0633\u0627\u0628 \u0645\u062F\u064A\u0631 \u0641\u0639\u0627\u0644 \u0648\u0627\u062D\u062F \u0639\u0644\u0649 \u0627\u0644\u0623\u0642\u0644");
+    s.roles[input.uid] = next;
+    return s;
+  }
+  if (input.action === "patientSave") {
+    requirePermission(r, "patients.edit");
+    indexPatients(s);
+    const p = core.phone(input.phone), to = core.phone(input.newPhone || p), name = String(input.name || "").trim();
+    if (!/^01[0125]\d{8}$/.test(p) || !/^01[0125]\d{8}$/.test(to) || !name || name.length > 120) core.fail("\u0631\u0627\u062C\u0639 \u0627\u0633\u0645 \u0627\u0644\u062D\u0627\u0644\u0629 \u0648\u0627\u0644\u0647\u0627\u062A\u0641");
+    if (s.patients[p]) assertAccess(s, r, p);
+    if (p !== to && s.patients[to]) core.fail("\u0631\u0642\u0645 \u0627\u0644\u0647\u0627\u062A\u0641 \u0627\u0644\u062C\u062F\u064A\u062F \u0645\u0633\u062A\u062E\u062F\u0645 \u0644\u062D\u0627\u0644\u0629 \u0623\u062E\u0631\u0649", 409);
+    const spouse2 = {};
+    for (const k of ["spouseName", "spouseJob", "spousePhone"]) if (Object.hasOwn(input, k)) {
+      if (typeof input[k] !== "string" || input[k].length > 120) core.fail("\u0631\u0627\u062C\u0639 \u0628\u064A\u0627\u0646\u0627\u062A \u0627\u0644\u0632\u0648\u062C");
+      spouse2[k] = k === "spousePhone" ? core.phone(input[k]) : input[k].trim();
+      if (k === "spousePhone" && spouse2[k] && !/^01[0125]\d{8}$/.test(spouse2[k])) core.fail("\u0631\u0642\u0645 \u0645\u0648\u0628\u0627\u064A\u0644 \u0627\u0644\u0632\u0648\u062C \u063A\u064A\u0631 \u0635\u062D\u064A\u062D");
+    }
+    s.patients[to] = { ...s.patients[p], ...spouse2, n: name, d: s.patients[p]?.d || core.today(), ...!allPatients(r) ? { br: r.br } : {} };
+    if (p !== to) delete s.patients[p];
+    for (const rows of Object.values(s.bookings || {})) for (const x of Object.values(rows)) if (x.phone === p) {
+      x.phone = to;
+      x.name = name;
+      x.rev = (x.rev || 0) + 1;
+    }
+    if (p !== to) {
+      for (const kind of ["files", "complaints", "followups", "attachments", "complaintSequences"]) if (s[kind]?.[p]) {
+        s[kind][to] = s[kind][p];
+        delete s[kind][p];
+      }
+    }
+    for (const n of Object.values(s.inbox || {})) if (n.p === p) {
+      n.p = to;
+      n.n = name;
+    }
+    core.rebuild(s);
+    return s;
+  }
+  if (input.action === "patientDelete") {
+    requirePermission(r, "patients.delete");
+    const p = core.phone(input.phone);
+    if (!/^01[0125]\d{8}$/.test(p)) core.fail("\u0647\u0627\u062A\u0641 \u063A\u064A\u0631 \u0635\u062D\u064A\u062D");
+    assertAccess(s, r, p);
+    enqueue(s, s.attachments?.[p]);
+    delete s.complaintSequences?.[p];
+    for (const rows of Object.values(s.bookings || {})) for (const [id2, x] of Object.entries(rows)) if (x.phone === p) delete rows[id2];
+    for (const [id2, x] of Object.entries(s.deletedBookings || {})) if (x.booking.phone === p) delete s.deletedBookings[id2];
+    for (const kind of ["patients", "files", "complaints", "followups", "attachments", "complaintSequences"]) delete s[kind]?.[p];
+    for (const [id2, x] of Object.entries(s.inbox || {})) if (x.p === p) delete s.inbox[id2];
+    core.rebuild(s);
+    return s;
+  }
+  if (input.action === "dataClear") {
+    requirePermission(r, "data.delete");
+    if (input.confirmation !== "DELETE_CLINIC_DATA") core.fail("\u062A\u0623\u0643\u064A\u062F \u0627\u0644\u062D\u0630\u0641 \u0645\u0637\u0644\u0648\u0628");
+    for (const items of Object.values(s.attachments || {})) enqueue(s, items);
+    for (const kind of ["bookings", "patients", "files", "complaints", "inbox", "track", "deletedBookings", "sessions", "followups", "attachments", "complaintSequences"]) s[kind] = {};
+    return s;
+  }
+  core.fail("\u0639\u0645\u0644\u064A\u0629 \u063A\u064A\u0631 \u0645\u0633\u0645\u0648\u062D\u0629", 403);
+}
+
+// supabase/functions/clinic-api/data-import.js
+var bad2 = (path, message) => fail2("\u0645\u0644\u0641 \u0627\u0644\u0627\u0633\u062A\u064A\u0631\u0627\u062F: " + path + " - " + message);
+var object = (x) => !!x && typeof x === "object" && !Array.isArray(x);
+var safeId = (x) => typeof x === "string" && /^[A-Za-z0-9_-]{1,128}$/.test(x) && !Object.hasOwn(Object.prototype, x);
+function canonical(x) {
+  return Array.isArray(x) ? x.map(canonical) : object(x) ? Object.fromEntries(Object.keys(x).sort().map((k) => [k, canonical(x[k])])) : x;
+}
+var same = (a, b) => JSON.stringify(canonical(a)) === JSON.stringify(canonical(b));
+function text(x, max, path, optional = false) {
+  if (optional && x === void 0) return "";
+  if (typeof x !== "string" || x.length > max) bad2(path, "\u0646\u0635 \u063A\u064A\u0631 \u0635\u062D\u064A\u062D \u0623\u0648 \u0623\u0637\u0648\u0644 \u0645\u0646 \u0627\u0644\u062D\u062F \u0627\u0644\u0645\u0633\u0645\u0648\u062D");
+  return x;
+}
+function stamp(x, path) {
+  if (x === void 0 || x === "") return void 0;
+  if (typeof x !== "string" || x.length > 60 || !Number.isFinite(Date.parse(x))) bad2(path, "\u062A\u0648\u0642\u064A\u062A \u063A\u064A\u0631 \u0635\u062D\u064A\u062D");
+  return new Date(x).toISOString();
+}
+function phone2(x, path) {
+  const p = phone(x);
+  if (!/^01[0125]\d{8}$/.test(p)) bad2(path, "\u0631\u0642\u0645 \u0645\u0648\u0628\u0627\u064A\u0644 \u063A\u064A\u0631 \u0635\u062D\u064A\u062D");
+  return p;
+}
+function guardTree(value, depth = 0) {
+  if (depth > 18) bad2("\u0627\u0644\u0645\u0644\u0641", "\u0628\u0646\u064A\u0629 \u0645\u062A\u062F\u0627\u062E\u0644\u0629 \u0623\u0643\u062B\u0631 \u0645\u0646 \u0627\u0644\u0645\u0633\u0645\u0648\u062D");
+  if (object(value) || Array.isArray(value)) for (const [k, v] of Object.entries(value)) {
+    if (["__proto__", "constructor", "prototype"].includes(k)) bad2("\u0627\u0644\u0645\u0644\u0641", "\u0645\u0641\u062A\u0627\u062D \u063A\u064A\u0631 \u0645\u0633\u0645\u0648\u062D");
+    guardTree(v, depth + 1);
+  }
+}
+function normalize3(input, state = {}, withSettings = false, maxBytes = 85e4) {
+  if (!object(input)) bad2("\u0627\u0644\u0645\u0644\u0641", "\u0627\u062E\u062A\u0631 \u0646\u0633\u062E\u0629 JSON \u0635\u062D\u064A\u062D\u0629 \u0623\u0648 \u0627\u0644\u0642\u0627\u0644\u0628 \u0627\u0644\u0645\u062E\u0635\u0635");
+  if (Buffer3.byteLength(JSON.stringify(input), "utf8") > maxBytes) bad2("\u0627\u0644\u062D\u062C\u0645", "\u0627\u0644\u0628\u064A\u0627\u0646\u0627\u062A \u0628\u0639\u062F \u0627\u0644\u0642\u0631\u0627\u0621\u0629 \u062A\u062A\u062C\u0627\u0648\u0632 850 \u0643\u064A\u0644\u0648\u0628\u0627\u064A\u062A\u061B \u0642\u0633\u0651\u0645 \u0627\u0644\u0645\u0644\u0641");
+  guardTree(input);
+  const data = object(input.payload) ? input.payload : input;
+  if (data.schemaVersion !== void 0 && data.schemaVersion !== 1) bad2("\u0627\u0644\u0625\u0635\u062F\u0627\u0631", "\u0625\u0635\u062F\u0627\u0631 \u0627\u0644\u0646\u0633\u062E\u0629 \u063A\u064A\u0631 \u0645\u062F\u0639\u0648\u0645");
+  if (!["patients", "bookings", "files", "complaints", "settings"].some((k) => Object.hasOwn(data, k))) bad2("\u0627\u0644\u0645\u062D\u062A\u0648\u0649", "\u0644\u0627 \u062A\u0648\u062C\u062F \u0628\u064A\u0627\u0646\u0627\u062A \u0639\u064A\u0627\u062F\u0629 \u0642\u0627\u0628\u0644\u0629 \u0644\u0644\u0627\u0633\u062A\u064A\u0631\u0627\u062F");
+  if (withSettings && data.settings?.branches) {
+    for (const [b, x] of Object.entries(data.settings.branches)) if (x?.enabled === false && (Object.values(state.bookings?.[today()] || {}).some((v) => v.b === b && v.s === "exam") || ["running", "paused"].includes(state.sessions?.[today() + "_" + b]?.status))) fail2("\u0623\u0646\u0647 \u062C\u0644\u0633\u0629 \u0627\u0644\u0641\u0631\u0639 \u0642\u0628\u0644 \u0627\u0633\u062A\u064A\u0631\u0627\u062F \u062A\u0639\u0637\u064A\u0644\u0647", 409);
+  }
+  if (withSettings && data.settings?.branches) state = { ...state, settings: { ...state.settings, branches: { ...branches(state), ...validateRegistry(data.settings.branches, fail2) } } };
+  const out = { patients: {}, bookings: {}, files: {}, complaints: {}, complaintSequences: {}, settings: null, ignored: Object.keys(data).filter((k) => !["patients", "bookings", "files", "complaints", "complaintSequences", "settings", "exportedAt", "format", "schemaVersion"].includes(k)) };
+  let count = 0;
+  const map = (value, path, fn) => {
+    if (value === void 0) return;
+    if (!object(value)) bad2(path, "\u064A\u062C\u0628 \u0623\u0646 \u064A\u0643\u0648\u0646 \u0645\u062C\u0645\u0648\u0639\u0629 \u0633\u062C\u0644\u0627\u062A");
+    for (const [k, v] of Object.entries(value)) {
+      if (++count > 5e3) bad2("\u0627\u0644\u0633\u062C\u0644\u0627\u062A", "\u0639\u062F\u062F \u0627\u0644\u0633\u062C\u0644\u0627\u062A \u0623\u0643\u0628\u0631 \u0645\u0646 \u0627\u0644\u0645\u0633\u0645\u0648\u062D");
+      fn(k, v);
+    }
+  };
+  map(data.patients, "patients", (raw, x) => {
+    const p = phone2(raw, "patients");
+    if (out.patients[p]) bad2("patients", "\u0631\u0642\u0645 \u0645\u0643\u0631\u0631 \u0628\u0635\u064A\u063A\u0629 \u0645\u062E\u062A\u0644\u0641\u0629");
+    if (!object(x)) bad2("patients", "\u0633\u062C\u0644 \u063A\u064A\u0631 \u0635\u062D\u064A\u062D");
+    const n = text(x.n, 120, "\u0627\u0633\u0645 \u0627\u0644\u0645\u0631\u064A\u0636").trim();
+    if (!n) bad2("\u0627\u0644\u0627\u0633\u0645", "\u0627\u0633\u0645 \u0627\u0644\u062D\u0627\u0644\u0629 \u0645\u0637\u0644\u0648\u0628");
+    out.patients[p] = { n, d: x.d ? date(x.d) : today() };
+    if (x.br !== void 0) {
+      if (!branchIds(state).includes(x.br)) bad2("\u0641\u0631\u0639 \u0627\u0644\u062D\u0627\u0644\u0629", "\u0641\u0631\u0639 \u063A\u064A\u0631 \u0645\u0639\u0631\u0648\u0641");
+      out.patients[p].br = x.br;
+    }
+    if (x.visitType !== void 0) {
+      if (!["exam", "cons", "follow", "emergency"].includes(x.visitType)) bad2("\u0646\u0648\u0639 \u0627\u0644\u0632\u064A\u0627\u0631\u0629", "\u0642\u064A\u0645\u0629 \u063A\u064A\u0631 \u0635\u062D\u064A\u062D\u0629");
+      out.patients[p].visitType = x.visitType;
+    }
+    for (const k of ["spouseName", "spouseJob", "spousePhone"]) if (x[k] !== void 0) out.patients[p][k] = k === "spousePhone" ? x[k] ? phone2(x[k], k) : "" : text(x[k], 120, k);
+  });
+  const seenIds = /* @__PURE__ */ new Set(), seenPhones = /* @__PURE__ */ new Set();
+  map(data.bookings, "bookings", (d, rows) => {
+    date(d);
+    map(rows, "bookings/" + d, (id2, x) => {
+      if (!object(x) || x.id !== id2 || x.date !== d || !safeId(id2)) bad2("bookings/" + d, "\u0645\u0639\u0631\u0651\u0641 \u0623\u0648 \u062A\u0627\u0631\u064A\u062E \u062D\u062C\u0632 \u063A\u064A\u0631 \u0645\u062A\u0637\u0627\u0628\u0642");
+      const n = booking(x, state);
+      if (seenIds.has(id2) || seenPhones.has(d + "|" + n.phone)) bad2("bookings/" + d, "\u062D\u062C\u0632 \u0645\u0643\u0631\u0631 \u0641\u064A \u0627\u0644\u0645\u0644\u0641");
+      seenIds.add(id2);
+      seenPhones.add(d + "|" + n.phone);
+      if (seenIds.size > 1e3) bad2("\u0627\u0644\u062D\u062C\u0648\u0632\u0627\u062A", "\u0627\u0644\u062D\u062F \u0627\u0644\u0623\u0642\u0635\u0649 1000 \u062D\u062C\u0632 \u0641\u064A \u0627\u0644\u0639\u0645\u0644\u064A\u0629");
+      if (x.no !== void 0 && (!Number.isSafeInteger(x.no) || x.no < 1 || x.no > 1e7)) bad2("\u0631\u0642\u0645 \u0627\u0644\u062A\u0630\u0643\u0631\u0629", "\u0631\u0642\u0645 \u063A\u064A\u0631 \u0635\u062D\u064A\u062D");
+      const startedAt = stamp(x.startedAt, "\u0628\u062F\u0621 \u0627\u0644\u0643\u0634\u0641");
+      out.bookings[d] ||= {};
+      out.bookings[d][id2] = { ...n, ...x.no ? { no: x.no } : {}, ...startedAt ? { startedAt } : {}, rev: 1 };
+      for (const k of ["createdAt", "updatedAt"]) if (x[k]) out.bookings[d][id2][k] = stamp(x[k], k);
+      for (const k of ["createdBy", "updatedBy"]) if (x[k]) out.bookings[d][id2][k] = text(x[k], 128, k);
+    });
+  });
+  map(data.files, "files", (raw, x) => {
+    const p = phone2(raw, "files");
+    if (!object(x) || out.files[p]) bad2("files", "\u0645\u0644\u0641 \u063A\u064A\u0631 \u0635\u062D\u064A\u062D \u0623\u0648 \u0631\u0642\u0645 \u0645\u0643\u0631\u0631");
+    const f = { n: text(x.n, 5e3, "\u0645\u0644\u0627\u062D\u0638\u0627\u062A \u0627\u0644\u0637\u0628\u064A\u0628", true) };
+    for (const k of ["allergies", "chronic", "diagnosis", "treatment", "followUp", "source"]) if (x[k] !== void 0) {
+      f[k] = text(x[k], k === "source" ? 512 : 2e3, "files/" + k);
+      if (k === "followUp" && f[k]) date(f[k]);
+    }
+    if (x.t) f.t = stamp(x.t, "\u062A\u062D\u062F\u064A\u062B \u0627\u0644\u0645\u0644\u0641");
+    if (x.by !== void 0) f.by = text(x.by, 128, "\u0643\u0627\u062A\u0628 \u0627\u0644\u0645\u0644\u0641");
+    if (x.importedRecords !== void 0) {
+      if (!Array.isArray(x.importedRecords) || x.importedRecords.length > 100) bad2("files", "\u0623\u0631\u0634\u064A\u0641 \u062F\u0645\u062C \u063A\u064A\u0631 \u0635\u062D\u064A\u062D");
+      f.importedRecords = x.importedRecords.map((y) => {
+        if (!object(y)) bad2("files", "\u0633\u062C\u0644 \u0645\u062F\u0645\u062C \u063A\u064A\u0631 \u0635\u062D\u064A\u062D");
+        const z = { sourcePhone: phone2(y.sourcePhone, "\u0645\u0644\u0641 \u0645\u062F\u0645\u062C"), mergedAt: stamp(y.mergedAt, "\u062A\u0627\u0631\u064A\u062E \u0627\u0644\u062F\u0645\u062C"), n: text(y.n, 5e3, "\u0645\u0644\u0627\u062D\u0638\u0627\u062A \u0645\u062F\u0645\u062C\u0629", true) };
+        for (const k of ["allergies", "chronic", "diagnosis", "treatment"]) if (y[k] !== void 0) z[k] = text(y[k], 2e3, k);
+        if (y.t) z.t = stamp(y.t, "\u062A\u0627\u0631\u064A\u062E \u0627\u0644\u0633\u062C\u0644");
+        if (y.by) z.by = text(y.by, 128, "\u0643\u0627\u062A\u0628 \u0627\u0644\u0633\u062C\u0644");
+        return z;
+      });
+    }
+    out.files[p] = f;
+  });
+  map(data.complaints, "complaints", (raw, rows) => {
+    const p = phone2(raw, "complaints");
+    if (out.complaints[p]) bad2("complaints", "\u0631\u0642\u0645 \u0645\u0643\u0631\u0631");
+    out.complaints[p] = {};
+    map(rows, "complaints/" + p, (id2, x) => {
+      if (!safeId(id2) || !object(x) || x.id !== id2) bad2("complaints", "\u0645\u0639\u0631\u0651\u0641 \u0634\u0643\u0648\u0649 \u063A\u064A\u0631 \u0635\u062D\u064A\u062D");
+      const date2 = date(x.date);
+      if (date2 > today()) bad2("complaints", "\u062A\u0627\u0631\u064A\u062E \u0627\u0644\u0634\u0643\u0648\u0649 \u0644\u0627 \u064A\u0643\u0648\u0646 \u0641\u064A \u0627\u0644\u0645\u0633\u062A\u0642\u0628\u0644");
+      const body = text(x.text, 2e3, "\u0627\u0644\u0634\u0643\u0648\u0649");
+      if (!body.trim()) bad2("\u0627\u0644\u0634\u0643\u0648\u0649", "\u0627\u0644\u0646\u0635 \u0645\u0637\u0644\u0648\u0628");
+      if (x.no !== void 0 && (!Number.isSafeInteger(x.no) || x.no < 1)) bad2("complaints", "\u0631\u0642\u0645 \u0634\u0643\u0648\u0649 \u063A\u064A\u0631 \u0635\u062D\u064A\u062D");
+      out.complaints[p][id2] = { id: id2, ...x.no ? { no: x.no } : {}, reason: text(x.reason, 2e3, "\u0633\u0628\u0628 \u0627\u0644\u0634\u0643\u0648\u0649", true), date: date2, text: body, tx: text(x.tx, 1e3, "\u0627\u0644\u0639\u0644\u0627\u062C", true), by: text(x.by, 128, "\u0643\u0627\u062A\u0628 \u0627\u0644\u0634\u0643\u0648\u0649", true) || "\u0645\u0633\u062A\u0648\u0631\u062F", ...x.at ? { at: stamp(x.at, "\u0648\u0642\u062A \u0627\u0644\u0634\u0643\u0648\u0649") } : {} };
+    });
+  });
+  map(data.complaintSequences, "complaintSequences", (raw, value) => {
+    const p = phone2(raw, "complaintSequences");
+    if (!Number.isSafeInteger(value) || value < 0 || value > 1e8) bad2("complaintSequences", "\u0639\u062F\u0627\u062F \u0634\u0643\u0648\u0649 \u063A\u064A\u0631 \u0635\u062D\u064A\u062D");
+    out.complaintSequences[p] = value;
+  });
+  if (data.settings !== void 0) {
+    if (!object(data.settings)) bad2("settings", "\u0625\u0639\u062F\u0627\u062F\u0627\u062A \u063A\u064A\u0631 \u0635\u062D\u064A\u062D\u0629");
+    out.settings = {};
+    if (data.settings.branches !== void 0) out.settings.branches = validateRegistry(data.settings.branches, fail2);
+    if (data.settings.avg !== void 0) {
+      if (!Number.isInteger(data.settings.avg) || data.settings.avg < 1 || data.settings.avg > 180) bad2("\u0627\u0644\u0645\u062A\u0648\u0633\u0637", "\u0645\u0646 1 \u0625\u0644\u0649 180 \u062F\u0642\u064A\u0642\u0629");
+      out.settings.avg = data.settings.avg;
+    }
+    if (data.settings.sched !== void 0) {
+      if (!object(data.settings.sched)) bad2("\u0627\u0644\u0645\u0648\u0627\u0639\u064A\u062F", "\u0625\u0639\u062F\u0627\u062F \u063A\u064A\u0631 \u0635\u062D\u064A\u062D");
+      out.settings.sched = {};
+      for (const b of Object.keys(data.settings.sched)) {
+        if (!branchIds(state).includes(b)) bad2("\u0627\u0644\u0645\u0648\u0627\u0639\u064A\u062F", "\u0641\u0631\u0639 \u063A\u064A\u0631 \u0635\u062D\u064A\u062D");
+        out.settings.sched[b] = schedule2(data.settings.sched[b]);
+      }
+    }
+    if (data.settings.site !== void 0) out.settings.site = site(data.settings.site, fail2);
+  }
+  return out;
+}
+function prepare(original, uid, input, options = {}, maxBytes = 85e4) {
+  requirePermission(role(original, uid), "data.import");
+  if (!object(options) || Object.keys(options).some((k) => k !== "importSettings") || options.importSettings !== void 0 && typeof options.importSettings !== "boolean") fail2("\u062E\u064A\u0627\u0631\u0627\u062A \u0627\u0644\u0627\u0633\u062A\u064A\u0631\u0627\u062F \u063A\u064A\u0631 \u0635\u062D\u064A\u062D\u0629");
+  const data = normalize3(input, original, options.importSettings === true, maxBytes), s = structuredClone(original), summary = { patients: { added: 0, duplicates: 0, conflicts: 0 }, bookings: { added: 0, duplicates: 0, conflicts: 0 }, files: { added: 0, duplicates: 0, conflicts: 0 }, complaints: { added: 0, duplicates: 0, conflicts: 0 }, renumbered: 0, examsToWaiting: 0, settingsChanged: false, ignored: data.ignored };
+  s.patients ||= {};
+  s.bookings ||= {};
+  s.files ||= {};
+  s.complaints ||= {};
+  s.sequences ||= {};
+  const blockedPhones = /* @__PURE__ */ new Set();
+  const addPatient = (p, x) => {
+    const old = s.patients[p];
+    if (!old) {
+      s.patients[p] = x;
+      summary.patients.added++;
+    } else {
+      summary.patients[same(old, x) ? "duplicates" : "conflicts"]++;
+      if (old.n !== x.n) blockedPhones.add(p);
+    }
+  };
+  for (const [p, x] of Object.entries(data.patients)) addPatient(p, x);
+  const ids2 = /* @__PURE__ */ new Map(), phones = /* @__PURE__ */ new Set();
+  for (const [d, rows] of Object.entries(s.bookings)) for (const x of Object.values(rows)) {
+    ids2.set(x.id, x);
+    phones.add(d + "|" + x.phone);
+  }
+  for (const [d, rows] of Object.entries(data.bookings)) for (const incoming of Object.values(rows)) {
+    const old = ids2.get(incoming.id), p = incoming.phone;
+    if (original.deletedBookings?.[incoming.id]) {
+      summary.bookings.conflicts++;
+      continue;
+    }
+    if (old) {
+      const comparison = { ...incoming, no: old.no };
+      if (comparison.s === "exam") {
+        comparison.s = "wait";
+        delete comparison.startedAt;
+      }
+      summary.bookings[same({ ...old, rev: 1 }, comparison) ? "duplicates" : "conflicts"]++;
+      continue;
+    }
+    if (phones.has(d + "|" + p) || s.patients[p] && s.patients[p].n !== incoming.name) {
+      summary.bookings.conflicts++;
+      continue;
+    }
+    const x = { ...incoming };
+    if (x.s === "exam") {
+      x.s = "wait";
+      delete x.startedAt;
+      summary.examsToWaiting++;
+    }
+    const key = d + "_" + x.b, existing = Object.values(s.bookings[d] || {}).filter((y) => y.b === x.b), max = Math.max(s.sequences[key] || 0, 0, ...existing.map((y) => y.no || 0));
+    if (!x.no || existing.some((y) => y.no === x.no)) {
+      if (x.no) summary.renumbered++;
+      x.no = max + 1;
+    }
+    (s.bookings[d] ||= {})[x.id] = x;
+    s.sequences[key] = Math.max(max, x.no);
+    ids2.set(x.id, x);
+    phones.add(d + "|" + p);
+    summary.bookings.added++;
+    if (!s.patients[p]) addPatient(p, { n: x.name, d });
+  }
+  for (const [p, f] of Object.entries(data.files)) {
+    if (blockedPhones.has(p)) {
+      summary.files.conflicts++;
+      continue;
+    }
+    if (!s.patients[p]) bad2("files", "\u064A\u0648\u062C\u062F \u0645\u0644\u0641 \u0637\u0628\u064A \u0628\u0644\u0627 \u062D\u0627\u0644\u0629 \u0645\u0633\u062C\u0644\u0629 \u0641\u064A \u0627\u0644\u0646\u0633\u062E\u0629 \u0623\u0648 \u0627\u0644\u0639\u064A\u0627\u062F\u0629");
+    if (s.files[p]) {
+      const withoutTime = (x) => Object.fromEntries(Object.entries(x).filter(([k]) => k !== "t"));
+      summary.files[same(withoutTime(s.files[p]), withoutTime(f)) ? "duplicates" : "conflicts"]++;
+    } else {
+      s.files[p] = { ...f, t: f.t || (/* @__PURE__ */ new Date()).toISOString() };
+      summary.files.added++;
+    }
+  }
+  for (const [p, rows] of Object.entries(data.complaints)) {
+    if (blockedPhones.has(p)) {
+      summary.complaints.conflicts += Object.keys(rows).length;
+      continue;
+    }
+    if (!s.patients[p]) bad2("complaints", "\u062A\u0648\u062C\u062F \u0634\u0643\u0627\u0648\u0649 \u0628\u0644\u0627 \u062D\u0627\u0644\u0629 \u0645\u0633\u062C\u0644\u0629");
+    s.complaints[p] ||= {};
+    for (const [id2, x] of Object.entries(rows)) {
+      if (s.complaints[p][id2]) summary.complaints[same(s.complaints[p][id2], { ...x, no: x.no || s.complaints[p][id2].no, at: x.at || s.complaints[p][id2].at }) ? "duplicates" : "conflicts"]++;
+      else {
+        s.complaints[p][id2] = { ...x, at: x.at || (/* @__PURE__ */ new Date()).toISOString() };
+        summary.complaints.added++;
+      }
+    }
+  }
+  if (options.importSettings && data.settings) {
+    const previous = s.settings || {};
+    s.settings = { ...previous, ...data.settings, ...data.settings.branches ? { branches: { ...branches(s), ...data.settings.branches } } : {}, ...data.settings.sched ? { sched: { ...previous.sched, ...data.settings.sched } } : {} };
+    summary.settingsChanged = !same(previous, s.settings);
+  }
+  s.complaintSequences ||= {};
+  for (const [phone3, value] of Object.entries(data.complaintSequences)) {
+    if (!s.patients[phone3]) bad2("complaintSequences", "\u0639\u062F\u0627\u062F \u062F\u0648\u0646 \u062D\u0627\u0644\u0629");
+    s.complaintSequences[phone3] = Math.max(s.complaintSequences[phone3] || 0, value);
+  }
+  summary.totalAdded = ["patients", "bookings", "files", "complaints"].reduce((n, k) => n + summary[k].added, 0);
+  summary.totalConflicts = ["patients", "bookings", "files", "complaints"].reduce((n, k) => n + summary[k].conflicts, 0);
+  const token = createHash2("sha256").update(JSON.stringify(canonical({ uid, day: today(), input, options, bookings: original.bookings, patients: original.patients, files: original.files, complaints: original.complaints, complaintSequences: original.complaintSequences, settings: original.settings, sequences: original.sequences, sessions: original.sessions, deletedBookings: original.deletedBookings }))).digest("hex");
+  numberComplaints(s);
+  rebuild(s);
+  return { state: s, summary, token };
+}
+
+// supabase/functions/clinic-api/backup-rehearsal.js
+function rehearse(payload, uid) {
+  const clean = { roles: structuredClone(payload.roles), settings: structuredClone(payload.settings || {}), patients: {}, bookings: {}, files: {}, complaints: {} };
+  clean.roles[uid] = { ...clean.roles[uid], permissions: { ...clean.roles[uid]?.permissions, "data.import": true } };
+  const data = Object.fromEntries(["patients", "bookings", "files", "complaints", "complaintSequences"].map((k) => [k, payload[k] || {}]));
+  const plan2 = prepare(clean, uid, data, {}, 8e6);
+  if (plan2.summary.totalConflicts) fail2("\u062A\u0648\u062C\u062F \u062A\u0639\u0627\u0631\u0636\u0627\u062A \u062A\u0645\u0646\u0639 \u062A\u062C\u0631\u0628\u0629 \u0627\u0644\u0627\u0633\u062A\u0639\u0627\u062F\u0629", 409);
+  return { at: (/* @__PURE__ */ new Date()).toISOString(), status: "passed", scope: "clinical-json", counts: Object.fromEntries(["patients", "bookings", "files", "complaints"].map((k) => [k, plan2.summary[k].added])), imagesVerified: false, warning: "\u062A\u062C\u0631\u0628\u0629 \u0645\u0639\u0632\u0648\u0644\u0629 \u0644\u0644\u0628\u064A\u0627\u0646\u0627\u062A \u0627\u0644\u0637\u0628\u064A\u0629 \u0641\u0642\u0637\u061B \u0644\u0627 \u062A\u062A\u062D\u0642\u0642 \u0645\u0646 \u0648\u062C\u0648\u062F \u0645\u0644\u0641\u0627\u062A \u0627\u0644\u0635\u0648\u0631 \u0648\u0644\u0627 \u062A\u0633\u062A\u0628\u062F\u0644 \u0623\u064A \u0633\u062C\u0644 \u0641\u0639\u0644\u064A." };
+}
+async function handle(adapter2, input, uid) {
+  const s = await adapter2.read();
+  requirePermission(role(s, uid), "data.export");
+  if (input.action === "backupRehearsalStatus") return s.backupRehearsal || null;
+  const backup = await adapter2.latestBackup?.();
+  if (!backup?.payload) fail2("\u0644\u0627 \u062A\u0648\u062C\u062F \u0646\u0633\u062E\u0629 \u0622\u0644\u064A\u0629 \u0645\u0633\u062C\u0644\u0629 \u0644\u062A\u062C\u0631\u0628\u062A\u0647\u0627\u061B \u0627\u0633\u062A\u062E\u062F\u0645 \u0627\u0644\u0646\u0633\u062E\u0629 \u0627\u0644\u0643\u0627\u0645\u0644\u0629 \u0627\u0644\u0645\u062D\u0644\u064A\u0629", 404);
+  const payload = { ...backup.payload, roles: { ...backup.payload.roles, [uid]: s.roles[uid] } }, result = { ...rehearse(payload, uid), backupAt: backup.created_at, version: backup.version };
+  await adapter2.mutate((original) => {
+    requirePermission(role(original, uid), "data.export");
+    return { ...original, backupRehearsal: result };
+  });
+  return result;
+}
+
+// supabase/functions/clinic-api/workflow.js
+import { Buffer as Buffer4 } from "node:buffer";
+import { createHash as createHash3, randomUUID } from "node:crypto";
+
+// supabase/functions/clinic-api/history.js
+var ROOTS = ["patients", "files", "complaints", "attachments", "bookings", "inbox", "followups", "deletedBookings", "sessions", "complaintSequences", "settings", "roles", "tasks", "checkins", "appointmentRequests", "waitingList", "slotOpenings", "dayClosures", "patientMerges", "userPreferences"];
+var object2 = (x) => x !== null && typeof x === "object" && !Array.isArray(x);
+var same2 = (a, b) => JSON.stringify(a) === JSON.stringify(b);
+function diff(before, after, path = [], out = []) {
+  if (same2(before, after)) return out;
+  if (object2(before) && object2(after)) {
+    for (const key of /* @__PURE__ */ new Set([...Object.keys(before), ...Object.keys(after)])) diff(before[key], after[key], path.concat(key), out);
+  } else out.push({ path, before: before === void 0 ? null : before, after: after === void 0 ? null : after, removed: after === void 0, added: before === void 0 });
+  return out;
+}
+function safe(value) {
+  if (Array.isArray(value)) return value.map(safe);
+  if (object2(value)) return Object.fromEntries(Object.entries(value).filter(([k]) => !/(password|token|secret|hash|salt)/i.test(k)).map(([k, v]) => [k, safe(v)]));
+  return typeof value === "string" && value.startsWith("data:image/") ? "[\u0635\u0648\u0631\u0629 \u0645\u0636\u0645\u0651\u0646\u0629]" : value;
+}
+function context(before, next, changes, input = {}) {
+  const out = { patients: {}, bookings: {}, branches: {}, users: {} };
+  for (const state of [before, next]) {
+    for (const [p, x] of Object.entries(state.patients || {})) if (x.n) out.patients[p] = x.n;
+    for (const [d, rows] of Object.entries(state.bookings || {})) for (const x of Object.values(rows)) {
+      out.patients[x.phone] ||= x.name;
+      out.bookings[d + "/" + x.id] = { name: x.name, phone: x.phone, no: x.no, b: x.b, date: d };
+    }
+    for (const [b, x] of Object.entries(state.settings?.branches || state.settings?.site?.branches || {})) out.branches[b] = x.name;
+    for (const [id2, x] of Object.entries(state.roles || {})) {
+      out.users[id2] = x.displayName || x.u;
+      out.users[x.u] = x.displayName || x.u;
+    }
+  }
+  const phones = /* @__PURE__ */ new Set(), tickets = /* @__PURE__ */ new Set(), users = new Set([input.uid, input.actor].filter(Boolean));
+  for (const c of changes) {
+    const [root, a, b] = c.path;
+    if (["patients", "files", "complaints", "attachments", "inbox", "followups"].includes(root)) phones.add(a);
+    if (root === "patients") {
+      for (const v of [c.before, c.after]) if (v && typeof v === "object" && v.n) out.patients[a] = v.n;
+      if (b === "n" && typeof (c.after || c.before) === "string") out.patients[a] = c.after || c.before;
+    }
+    if (root === "roles") users.add(a);
+    if (root === "bookings") {
+      if (b) tickets.add(a + "/" + b);
+      for (const v of [c.before, c.after]) if (v && typeof v === "object") {
+        const rows = b ? [v] : Object.values(v);
+        for (const x of rows) if (x?.id) {
+          out.bookings[a + "/" + x.id] = { name: x.name, phone: x.phone, no: x.no, b: x.b, date: a };
+          out.patients[x.phone] ||= x.name;
+          phones.add(x.phone);
+          tickets.add(a + "/" + x.id);
+        }
+      }
+    }
+  }
+  for (const k of tickets) if (out.bookings[k]?.phone) phones.add(out.bookings[k].phone);
+  out.patients = Object.fromEntries(Object.entries(out.patients).filter(([p]) => phones.has(p)));
+  out.bookings = Object.fromEntries(Object.entries(out.bookings).filter(([k]) => tickets.has(k)));
+  out.users = Object.fromEntries(Object.entries(out.users).filter(([id2]) => users.has(id2) || changes.some((c) => ["by", "editedBy", "archivedBy"].includes(c.path.at(-1)) && [c.before, c.after].includes(id2))));
+  return out;
+}
+function record(before, next, input, uid) {
+  const changes = [];
+  for (const root of ROOTS) diff(before[root] || {}, next[root] || {}, [root], changes);
+  const id2 = crypto.randomUUID(), at = (/* @__PURE__ */ new Date()).toISOString(), branches2 = [...new Set((input.puts || []).map((x) => x.n?.b).concat((input.dels || []).map((x) => x.b)).filter(Boolean))];
+  const phones = /* @__PURE__ */ new Set();
+  for (const change of changes) {
+    const [root, a, b] = change.path;
+    if (["patients", "files", "complaints", "attachments"].includes(root)) phones.add(a);
+    if (root === "bookings" && b) {
+      for (const state of [before, next]) {
+        const booking2 = state.bookings?.[a]?.[b];
+        if (booking2?.b) branches2.push(booking2.b);
+        if (booking2?.phone) phones.add(booking2.phone);
+      }
+    }
+    if (root === "settings" && ["sched", "branches"].includes(a) && b) branches2.push(b);
+  }
+  for (const state of [before, next]) for (const rows of Object.values(state.bookings || {})) for (const booking2 of Object.values(rows)) if (phones.has(booking2.phone)) branches2.push(booking2.b);
+  branches2.splice(0, branches2.length, ...new Set(branches2.filter(Boolean)));
+  if (changes.some((x) => x.path[0] === "settings" && x.path[1] === "sched")) {
+    next.settings ||= {};
+    next.settings.scheduleUpdatedAt = at;
+  }
+  if (input.action !== "siteContentSave" && changes.some((x) => x.path[0] === "settings" && x.path[1] === "site" && ["sections", "layout"].includes(x.path[2]))) {
+    next.settings.contentRev = (before.settings?.contentRev || 0) + 1;
+  }
+  const watermarkState = (x) => Object.fromEntries(Object.entries(x.settings?.site?.design || {}).filter(([key]) => key.startsWith("watermark")));
+  if (input.action !== "watermarkSave" && JSON.stringify(watermarkState(before)) !== JSON.stringify(watermarkState(next))) next.settings.watermarkRev = (before.settings?.watermarkRev || 0) + 1;
+  const aboutState = (x) => [x.settings?.site?.about, Object.fromEntries(Object.entries(x.settings?.site?.design || {}).filter(([key]) => key.startsWith("about")))];
+  if (input.action !== "aboutSave" && JSON.stringify(aboutState(before)) !== JSON.stringify(aboutState(next))) next.settings.aboutRev = (before.settings?.aboutRev || 0) + 1;
+  if (input.action !== "headerSave" && changes.some((x) => x.path[0] === "settings" && x.path[1] === "site" && (!x.path[2] || ["design", "headerTitle", "headerSubtitle", "headerText", "doctorName", "specialty"].includes(x.path[2])))) {
+    next.settings.headerRev = (before.settings?.headerRev || 0) + 1;
+  }
+  const entry = { id: id2, at, actor: uid, actorName: before.roles?.[uid]?.displayName || before.roles?.[uid]?.u, action: input.action, target: input.uid, branch: input.branch || (branches2.length === 1 ? branches2[0] : void 0), branches: branches2, changeCount: changes.length };
+  next.audit = [...before.audit || [], entry];
+  next.activityDetails = { ...next.activityDetails || {}, [id2]: changes.map((x) => safe(x)) };
+  next.activityContext = { ...next.activityContext || {}, [id2]: context(before, next, changes, { ...input, actor: uid }) };
+  if (input.action === "bookingRestore") for (const group of Object.values(next.recycleBin || {})) {
+    group.items = (group.items || []).filter((x) => !(x.path[0] === "bookings" && x.path[2] === input.id));
+    if (!group.items.length) group.restoredAt = at;
+  }
+  const removed = changes.filter((x) => x.removed && !["roles", "sessions", "complaintSequences"].includes(x.path[0]));
+  if (removed.length && !["trashRestore", "bookingRestore", "patientSave", "userCredentials"].includes(input.action)) {
+    next.recycleBin = { ...next.recycleBin || {}, [id2]: { ...entry, items: structuredClone(removed) } };
+  }
+  for (const group of Object.values(next.recycleBin || {})) if (!group.restoredAt) {
+    for (const item of group.items || []) if (item.path[0] === "attachments") {
+      const collect = (x) => {
+        if (!object2(x)) return;
+        if (x.key && next.attachmentGarbage) delete next.attachmentGarbage[x.key];
+        for (const v of Object.values(x)) if (object2(v)) collect(v);
+      };
+      collect(item.before);
+    }
+  }
+  return next;
+}
+function admin(state, uid, key = "data.restore") {
+  requirePermission(role(state, uid), key);
+}
+function get(state, path) {
+  let x = state;
+  for (const k of path) x = x?.[k];
+  return x;
+}
+function restore(original, uid, id2) {
+  admin(original, uid);
+  const s = structuredClone(original), group = s.recycleBin?.[id2];
+  if (!group || group.restoredAt) fail2("\u0627\u0644\u0645\u062D\u0630\u0648\u0641\u0627\u062A \u063A\u064A\u0631 \u0645\u0648\u062C\u0648\u062F\u0629 \u0623\u0648 \u0633\u0628\u0642 \u0627\u0633\u062A\u0639\u0627\u062F\u062A\u0647\u0627", 404);
+  for (const item of group.items) {
+    if (get(s, item.path) !== void 0) fail2("\u062A\u0639\u0627\u0631\u0636 \u0645\u0639 \u0628\u064A\u0627\u0646\u0627\u062A \u062D\u0627\u0644\u064A\u0629 \u0641\u064A " + item.path.join("/") + "\u061B \u0644\u0645 \u064A\u062A\u0645 \u062A\u063A\u064A\u064A\u0631 \u0623\u064A \u0628\u064A\u0627\u0646\u0627\u062A", 409);
+  }
+  for (const item of group.items) {
+    let parent = s;
+    for (const key of item.path.slice(0, -1)) {
+      if (parent[key] !== void 0 && !object2(parent[key])) fail2("\u062A\u0639\u0627\u0631\u0636 \u0645\u0639 \u0628\u064A\u0627\u0646\u0627\u062A \u0623\u062D\u062F\u062B", 409);
+      parent = parent[key] ||= {};
+    }
+    parent[item.path.at(-1)] = structuredClone(item.before);
+  }
+  for (const item of group.items.filter((x) => x.path[0] === "bookings")) {
+    const rows = s.bookings[item.path[1]] || {};
+    const restored = item.path.length === 2 ? Object.values(rows) : [rows[item.path[2]]];
+    for (const n of restored) {
+      if (!n?.id) continue;
+      if (Object.values(rows).some((x) => x.id !== n.id && x.phone === n.phone)) fail2("\u064A\u0648\u062C\u062F \u062D\u062C\u0632 \u0622\u062E\u0631 \u0644\u0646\u0641\u0633 \u0627\u0644\u0645\u0631\u064A\u0636 \u0641\u064A \u0627\u0644\u064A\u0648\u0645 \u0646\u0641\u0633\u0647", 409);
+      if (!branchIds(s).includes(n.b)) fail2("\u0627\u0633\u062A\u0639\u062F \u0627\u0644\u0641\u0631\u0639 \u0623\u0648\u0644\u064B\u0627 \u0642\u0628\u0644 \u0627\u0644\u062D\u062C\u0648\u0632\u0627\u062A", 409);
+      s.sequences ||= {};
+      const key = n.date + "_" + n.b;
+      n.no = Math.max(s.sequences[key] || 0, ...Object.values(rows).map((x) => x.b === n.b ? x.no || 0 : 0)) + 1;
+      s.sequences[key] = n.no;
+      n.s = "wait";
+      n.rev = (n.rev || 0) + 1;
+      delete n.startedAt;
+      delete s.deletedBookings?.[n.id];
+    }
+  }
+  for (const [phone3, rows] of Object.entries(s.complaints || {})) {
+    s.complaintSequences ||= {};
+    s.complaintSequences[phone3] = Math.max(original.complaintSequences?.[phone3] || 0, s.complaintSequences[phone3] || 0, ...Object.values(rows).map((x) => x.no || 0));
+  }
+  group.restoredAt = (/* @__PURE__ */ new Date()).toISOString();
+  group.restoredBy = uid;
+  rebuild(s);
+  return s;
+}
+function list(state, uid, input) {
+  admin(state, uid);
+  const page = Math.max(0, Math.floor(Number(input.page) || 0)), size = 30;
+  let rows = Object.values(state.recycleBin || {}).filter((x) => !x.restoredAt).sort((a, b) => b.at.localeCompare(a.at));
+  return { total: rows.length, page, rows: rows.slice(page * size, (page + 1) * size).map(({ items, ...entry }) => ({ ...entry, count: items.length, paths: items.map((x) => x.path.join("/")) })) };
+}
+
+// supabase/functions/clinic-api/workflow.js
+var stamp2 = () => (/* @__PURE__ */ new Date()).toISOString();
+var digest = (x) => createHash3("sha256").update(JSON.stringify(x)).digest("hex");
+var text2 = (x, max, label, required = false) => {
+  if (typeof x !== "string" || x.length > max || required && !x.trim()) fail2("\u0631\u0627\u062C\u0639 " + label);
+  return x.trim();
+};
+function branch(s, r, b) {
+  if (!branchIds(s).includes(b)) fail2("\u0641\u0631\u0639 \u063A\u064A\u0631 \u0635\u062D\u064A\u062D");
+  allowed(r, b);
+  return b;
+}
+function access(s, r, p) {
+  if (!/^01[0125]\d{8}$/.test(p) || !s.patients?.[p]) fail2("\u0627\u0644\u062D\u0627\u0644\u0629 \u063A\u064A\u0631 \u0645\u0648\u062C\u0648\u062F\u0629", 404);
+  assertAccess(s, r, p);
+}
+function timeline(s, r, p) {
+  access(s, r, p);
+  const rows = [];
+  if (can(r, "bookings.read")) {
+    for (const list2 of Object.values(s.bookings || {})) for (const x of Object.values(list2)) if (x.phone === p && (allBranches(r) || x.b === r.br)) {
+      rows.push({ kind: "booking", id: x.id, at: x.createdAt || x.date + "T00:00:00Z", by: x.createdBy || "", updatedBy: x.updatedBy || "", updatedAt: x.updatedAt, date: x.date, no: x.no, branch: x.b, status: x.s, arrival: s.checkins?.[x.id]?.status || "not_arrived" });
+      const check = s.checkins?.[x.id];
+      if (check) rows.push({ kind: "arrival", id: x.id, at: check.at, status: check.status, by: check.by });
+    }
+  }
+  if (can(r, "complaints.read")) for (const x of Object.values(numberComplaints(structuredClone({ complaints: { [p]: s.complaints?.[p] || {} }, complaintSequences: { [p]: s.complaintSequences?.[p] || 0 } })).complaints[p])) rows.push({ kind: "complaint", id: x.id, no: x.no, at: x.at || x.date + "T00:00:00Z", date: x.date, reason: x.reason || "", text: x.text, tx: x.tx || "", by: x.by, editedAt: x.editedAt, editedBy: x.editedBy });
+  if (can(r, "attachments.read")) for (const x of Object.values(s.attachments?.[p] || {})) rows.push({ kind: "attachment", id: x.id, at: x.createdAt, date: x.reportDate, title: x.name, category: x.category, by: x.by });
+  if (can(r, "notes.read") && s.files?.[p]) rows.push({ kind: "medical", id: "medical", at: s.files[p].t || s.patients[p].d + "T00:00:00Z", text: s.files[p].n || "", by: s.files[p].by || "", diagnosis: s.files[p].diagnosis || "", treatment: s.files[p].treatment || "" });
+  if (can(r, "notes.read")) for (const [i, x] of (s.files?.[p]?.importedRecords || []).entries()) rows.push({ kind: "medical", id: "merged-" + i, at: x.t || x.mergedAt, text: x.n || "", diagnosis: x.diagnosis || "", treatment: x.treatment || "", by: x.by || "", sourcePhone: x.sourcePhone });
+  return rows.sort((a, b) => String(b.at).localeCompare(String(a.at)) || (b.no || 0) - (a.no || 0));
+}
+function mergePlan(s, uid, input) {
+  const r = role(s, uid);
+  requirePermission(r, "patients.merge");
+  const source = phone(input.source), target = phone(input.target);
+  if (source === target) fail2("\u0627\u062E\u062A\u0631 \u0645\u0644\u0641\u064A\u0646 \u0645\u062E\u062A\u0644\u0641\u064A\u0646");
+  access(s, r, source);
+  access(s, r, target);
+  for (const rows of Object.values(s.bookings || {})) {
+    const list2 = Object.values(rows);
+    if (list2.some((x) => x.phone === source) && list2.some((x) => x.phone === target)) fail2("\u064A\u0648\u062C\u062F \u062D\u062C\u0632 \u0644\u0644\u0645\u0644\u0641\u064A\u0646 \u0641\u064A \u0627\u0644\u064A\u0648\u0645 \u0646\u0641\u0633\u0647\u061B \u0631\u0627\u062C\u0639 \u0627\u0644\u062D\u062C\u0648\u0632\u0627\u062A \u0642\u0628\u0644 \u0627\u0644\u062F\u0645\u062C", 409);
+  }
+  if (Object.keys(s.attachments?.[source] || {}).some((id2) => Object.hasOwn(s.attachments?.[target] || {}, id2))) fail2("\u062A\u0639\u0627\u0631\u0636 \u0641\u064A \u0645\u0639\u0631\u0641\u0627\u062A \u0627\u0644\u0635\u0648\u0631\u061B \u0631\u0627\u062C\u0639 \u0627\u0644\u0645\u0631\u0641\u0642\u0627\u062A \u0642\u0628\u0644 \u0627\u0644\u062F\u0645\u062C", 409);
+  if (Object.keys(s.attachments?.[source] || {}).length + Object.keys(s.attachments?.[target] || {}).length > 20) fail2("\u0627\u0644\u0645\u0644\u0641\u0627\u0646 \u064A\u062A\u062C\u0627\u0648\u0632\u0627\u0646 \u062D\u062F 20 \u0635\u0648\u0631\u0629\u061B \u0631\u0627\u062C\u0639 \u0627\u0644\u0645\u0631\u0641\u0642\u0627\u062A \u0642\u0628\u0644 \u0627\u0644\u062F\u0645\u062C", 409);
+  const summary = { source, target, sourceName: s.patients[source].n, targetName: s.patients[target].n, complaints: Object.keys(s.complaints?.[source] || {}).length, images: Object.keys(s.attachments?.[source] || {}).length, bookings: Object.values(s.bookings || {}).flatMap(Object.values).filter((x) => x.phone === source).length };
+  return { summary, token: digest({ uid, source, target, patients: s.patients, bookings: s.bookings, files: s.files, complaints: s.complaints, attachments: s.attachments, complaintSequences: s.complaintSequences, tasks: s.tasks, checkins: s.checkins }) };
+}
+var draftKinds = { booking: "bookings.create", complaint: "complaints.create", medical: "notes.edit", patient: "patients.edit", about: "site.manage", task: "tasks.manage" };
+var draftFields = { booking: ["name", "phone", "b", "date", "v", "s", "nt", "spouseName", "spouseJob", "spousePhone"], complaint: ["date", "text", "reason", "tx"], medical: ["n", "diagnosis", "treatment", "allergies", "chronic", "rev"], patient: ["name", "phone", "newPhone", "spouseName", "spouseJob", "spousePhone"], about: ["text", "design"], task: ["title", "description", "due", "assignee", "phone", "branch"] };
+function draftAccess(s, r, x) {
+  if (!Object.hasOwn(draftKinds, x.kind)) fail2("\u0645\u0633\u0648\u062F\u0629 \u063A\u064A\u0631 \u0635\u062D\u064A\u062D\u0629");
+  requirePermission(r, draftKinds[x.kind]);
+  if (x.branch) branch(s, r, x.branch);
+  if (["complaint", "medical"].includes(x.kind)) access(s, r, phone(x.entity));
+}
+async function handle2(adapter2, input, uid) {
+  const action = input.action;
+  if (action === "preferencesGet") {
+    const s = await adapter2.read();
+    role(s, uid);
+    return s.userPreferences?.[uid] || {};
+  }
+  if (action === "preferencesSave") {
+    let saved;
+    await adapter2.mutate((original) => {
+      role(original, uid);
+      const p = input.preferences;
+      if (!p || Object.keys(p).some((k) => !["themePreset", "customColor", "mode"].includes(k)) || p.themePreset !== null && (!Number.isInteger(p.themePreset) || p.themePreset < 0 || p.themePreset > 9) || p.customColor !== null && !/^#[0-9a-f]{6}$/i.test(p.customColor || "") || !["system", "light", "dark"].includes(p.mode)) fail2("\u062A\u0641\u0636\u064A\u0644\u0627\u062A \u063A\u064A\u0631 \u0635\u062D\u064A\u062D\u0629");
+      const s = structuredClone(original);
+      s.userPreferences ||= {};
+      saved = s.userPreferences[uid] = { ...p, updatedAt: stamp2() };
+      return s;
+    });
+    return saved;
+  }
+  if (action === "timeline") {
+    const s = await adapter2.read(), r = role(s, uid);
+    if (!can(r, "patients.read") && !can(r, "bookings.read")) fail2("\u063A\u064A\u0631 \u0645\u0635\u0631\u062D", 403);
+    return timeline(s, r, phone(input.phone));
+  }
+  if (action === "workflowList") {
+    const s = await adapter2.read(), r = role(s, uid), d = date(input.date || today()), b = input.branch || r.br || "all";
+    if (b !== "all") branch(s, r, b);
+    else if (!allBranches(r)) fail2("\u0627\u062E\u062A\u0631 \u0641\u0631\u0639\u0643", 403);
+    const own2 = (x) => (b === "all" || x.branch === b) && (allBranches(r) || x.branch === r.br);
+    const tasks = can(r, "tasks.read") ? Object.values(s.tasks || {}).filter((x) => own2(x) && (!x.phone || canAccess(s, r, x.phone))) : [];
+    const checkins = can(r, "bookings.read") ? Object.fromEntries(Object.entries(s.checkins || {}).filter(([id2]) => Object.values(s.bookings?.[d] || {}).some((x) => x.id === id2 && (b === "all" || x.b === b) && (allBranches(r) || x.b === r.br)))) : {};
+    const online = can(r, "requests.read") ? Object.values(s.appointmentRequests || {}).filter((x) => own2(x)) : [];
+    const waiting = can(r, "waitinglist.manage") ? Object.values(s.waitingList || {}).filter(own2) : [];
+    const drafts = Object.values(s.drafts?.[uid] || {}).filter((x) => Date.now() - Date.parse(x.updatedAt) < 7 * 864e5).filter((x) => {
+      try {
+        draftAccess(s, r, x);
+        return true;
+      } catch {
+        return false;
+      }
+    }).map(({ data, ...x }) => x);
+    const users = can(r, "tasks.manage") ? Object.entries(s.roles || {}).filter(([, x]) => x.enabled !== false && (allBranches(r) || allBranches(x) || x.br === r.br)).map(([id2, x]) => ({ id: id2, name: x.displayName || x.u })) : [];
+    return { tasks, checkins, requests: online, waiting, drafts, users, openings: can(r, "waitinglist.manage") ? Object.values(s.slotOpenings || {}).filter(own2) : [], closed: s.dayClosures?.[d + "_" + b] || null };
+  }
+  if (action === "checkinSet") {
+    await adapter2.mutate((original) => {
+      const s = structuredClone(original), r = role(s, uid);
+      requirePermission(r, "bookings.status");
+      const d = date(input.date), x = s.bookings?.[d]?.[input.id];
+      if (!x) fail2("\u0627\u0644\u062D\u062C\u0632 \u063A\u064A\u0631 \u0645\u0648\u062C\u0648\u062F", 404);
+      allowed(r, x.b);
+      if (d !== today() || !["arrived", "not_arrived", "left"].includes(input.status)) fail2("\u0627\u0644\u0648\u0635\u0648\u0644 \u0645\u062A\u0627\u062D \u0644\u062D\u062C\u0648\u0632\u0627\u062A \u0627\u0644\u064A\u0648\u0645 \u0641\u0642\u0637");
+      s.checkins ||= {};
+      s.checkins[x.id] = { arrivalAt: s.checkins[x.id]?.arrivalAt || (input.status === "arrived" ? stamp2() : null), status: input.status, at: stamp2(), by: r.u, byUid: uid, branch: x.b };
+      return s;
+    });
+    return { ok: true };
+  }
+  if (action === "taskSave") {
+    let saved;
+    await adapter2.mutate((original) => {
+      const s = structuredClone(original), r = role(s, uid);
+      requirePermission(r, "tasks.manage");
+      const old = input.id ? s.tasks?.[input.id] : null;
+      if (input.id && !old) fail2("\u0627\u0644\u0645\u0647\u0645\u0629 \u063A\u064A\u0631 \u0645\u0648\u062C\u0648\u062F\u0629", 404);
+      if (old) {
+        branch(s, r, old.branch);
+        if ((input.revision || 0) !== old.rev) fail2("\u0627\u0644\u0645\u0647\u0645\u0629 \u062A\u063A\u064A\u0631\u062A\u061B \u0623\u0639\u062F \u062A\u062D\u0645\u064A\u0644\u0647\u0627", 409);
+      }
+      const b = branch(s, r, input.branch || old?.branch || r.br), p = input.phone ? phone(input.phone) : "";
+      if (p) access(s, r, p);
+      const assignee = input.assignee || uid, target = s.roles?.[assignee];
+      if (!target || target.enabled === false || !allBranches(target) && target.br !== b) fail2("\u0627\u0644\u0645\u0633\u0624\u0648\u0644 \u063A\u064A\u0631 \u0645\u062A\u0627\u062D \u0644\u0647\u0630\u0627 \u0627\u0644\u0641\u0631\u0639");
+      const due = input.due ? date(input.due) : today();
+      const status = input.status || old?.status || "open";
+      if (!["open", "in_progress", "done", "cancelled"].includes(status)) fail2("\u062D\u0627\u0644\u0629 \u0645\u0647\u0645\u0629 \u063A\u064A\u0631 \u0635\u062D\u064A\u062D\u0629");
+      s.tasks ||= {};
+      const id2 = old?.id || randomUUID();
+      saved = s.tasks[id2] = { id: id2, branch: b, phone: p, title: text2(input.title, 120, "\u0639\u0646\u0648\u0627\u0646 \u0627\u0644\u0645\u0647\u0645\u0629", true), description: text2(input.description || "", 2e3, "\u0648\u0635\u0641 \u0627\u0644\u0645\u0647\u0645\u0629"), due, assignee, status, by: old?.by || r.u, createdAt: old?.createdAt || stamp2(), updatedAt: stamp2(), updatedBy: r.u, rev: (old?.rev || 0) + 1 };
+      return s;
+    });
+    return saved;
+  }
+  if (action === "draftSave") {
+    let saved;
+    await adapter2.mutate((original) => {
+      const s = structuredClone(original), r = role(s, uid);
+      draftAccess(s, r, input);
+      if (!input.data || Array.isArray(input.data) || typeof input.data !== "object" || Buffer4.byteLength(JSON.stringify(input.data)) > 2e4 || Object.entries(input.data).some(([k, v]) => !draftFields[input.kind].includes(k) || (k === "design" ? !v || Array.isArray(v) || typeof v !== "object" || Object.entries(v).some(([dk, dv]) => !/^about[A-Z][A-Za-z]+$/.test(dk) || !["string", "number", "boolean"].includes(typeof dv)) : k === "rev" ? !Number.isInteger(v) : typeof v !== "string"))) fail2("\u0628\u064A\u0627\u0646\u0627\u062A \u0627\u0644\u0645\u0633\u0648\u062F\u0629 \u063A\u064A\u0631 \u0635\u062D\u064A\u062D\u0629");
+      const id2 = digest({ kind: input.kind, entity: String(input.entity || "new").slice(0, 128) }).slice(0, 32);
+      s.drafts ||= {};
+      s.drafts[uid] ||= {};
+      for (const [key, x] of Object.entries(s.drafts[uid])) if (Date.now() - Date.parse(x.updatedAt) > 7 * 864e5) delete s.drafts[uid][key];
+      if (!s.drafts[uid][id2] && Object.keys(s.drafts[uid]).length >= 30) fail2("\u0627\u062D\u0630\u0641 \u0628\u0639\u0636 \u0627\u0644\u0645\u0633\u0648\u062F\u0627\u062A \u0627\u0644\u0642\u062F\u064A\u0645\u0629 \u0623\u0648\u0644\u064B\u0627");
+      saved = s.drafts[uid][id2] = { id: id2, kind: input.kind, entity: String(input.entity || "new").slice(0, 128), branch: input.branch || null, data: structuredClone(input.data), updatedAt: stamp2() };
+      return s;
+    });
+    return { id: saved.id, updatedAt: saved.updatedAt };
+  }
+  if (action === "draftGet") {
+    const s = await adapter2.read(), r = role(s, uid), x = s.drafts?.[uid]?.[input.id];
+    if (!x || Date.now() - Date.parse(x.updatedAt) > 7 * 864e5) fail2("\u0627\u0644\u0645\u0633\u0648\u062F\u0629 \u063A\u064A\u0631 \u0645\u0648\u062C\u0648\u062F\u0629", 404);
+    draftAccess(s, r, x);
+    return x;
+  }
+  if (action === "draftDelete") {
+    await adapter2.mutate((original) => {
+      role(original, uid);
+      const s = structuredClone(original);
+      delete s.drafts?.[uid]?.[input.id];
+      return s;
+    });
+    return { ok: true };
+  }
+  if (action === "editingPresence") {
+    let others;
+    await adapter2.mutate((original) => {
+      const s = structuredClone(original), r = role(s, uid), p = phone(input.phone);
+      if (!can(r, "patients.read") && !can(r, "bookings.read")) fail2("\u063A\u064A\u0631 \u0645\u0635\u0631\u062D", 403);
+      access(s, r, p);
+      s.editingPresence ||= {};
+      s.editingPresence[p] ||= {};
+      for (const [id2, x] of Object.entries(s.editingPresence[p])) if (Date.now() - x.at > 9e4) delete s.editingPresence[p][id2];
+      if (input.release) delete s.editingPresence[p][uid];
+      else s.editingPresence[p][uid] = { name: r.displayName || r.u, at: Date.now() };
+      others = Object.entries(s.editingPresence[p]).filter(([id2]) => id2 !== uid).map(([, x]) => ({ name: x.name }));
+      return s;
+    });
+    return { others };
+  }
+  if (action === "daySummary" || action === "dayClose") {
+    const build2 = (s) => {
+      const r = role(s, uid);
+      requirePermission(r, "bookings.read");
+      const b = branch(s, r, input.branch), d = date(input.date), rows = Object.values(s.bookings?.[d] || {}).filter((x) => x.b === b), counts = { total: rows.length, arrived: rows.filter((x) => s.checkins?.[x.id]?.status === "arrived").length, waiting: rows.filter((x) => x.s === "wait").length, exam: rows.filter((x) => x.s === "exam").length, done: rows.filter((x) => x.s === "done").length, cancelled: rows.filter((x) => x.s === "cx").length, absent: rows.filter((x) => x.s === "no").length };
+      const elapsed = rows.map((x) => {
+        const arrived = s.checkins?.[x.id];
+        return arrived?.status === "arrived" && x.startedAt ? Math.max(0, Date.parse(x.startedAt) - Date.parse(arrived.arrivalAt || arrived.at)) / 6e4 : null;
+      }).filter((x) => Number.isFinite(x));
+      return { branch: b, date: d, counts, averageWaitMinutes: elapsed.length ? Math.round(elapsed.reduce((a, b2) => a + b2, 0) / elapsed.length) : null, generatedAt: stamp2(), pending: rows.filter((x) => ["wait", "exam"].includes(x.s)).map((x) => ({ id: x.id, no: x.no, status: x.s })), closed: s.dayClosures?.[d + "_" + b] || null };
+    };
+    if (action === "daySummary") return build2(await adapter2.read());
+    let summary;
+    await adapter2.mutate((original) => {
+      const s = structuredClone(original), r = role(s, uid);
+      requirePermission(r, "day.close");
+      summary = build2(s);
+      if (input.date > today()) fail2("\u0644\u0627 \u064A\u0645\u0643\u0646 \u0625\u0642\u0641\u0627\u0644 \u064A\u0648\u0645 \u0645\u0633\u062A\u0642\u0628\u0644\u064A");
+      if (input.confirmation !== "CLOSE_DAY") fail2("\u0631\u0627\u062C\u0639 \u0645\u0644\u062E\u0635 \u0627\u0644\u064A\u0648\u0645 \u0648\u0623\u0643\u062F \u0627\u0644\u0625\u0642\u0641\u0627\u0644");
+      if (summary.pending.some((x) => x.status === "exam")) fail2("\u0623\u0646\u0647 \u062C\u0644\u0633\u0629 \u0627\u0644\u0643\u0634\u0641 \u0623\u0648\u0644\u064B\u0627", 409);
+      s.dayClosures ||= {};
+      s.dayClosures[input.date + "_" + input.branch] = { ...summary, closed: null, by: r.u, at: stamp2(), note: text2(input.note || "", 1e3, "\u0645\u0644\u0627\u062D\u0638\u0627\u062A \u0627\u0644\u0625\u0642\u0641\u0627\u0644") };
+      return s;
+    });
+    return summary;
+  }
+  if (action === "similarPatients") {
+    const s = await adapter2.read(), r = role(s, uid);
+    requirePermission(r, "patients.merge");
+    const normalize5 = (x) => String(x || "").replace(/[أإآ]/g, "\u0627").replace(/ى/g, "\u064A").replace(/ة/g, "\u0647").replace(/\s+/g, " ").trim();
+    const result = [], groups = /* @__PURE__ */ new Map();
+    for (const [p, x] of Object.entries(s.patients || {})) {
+      if (!canAccess(s, r, p)) continue;
+      const keys2 = [normalize5(x.n), x.spousePhone ? "spouse:" + phone(x.spousePhone) : ""].filter(Boolean);
+      for (const key of keys2) {
+        if (!groups.has(key)) groups.set(key, []);
+        groups.get(key).push({ phone: p, name: x.n, branch: x.br });
+      }
+    }
+    for (const [key, items] of groups) if (items.length > 1) result.push({ reason: key.startsWith("spouse:") ? "\u0645\u0648\u0628\u0627\u064A\u0644 \u0632\u0648\u062C \u0645\u062A\u0637\u0627\u0628\u0642" : "\u0627\u0633\u0645 \u0645\u062A\u0634\u0627\u0628\u0647", patients: items });
+    return result.slice(0, 100);
+  }
+  if (action === "patientMergePreview") return mergePlan(await adapter2.read(), uid, input);
+  if (action === "patientMergeApply") {
+    let id2;
+    await adapter2.mutate((original) => {
+      const plan2 = mergePlan(original, uid, input);
+      if (input.previewToken !== plan2.token || input.confirmation !== "MERGE_PATIENTS") fail2("\u062A\u063A\u064A\u0631\u062A \u0627\u0644\u0628\u064A\u0627\u0646\u0627\u062A\u061B \u0623\u0639\u062F \u0627\u0644\u0645\u0639\u0627\u064A\u0646\u0629", 409);
+      const s = structuredClone(original), { source, target } = plan2.summary, patient = s.patients[source], dest = s.patients[target];
+      for (const key of ["spouseName", "spouseJob", "spousePhone"]) if (!dest[key] && patient[key]) dest[key] = patient[key];
+      for (const rows of Object.values(s.bookings || {})) for (const x of Object.values(rows)) if (x.phone === source) {
+        x.phone = target;
+        x.name = dest.n;
+        x.rev = (x.rev || 0) + 1;
+      }
+      s.files ||= {};
+      if (s.files[source]) {
+        const from = s.files[source], to = s.files[target] || { n: "", rev: 0 };
+        const { importedRecords: archives, ...originalFile } = from;
+        to.importedRecords = [...to.importedRecords || [], ...archives || [], { ...originalFile, sourcePhone: source, mergedAt: stamp2() }];
+        if (to.importedRecords.length > 100) fail2("\u0623\u0631\u0634\u064A\u0641 \u0627\u0644\u0645\u0644\u0641\u0627\u062A \u0627\u0644\u0645\u062F\u0645\u062C\u0629 \u062A\u062C\u0627\u0648\u0632 \u0627\u0644\u062D\u062F \u0627\u0644\u0645\u0633\u0645\u0648\u062D", 409);
+        to.n = [to.n, from.n ? "\u0633\u062C\u0644 \u0645\u062F\u0645\u062C \u0628\u062A\u0627\u0631\u064A\u062E " + today() + ":\n" + from.n : ""].filter(Boolean).join("\n\n");
+        if (to.n.length > 5e3) to.n = to.n.slice(0, 5e3);
+        for (const k of ["allergies", "chronic", "diagnosis", "treatment"]) if (!to[k] && from[k]) to[k] = from[k];
+        to.rev = (to.rev || 0) + 1;
+        to.t = stamp2();
+        s.files[target] = to;
+        delete s.files[source];
+      }
+      s.complaints ||= {};
+      s.complaints[target] ||= {};
+      s.complaintSequences ||= {};
+      let seq = Math.max(s.complaintSequences[target] || 0, ...Object.values(s.complaints[target]).map((x) => x.no || 0));
+      for (const x of Object.values(s.complaints[source] || {}).sort((a, b) => (a.no || 0) - (b.no || 0))) {
+        const key = s.complaints[target][x.id] ? randomUUID() : x.id;
+        s.complaints[target][key] = { ...x, id: key, no: ++seq, originalNo: x.no, sourcePhone: source };
+      }
+      s.complaintSequences[target] = seq;
+      delete s.complaints[source];
+      delete s.complaintSequences[source];
+      s.attachments ||= {};
+      s.attachments[target] = { ...s.attachments[target], ...s.attachments[source] };
+      delete s.attachments[source];
+      for (const x of Object.values(s.inbox || {})) if (x.p === source) {
+        x.p = target;
+        x.n = dest.n;
+      }
+      for (const x of Object.values(s.tasks || {})) if (x.phone === source) x.phone = target;
+      delete s.patients[source];
+      rebuild(s);
+      id2 = randomUUID();
+      s.patientMerges ||= {};
+      const changes = [];
+      for (const key of ["patients", "bookings", "files", "complaints", "complaintSequences", "attachments", "inbox", "tasks"]) diff(original[key] || {}, s[key] || {}, [key], changes);
+      s.patientMerges[id2] = { id: id2, source, target, at: stamp2(), by: uid, changes: structuredClone(changes) };
+      return s;
+    });
+    return { ok: true, id: id2 };
+  }
+  if (action === "patientMergeList") {
+    const s = await adapter2.read();
+    requirePermission(role(s, uid), "patients.merge");
+    return Object.values(s.patientMerges || {}).map(({ changes, ...x }) => x);
+  }
+  if (action === "patientMergeUndo") {
+    await adapter2.mutate((original) => {
+      const s = structuredClone(original), r = role(s, uid);
+      requirePermission(r, "patients.merge");
+      const m = s.patientMerges?.[input.id];
+      if (!m || m.undoneAt) fail2("\u0639\u0645\u0644\u064A\u0629 \u0627\u0644\u062F\u0645\u062C \u063A\u064A\u0631 \u0645\u0648\u062C\u0648\u062F\u0629", 404);
+      access(s, r, m.target);
+      for (const x of m.changes) {
+        let value = s;
+        for (const k of x.path) value = value?.[k];
+        if (JSON.stringify(value) !== JSON.stringify(x.removed ? void 0 : x.after)) fail2("\u062A\u0648\u062C\u062F \u062A\u0639\u062F\u064A\u0644\u0627\u062A \u0623\u062D\u062F\u062B\u061B \u0644\u0627 \u064A\u0645\u0643\u0646 \u0627\u0644\u062A\u0631\u0627\u062C\u0639 \u062F\u0648\u0646 \u0645\u0631\u0627\u062C\u0639\u062A\u0647\u0627", 409);
+      }
+      for (const x of m.changes) {
+        let node = s;
+        for (const k of x.path.slice(0, -1)) node = node[k] ||= {};
+        if (x.added) delete node[x.path.at(-1)];
+        else node[x.path.at(-1)] = structuredClone(x.before);
+      }
+      m.undoneAt = stamp2();
+      m.undoneBy = uid;
+      rebuild(s);
+      return s;
+    });
+    return { ok: true };
+  }
+  fail2("\u0639\u0645\u0644\u064A\u0629 \u063A\u064A\u0631 \u0645\u0633\u0645\u0648\u062D\u0629", 403);
+}
+var actions = ["preferencesGet", "preferencesSave", "timeline", "workflowList", "checkinSet", "taskSave", "draftSave", "draftGet", "draftDelete", "editingPresence", "daySummary", "dayClose", "similarPatients", "patientMergePreview", "patientMergeApply", "patientMergeList", "patientMergeUndo"];
+
+// supabase/functions/clinic-api/patient-requests.js
+import { randomUUID as randomUUID2 } from "node:crypto";
+
+// supabase/functions/clinic-api/schedule.js
+function validDate2(date2) {
+  const parsed = /* @__PURE__ */ new Date(date2 + "T12:00:00Z");
+  return /^\d{4}-\d{2}-\d{2}$/.test(date2) && Number.isFinite(parsed.getTime()) && parsed.toISOString().slice(0, 10) === date2;
+}
+function availability(registry, schedules, date2) {
+  const result = { scheduled: [], flexible: [] };
+  if (!validDate2(date2)) return result;
+  const day = (/* @__PURE__ */ new Date(date2 + "T12:00:00Z")).getUTCDay();
+  for (const [id2, branch2] of Object.entries(registry)) {
+    if (branch2.enabled === false) continue;
+    const schedule3 = schedules[id2];
+    if (Object.hasOwn(schedule3?.exceptions || {}, date2)) {
+      const slots2 = schedule3.exceptions[date2];
+      if (slots2.length) result.scheduled.push({ id: id2, slots: slots2 });
+      continue;
+    }
+    if (schedule3?.mode === "days") {
+      if (schedule3.d?.includes(day)) result.scheduled.push({ id: id2, slots: [], dayOnly: true });
+      continue;
+    }
+    if (!schedule3 || schedule3.mode === "flexible") {
+      result.flexible.push(id2);
+      continue;
+    }
+    const slots = schedule3.mode === "weekly" ? schedule3.weekly?.[day] || [] : schedule3.d?.includes(day) ? [{ f: schedule3.f, t: schedule3.t }] : [];
+    if (slots.length) result.scheduled.push({ id: id2, slots });
+  }
+  return result;
+}
+function choose(registry, schedules, date2, time2) {
+  const items = availability(registry, schedules, date2).scheduled;
+  if (items.length === 1) return items[0].id;
+  if (time2 && items.every((item) => !item.dayOnly)) {
+    const active = items.filter((item) => item.slots.some((slot) => slot.f <= time2 && time2 < slot.t));
+    if (active.length === 1) return active[0].id;
+  }
+  return null;
+}
+
+// supabase/functions/clinic-api/patient-requests.js
+var time = () => (/* @__PURE__ */ new Date()).toISOString();
+function settings(s) {
+  const x = s.settings?.bookingRequests || {};
+  return { enabled: x.enabled !== false, leadDays: Number.isInteger(x.leadDays) ? Math.max(1, Math.min(90, x.leadDays)) : 30, changeCutoffHours: Number.isInteger(x.changeCutoffHours) ? Math.max(0, Math.min(168, x.changeCutoffHours)) : 12, slotMinutes: Number.isInteger(x.slotMinutes) ? Math.max(5, Math.min(120, x.slotMinutes)) : 15 };
+}
+function available(s, d) {
+  const conf = settings(s), registry = branches(s), a = availability(registry, s.settings?.sched || {}, d);
+  return Object.entries(registry).filter(([b, x]) => x.enabled !== false).map(([id2, x]) => {
+    const declared = a.scheduled.find((y) => y.id === id2), booked = Object.values(s.bookings?.[d] || {}).filter((y) => y.b === id2 && y.s !== "cx").length, full = !!x.maxBookings && booked >= x.maxBookings;
+    const slots = [];
+    for (const item of declared?.slots || []) {
+      const minutes = (t) => Number(t.slice(0, 2)) * 60 + Number(t.slice(3));
+      for (let m = minutes(item.f); m < minutes(item.t); m += conf.slotMinutes) slots.push(String(Math.floor(m / 60)).padStart(2, "0") + ":" + String(m % 60).padStart(2, "0"));
+    }
+    return { id: id2, name: x.name, address: x.address || "", phone: x.phone || "", scheduled: !!declared, flexible: a.flexible.includes(id2), slots, full };
+  });
+}
+function validateDate(s, date2) {
+  const d = date(date2), today2 = today(), max = /* @__PURE__ */ new Date(today2 + "T12:00:00Z");
+  max.setUTCDate(max.getUTCDate() + settings(s).leadDays);
+  if (d < today2 || d > max.toISOString().slice(0, 10)) fail2("\u0627\u062E\u062A\u0631 \u064A\u0648\u0645\u064B\u0627 \u0645\u062A\u0627\u062D\u064B\u0627 \u062E\u0644\u0627\u0644 " + settings(s).leadDays + " \u064A\u0648\u0645\u064B\u0627");
+  return d;
+}
+function own(s, r, b) {
+  if (!branchIds(s).includes(b)) fail2("\u0641\u0631\u0639 \u063A\u064A\u0631 \u0635\u062D\u064A\u062D");
+  allowed(r, b);
+}
+function request(s, r, id2) {
+  const x = s.appointmentRequests?.[id2];
+  if (!x) fail2("\u0627\u0644\u0637\u0644\u0628 \u063A\u064A\u0631 \u0645\u0648\u062C\u0648\u062F", 404);
+  own(s, r, x.branch);
+  return x;
+}
+function cutoff(s, booking2) {
+  const declared = available(s, booking2.date).find((x) => x.id === booking2.b), clock = declared?.slots[0] || "14:00", desired = Date.parse(booking2.date + "T" + clock + ":00Z");
+  const cairo = new Intl.DateTimeFormat("en-CA", { timeZone: "Africa/Cairo", year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit", hourCycle: "h23" });
+  let target = desired;
+  for (let i = 0; i < 2; i++) {
+    const p = Object.fromEntries(cairo.formatToParts(new Date(target)).map((x) => [x.type, x.value]));
+    const wall = Date.parse(p.year + "-" + p.month + "-" + p.day + "T" + p.hour + ":" + p.minute + ":00Z");
+    target += desired - wall;
+  }
+  return target - Date.now() >= settings(s).changeCutoffHours * 36e5;
+}
+async function handle3(adapter2, input, uid, client) {
+  const action = input.action;
+  if (action === "bookingAvailability") {
+    const s = await adapter2.read(), d = validateDate(s, input.date || today());
+    await adapter2.limit?.(client, "availability");
+    return { date: d, ...settings(s), branches: available(s, d) };
+  }
+  if (action === "appointmentRequest") {
+    const p = phone(input.phone);
+    if (!/^01[0125]\d{8}$/.test(p)) fail2("\u0631\u0642\u0645 \u0627\u0644\u0645\u0648\u0628\u0627\u064A\u0644 \u063A\u064A\u0631 \u0635\u062D\u064A\u062D");
+    await adapter2.limit?.(client, p);
+    await adapter2.mutate((original) => {
+      const s = structuredClone(original);
+      if (!settings(s).enabled) fail2("\u0637\u0644\u0628\u0627\u062A \u0627\u0644\u062D\u062C\u0632 \u0627\u0644\u0625\u0644\u0643\u062A\u0631\u0648\u0646\u064A \u0645\u062A\u0648\u0642\u0641\u0629\u061B \u062A\u0648\u0627\u0635\u0644 \u0645\u0639 \u0627\u0644\u0639\u064A\u0627\u062F\u0629", 409);
+      const d = validateDate(s, input.date), b = input.branch, choice = available(s, d).find((x) => x.id === b);
+      if (!choice || choice.full || !choice.scheduled && !choice.flexible) fail2("\u0627\u062E\u062A\u0631 \u0641\u0631\u0639\u064B\u0627 \u0645\u062A\u0627\u062D\u064B\u0627 \u0641\u064A \u0627\u0644\u064A\u0648\u0645 \u0627\u0644\u0645\u062D\u062F\u062F", 409);
+      const name = String(input.name || "").trim();
+      if (!name || name.length > 120) fail2("\u0627\u0633\u0645 \u0627\u0644\u0645\u0631\u064A\u0636\u0629 \u0645\u0637\u0644\u0648\u0628 \u0648\u062D\u062A\u0649 120 \u062D\u0631\u0641\u064B\u0627");
+      const slot = String(input.slot || "");
+      if (slot && !choice.slots.includes(slot)) fail2("\u0627\u062E\u062A\u0631 \u0641\u062A\u0631\u0629 \u0645\u0646 \u0627\u0644\u0645\u0648\u0627\u0639\u064A\u062F \u0627\u0644\u0645\u062A\u0627\u062D\u0629");
+      if (Object.values(s.appointmentRequests || {}).some((x) => x.phone === p && x.date === d && x.status === "pending" && x.kind === "new")) return s;
+      s.appointmentRequests ||= {};
+      const id2 = randomUUID2();
+      s.appointmentRequests[id2] = { id: id2, kind: "new", phone: p, name, branch: b, date: d, slot, status: "pending", createdAt: time(), rev: 1 };
+      return s;
+    });
+    return { received: true, message: "\u062A\u0645 \u0627\u0633\u062A\u0644\u0627\u0645 \u0627\u0644\u0637\u0644\u0628. \u0627\u0644\u0645\u0648\u0639\u062F \u0644\u0627 \u064A\u062A\u0623\u0643\u062F \u0625\u0644\u0627 \u0628\u0639\u062F \u0645\u0631\u0627\u062C\u0639\u0629 \u0627\u0644\u0633\u0643\u0631\u062A\u0627\u0631\u064A\u0629 \u0648\u0627\u0644\u062A\u0648\u0627\u0635\u0644 \u0645\u0639\u0643." };
+  }
+  if (action === "appointmentChangeRequest") {
+    const p = phone(input.phone);
+    if (!/^01[0125]\d{8}$/.test(p)) fail2("\u0631\u0642\u0645 \u0627\u0644\u0645\u0648\u0628\u0627\u064A\u0644 \u063A\u064A\u0631 \u0635\u062D\u064A\u062D");
+    await adapter2.limit?.(client, p);
+    if (!["cancel", "reschedule"].includes(input.kind)) fail2("\u0646\u0648\u0639 \u0627\u0644\u0637\u0644\u0628 \u063A\u064A\u0631 \u0635\u062D\u064A\u062D");
+    const date2 = date(input.originalDate);
+    await adapter2.mutate((original) => {
+      const s = structuredClone(original), booking2 = Object.values(s.bookings?.[date2] || {}).find((x) => x.phone === p);
+      if (!booking2 || ["cx", "done"].includes(booking2.s) || date2 < today()) return s;
+      if (!cutoff(s, booking2)) fail2("\u0627\u0644\u0645\u0648\u0639\u062F \u0642\u0631\u064A\u0628\u061B \u062A\u0648\u0627\u0635\u0644 \u0645\u0639 \u0627\u0644\u0633\u0643\u0631\u062A\u0627\u0631\u064A\u0629 \u0645\u0628\u0627\u0634\u0631\u0629", 409);
+      const to = input.kind === "reschedule" ? validateDate(s, input.date) : date2, b = input.kind === "reschedule" ? input.branch : booking2.b;
+      if (input.kind === "reschedule" && !available(s, to).some((x) => x.id === b && !x.full && (x.scheduled || x.flexible))) fail2("\u0627\u0644\u0641\u0631\u0639 \u063A\u064A\u0631 \u0645\u062A\u0627\u062D \u0641\u064A \u0627\u0644\u0645\u0648\u0639\u062F \u0627\u0644\u0645\u0637\u0644\u0648\u0628", 409);
+      s.appointmentRequests ||= {};
+      if (Object.values(s.appointmentRequests).some((x) => x.bookingId === booking2.id && x.status === "pending" && x.kind === input.kind)) return s;
+      const id2 = randomUUID2();
+      s.appointmentRequests[id2] = { id: id2, kind: input.kind, phone: p, name: booking2.name, branch: booking2.b, date: date2, requestedDate: to, requestedBranch: b, bookingId: booking2.id, status: "pending", createdAt: time(), rev: 1 };
+      return s;
+    });
+    return { received: true, message: "\u062A\u0645 \u0627\u0633\u062A\u0644\u0627\u0645 \u0627\u0644\u0637\u0644\u0628 \u0644\u0644\u0645\u0631\u0627\u062C\u0639\u0629. \u064A\u0638\u0644 \u0645\u0648\u0639\u062F\u0643 \u0627\u0644\u062D\u0627\u0644\u064A \u0642\u0627\u0626\u0645\u064B\u0627 \u062D\u062A\u0649 \u062A\u0623\u0643\u064A\u062F \u0627\u0644\u0633\u0643\u0631\u062A\u0627\u0631\u064A\u0629." };
+  }
+  if (action === "requestDecide") {
+    let result;
+    await adapter2.mutate((original) => {
+      const r = role(original, uid);
+      requirePermission(r, "requests.manage");
+      const x = request(original, r, input.id);
+      if (input.revision !== x.rev || x.status !== "pending") fail2("\u0627\u0644\u0637\u0644\u0628 \u062A\u063A\u064A\u0631\u061B \u0623\u0639\u062F \u062A\u062D\u0645\u064A\u0644\u0647", 409);
+      if (!["approve", "reject"].includes(input.decision)) fail2("\u0642\u0631\u0627\u0631 \u063A\u064A\u0631 \u0635\u062D\u064A\u062D");
+      let s = structuredClone(original), item = s.appointmentRequests[x.id];
+      if (input.decision === "reject") {
+        item.status = "rejected";
+        item.note = String(input.note || "").slice(0, 1e3);
+      } else {
+        if (input.confirmContact !== true) fail2("\u0623\u0643\u062F \u0627\u0644\u062A\u0648\u0627\u0635\u0644 \u0645\u0639 \u0627\u0644\u0645\u0631\u064A\u0636\u0629 \u0648\u0627\u0644\u062A\u062D\u0642\u0642 \u0645\u0646 \u0627\u0644\u0637\u0644\u0628 \u0623\u0648\u0644\u064B\u0627");
+        let old = null, n;
+        if (x.kind !== "new") {
+          old = Object.values(s.bookings?.[x.date] || {}).find((y) => y.id === x.bookingId && y.phone === x.phone);
+          if (!old || ["done", "cx", "exam"].includes(old.s)) fail2("\u0631\u0627\u062C\u0639 \u0627\u0644\u062D\u062C\u0632 \u0627\u0644\u062D\u0627\u0644\u064A\u061B \u0644\u0627 \u064A\u0645\u0643\u0646 \u062A\u063A\u064A\u064A\u0631\u0647 \u0645\u0646 \u0627\u0644\u0637\u0644\u0628", 409);
+          allowed(r, old.b);
+        }
+        if (x.kind === "cancel") n = { ...old, s: "cx" };
+        else {
+          const date2 = validateDate(s, input.date || x.requestedDate || x.date), b = input.branch || x.requestedBranch || x.branch;
+          own(s, r, b);
+          const choice = available(s, date2).find((y) => y.id === b);
+          if (!choice || choice.full || !choice.scheduled && !choice.flexible) fail2("\u0627\u0644\u0641\u0631\u0639 \u063A\u064A\u0631 \u0645\u062A\u0627\u062D\u061B \u0631\u0627\u062C\u0639 \u062C\u062F\u0648\u0644 \u0627\u0644\u0637\u0628\u064A\u0628", 409);
+          n = { ...old || {}, id: old?.id || randomUUID2(), phone: x.phone, name: x.name, date: date2, b, v: old?.v || "exam", s: "wait", nt: old?.nt || "" };
+        }
+        s = commit(s, uid, [{ n, ...old ? { o: old } : {} }], []).state;
+        item = s.appointmentRequests[x.id];
+        item.status = "confirmed";
+        item.bookingId = n.id;
+        item.confirmedDate = n.date;
+        item.confirmedBranch = n.b;
+        if (x.kind === "cancel") {
+          s.slotOpenings ||= {};
+          const id2 = randomUUID2();
+          s.slotOpenings[id2] = { id: id2, branch: old.b, date: old.date, at: time(), by: r.u };
+        }
+      }
+      item.decidedBy = r.u;
+      item.decidedAt = time();
+      item.rev++;
+      result = { ok: true, status: item.status };
+      return s;
+    });
+    return result;
+  }
+  if (action === "waitingListSave") {
+    let saved;
+    await adapter2.mutate((original) => {
+      const s = structuredClone(original), r = role(s, uid);
+      requirePermission(r, "waitinglist.manage");
+      const p = phone(input.phone);
+      if (!/^01[0125]\d{8}$/.test(p)) fail2("\u0631\u0642\u0645 \u063A\u064A\u0631 \u0635\u062D\u064A\u062D");
+      const b = input.branch;
+      own(s, r, b);
+      const name = String(input.name || s.patients?.[p]?.n || "").trim();
+      if (!name || name.length > 120) fail2("\u0627\u0633\u0645 \u0627\u0644\u062D\u0627\u0644\u0629 \u0645\u0637\u0644\u0648\u0628");
+      if (s.patients?.[p]) {
+        assertAccess(s, r, p);
+      }
+      s.waitingList ||= {};
+      const old = input.id ? s.waitingList[input.id] : null;
+      if (input.id && !old) fail2("\u0627\u0644\u0633\u062C\u0644 \u063A\u064A\u0631 \u0645\u0648\u062C\u0648\u062F", 404);
+      if (old) {
+        own(s, r, old.branch);
+        if (input.revision !== old.rev) fail2("\u0627\u0644\u0642\u0627\u0626\u0645\u0629 \u062A\u063A\u064A\u0631\u062A", 409);
+      }
+      const from = date(input.from || today()), to = date(input.to || from);
+      if (from > to || to < today()) fail2("\u0631\u0627\u062C\u0639 \u0641\u062A\u0631\u0629 \u0627\u0644\u0627\u0646\u062A\u0638\u0627\u0631");
+      const status = input.status || old?.status || "waiting";
+      if (!["waiting", "contacted", "confirmed", "declined"].includes(status)) fail2("\u062D\u0627\u0644\u0629 \u063A\u064A\u0631 \u0635\u062D\u064A\u062D\u0629");
+      if (status === "confirmed" && (input.confirmContact !== true || !Object.entries(s.bookings || {}).some(([d, rows]) => d >= from && d <= to && Object.values(rows).some((x) => x.phone === p && x.b === b && x.s !== "cx")))) fail2("\u0623\u0646\u0634\u0626 \u0627\u0644\u062D\u062C\u0632 \u0648\u0623\u0643\u062F \u0645\u0648\u0627\u0641\u0642\u0629 \u0627\u0644\u0645\u0631\u064A\u0636\u0629 \u0623\u0648\u0644\u064B\u0627");
+      const id2 = old?.id || randomUUID2();
+      saved = s.waitingList[id2] = { id: id2, phone: p, name, branch: b, from, to, status, note: String(input.note || "").slice(0, 1e3), by: old?.by || r.u, updatedBy: r.u, updatedAt: time(), createdAt: old?.createdAt || time(), rev: (old?.rev || 0) + 1 };
+      return s;
+    });
+    return saved;
+  }
+  if (action === "waitingListMatches") {
+    const s = await adapter2.read(), r = role(s, uid);
+    requirePermission(r, "waitinglist.manage");
+    own(s, r, input.branch);
+    const d = date(input.date);
+    return Object.values(s.waitingList || {}).filter((x) => x.branch === input.branch && ["waiting", "contacted"].includes(x.status) && x.from <= d && x.to >= d).sort((a, b) => a.createdAt.localeCompare(b.createdAt));
+  }
+  if (action === "bookingRequestSettings") {
+    await adapter2.mutate((original) => {
+      const r = role(original, uid);
+      requirePermission(r, "clinic.manage");
+      const x = input.config;
+      if (!x || typeof x.enabled !== "boolean" || !Number.isInteger(x.leadDays) || x.leadDays < 1 || x.leadDays > 90 || !Number.isInteger(x.changeCutoffHours) || x.changeCutoffHours < 0 || x.changeCutoffHours > 168 || !Number.isInteger(x.slotMinutes) || x.slotMinutes < 5 || x.slotMinutes > 120) fail2("\u0625\u0639\u062F\u0627\u062F\u0627\u062A \u0627\u0644\u062D\u062C\u0632 \u063A\u064A\u0631 \u0635\u062D\u064A\u062D\u0629");
+      const s = structuredClone(original);
+      s.settings ||= {};
+      s.settings.bookingRequests = { enabled: x.enabled, leadDays: x.leadDays, changeCutoffHours: x.changeCutoffHours, slotMinutes: x.slotMinutes };
+      return s;
+    });
+    return { ok: true };
+  }
+  fail2("\u0639\u0645\u0644\u064A\u0629 \u063A\u064A\u0631 \u0645\u0633\u0645\u0648\u062D\u0629", 403);
+}
+var publicActions = ["bookingAvailability", "appointmentRequest", "appointmentChangeRequest"];
+var actions2 = [...publicActions, "requestDecide", "waitingListSave", "waitingListMatches", "bookingRequestSettings"];
+
+// supabase/functions/clinic-api/import-staging.js
+import { Buffer as Buffer5 } from "node:buffer";
+import { randomUUID as randomUUID3 } from "node:crypto";
+var MAX_BYTES = 8e6;
+var TTL = 60 * 60 * 1e3;
+function authorize(s, uid) {
+  requirePermission(role(s, uid), "data.import");
+}
+function session(s, uid, id2) {
+  authorize(s, uid);
+  const x = s.importSessions?.[uid];
+  if (!x || x.id !== id2 || Date.now() - x.createdAt > TTL) fail2("\u0627\u0646\u062A\u0647\u062A \u062C\u0644\u0633\u0629 \u062A\u062C\u0647\u064A\u0632 \u0627\u0644\u0645\u0644\u0641\u061B \u0623\u0639\u062F \u0627\u062E\u062A\u064A\u0627\u0631 \u0627\u0644\u0645\u0644\u0641", 409);
+  return x;
+}
+function assemble(x) {
+  if (x.parts.filter((v) => typeof v === "string").length !== x.total) fail2("\u0644\u0645 \u062A\u0643\u062A\u0645\u0644 \u0623\u062C\u0632\u0627\u0621 \u0627\u0644\u0645\u0644\u0641", 409);
+  const text3 = x.parts.join("");
+  if (Buffer5.byteLength(text3) > MAX_BYTES) fail2("\u0627\u0644\u0628\u064A\u0627\u0646\u0627\u062A \u0627\u0644\u0637\u0628\u064A\u0629 \u0623\u0643\u0628\u0631 \u0645\u0646 8 \u0645\u064A\u062C\u0627\u0628\u0627\u064A\u062A", 413);
+  try {
+    return JSON.parse(text3);
+  } catch {
+    fail2("\u0627\u0644\u0646\u0633\u062E\u0629 \u063A\u064A\u0631 \u0645\u0643\u062A\u0645\u0644\u0629 \u0623\u0648 JSON \u063A\u064A\u0631 \u0635\u062D\u064A\u062D");
+  }
+}
+async function handle4(adapter2, input, uid) {
+  if (input.action === "importStageStart") {
+    let id2;
+    await adapter2.mutate((original) => {
+      authorize(original, uid);
+      if (!Number.isInteger(input.total) || input.total < 1 || input.total > 48) fail2("\u0639\u062F\u062F \u0623\u062C\u0632\u0627\u0621 \u063A\u064A\u0631 \u0635\u062D\u064A\u062D");
+      if (input.options && Object.keys(input.options).some((k) => k !== "importSettings") || input.options?.importSettings !== void 0 && typeof input.options.importSettings !== "boolean") fail2("\u062E\u064A\u0627\u0631\u0627\u062A \u063A\u064A\u0631 \u0635\u062D\u064A\u062D\u0629");
+      const s = structuredClone(original);
+      s.importSessions ||= {};
+      for (const [key, x] of Object.entries(s.importSessions)) if (Date.now() - x.createdAt > TTL) delete s.importSessions[key];
+      const others = Object.entries(s.importSessions).filter(([key]) => key !== uid).reduce((n, [, x]) => n + (x.bytes || 0), 0);
+      if (others > 16e6) fail2("\u062A\u0648\u062C\u062F \u0645\u0644\u0641\u0627\u062A \u0642\u064A\u062F \u0627\u0644\u062A\u062C\u0647\u064A\u0632\u061B \u062D\u0627\u0648\u0644 \u0644\u0627\u062D\u0642\u064B\u0627", 429);
+      id2 = randomUUID3();
+      s.importSessions[uid] = { id: id2, total: input.total, parts: Array(input.total).fill(null), bytes: 0, createdAt: Date.now(), options: input.options || {} };
+      return s;
+    });
+    return { id: id2 };
+  }
+  if (input.action === "importStagePart") {
+    await adapter2.mutate((original) => {
+      const x = session(original, uid, input.id);
+      if (!Number.isInteger(input.index) || input.index < 0 || input.index >= x.total || typeof input.text !== "string" || input.text.length > 18e4) fail2("\u062C\u0632\u0621 \u063A\u064A\u0631 \u0635\u062D\u064A\u062D");
+      if (x.parts[input.index] !== null && x.parts[input.index] !== input.text) fail2("\u062A\u0639\u0627\u0631\u0636 \u0641\u064A \u062C\u0632\u0621 \u0627\u0644\u0645\u0644\u0641\u061B \u0623\u0639\u062F \u0627\u0644\u0627\u062E\u062A\u064A\u0627\u0631", 409);
+      const size = x.bytes - Buffer5.byteLength(x.parts[input.index] || "") + Buffer5.byteLength(input.text);
+      if (size > MAX_BYTES) fail2("\u0627\u0644\u0628\u064A\u0627\u0646\u0627\u062A \u0627\u0644\u0637\u0628\u064A\u0629 \u0623\u0643\u0628\u0631 \u0645\u0646 8 \u0645\u064A\u062C\u0627\u0628\u0627\u064A\u062A", 413);
+      const others = Object.entries(original.importSessions || {}).filter(([key, x2]) => key !== uid && Date.now() - x2.createdAt <= TTL).reduce((n, [, x2]) => n + (x2.bytes || 0), 0);
+      if (others + size > 16e6) fail2("\u062A\u0648\u062C\u062F \u0645\u0644\u0641\u0627\u062A \u0642\u064A\u062F \u0627\u0644\u062A\u062C\u0647\u064A\u0632\u061B \u062D\u0627\u0648\u0644 \u0644\u0627\u062D\u0642\u064B\u0627", 429);
+      const s = structuredClone(original);
+      s.importSessions[uid].parts[input.index] = input.text;
+      s.importSessions[uid].bytes = size;
+      return s;
+    });
+    return { ok: true };
+  }
+  if (input.action === "importStagePreview") {
+    const s = await adapter2.read(), x = session(s, uid, input.id), plan2 = prepare(s, uid, assemble(x), x.options, MAX_BYTES);
+    return { summary: plan2.summary, token: plan2.token };
+  }
+  if (input.action === "importStageApply") {
+    if (input.confirmation !== "IMPORT_CLINIC_DATA" || typeof input.previewToken !== "string") fail2("\u0631\u0627\u062C\u0639 \u0627\u0644\u0645\u0639\u0627\u064A\u0646\u0629 \u0648\u0623\u0643\u062F \u0627\u0644\u0627\u0633\u062A\u064A\u0631\u0627\u062F");
+    let summary;
+    await adapter2.mutate((s) => {
+      const x = session(s, uid, input.id), plan2 = prepare(s, uid, assemble(x), x.options, MAX_BYTES);
+      if (plan2.token !== input.previewToken) fail2("\u062A\u063A\u064A\u0631\u062A \u0627\u0644\u0628\u064A\u0627\u0646\u0627\u062A \u0645\u0646\u0630 \u0627\u0644\u0645\u0639\u0627\u064A\u0646\u0629\u061B \u0623\u0639\u062F \u0627\u0644\u0645\u0639\u0627\u064A\u0646\u0629 \u0623\u0648\u0644\u064B\u0627", 409);
+      summary = plan2.summary;
+      delete plan2.state.importSessions[uid];
+      return plan2.state;
+    });
+    return { ok: true, summary };
+  }
+  if (input.action === "importStageCancel") {
+    await adapter2.mutate((original) => {
+      authorize(original, uid);
+      const s = structuredClone(original);
+      if (s.importSessions?.[uid]?.id === input.id) delete s.importSessions[uid];
+      return s;
+    });
+    return { ok: true };
+  }
+  fail2("\u0639\u0645\u0644\u064A\u0629 \u0627\u0633\u062A\u064A\u0631\u0627\u062F \u063A\u064A\u0631 \u0645\u0633\u0645\u0648\u062D\u0629", 403);
+}
 
 // supabase/functions/clinic-api/schedule-transfers.js
 function reconcile(before, next) {
@@ -811,7 +2308,7 @@ function reconcile(before, next) {
       delete next.scheduleTransferPending[key];
       continue;
     }
-    const available = availability(registry, next.settings?.sched || {}, date2), stillAvailable = available.scheduled.some((x) => x.id === row.b) || available.flexible.includes(row.b);
+    const available2 = availability(registry, next.settings?.sched || {}, date2), stillAvailable = available2.scheduled.some((x) => x.id === row.b) || available2.flexible.includes(row.b);
     if (stillAvailable) {
       delete next.scheduleTransferPending[key];
       continue;
@@ -820,11 +2317,11 @@ function reconcile(before, next) {
     if (!next.scheduleTransferPending[key] && old?.b === row.b && wasAvailable) next.scheduleTransferPending[key] = { from: row.b, requestedAt: (/* @__PURE__ */ new Date()).toISOString() };
     const pending = next.scheduleTransferPending[key];
     if (!pending) continue;
-    if (available.scheduled.length !== 1) {
-      pending.reason = available.scheduled.length ? "multiple" : "unassigned";
+    if (available2.scheduled.length !== 1) {
+      pending.reason = available2.scheduled.length ? "multiple" : "unassigned";
       continue;
     }
-    const target = available.scheduled[0].id;
+    const target = available2.scheduled[0].id;
     if ([row.b, target].some((b) => ["running", "paused"].includes(next.sessions?.[date2 + "_" + b]?.status) || Object.values(rows).some((x) => x.b === b && x.s === "exam"))) {
       pending.reason = "session";
       continue;
@@ -855,10 +2352,10 @@ function reconcile(before, next) {
   next.settings.scheduleTransferPendingCount = Object.keys(next.scheduleTransferPending).length;
   return rebuild(next);
 }
-function preview(state, branch, schedule3) {
+function preview(state, branch2, schedule3) {
   const next = structuredClone(state);
   next.settings ||= {};
-  next.settings.sched = { ...next.settings.sched, [branch]: schedule2(schedule3) };
+  next.settings.sched = { ...next.settings.sched, [branch2]: schedule2(schedule3) };
   reconcile(state, next);
   const moved = [];
   for (const [date2, rows] of Object.entries(next.bookings || {})) for (const row of Object.values(rows)) if (state.bookings?.[date2]?.[row.id]?.b !== row.b) moved.push({ id: row.id, date: date2, from: state.bookings[date2][row.id].b, to: row.b, no: row.no });
@@ -1386,12 +2883,12 @@ function preview2(state, uid, accounts) {
   if (role(state, uid).r !== "admin") fail2("\u062A\u0646\u0638\u064A\u0645 \u0628\u064A\u0627\u0646\u0627\u062A \u0627\u0644\u062A\u062F\u0631\u064A\u0628 \u0645\u062A\u0627\u062D \u0644\u0644\u0623\u062F\u0645\u0646 \u0641\u0642\u0637", 403);
   if (!accounts || typeof accounts.dmn !== "string" || typeof accounts.libya !== "string" || accounts.dmn === accounts.libya) fail2("\u0627\u062E\u062A\u0631 \u062D\u0633\u0627\u0628\u064A\u0646 \u0645\u062E\u062A\u0644\u0641\u064A\u0646 \u0644\u0625\u062F\u062E\u0627\u0644 \u0627\u0644\u0628\u064A\u0627\u0646\u0627\u062A");
   const roles = [];
-  for (const [branch, username, name] of [["dmn", "dmn-sec", "\u062F\u0645\u0646\u0647\u0648\u0631"], ["libya", "libya-sec", "\u0644\u064A\u0628\u064A\u0627"]]) {
-    const id2 = accounts[branch], old = state.roles?.[id2];
+  for (const [branch2, username, name] of [["dmn", "dmn-sec", "\u062F\u0645\u0646\u0647\u0648\u0631"], ["libya", "libya-sec", "\u0644\u064A\u0628\u064A\u0627"]]) {
+    const id2 = accounts[branch2], old = state.roles?.[id2];
     if (!old || !["staff", "sec"].includes(old.r) || old.enabled === false || old.archivedAt || old.deletePending) fail2("\u0627\u062E\u062A\u0631 \u062D\u0633\u0627\u0628 \u0625\u062F\u062E\u0627\u0644 \u0628\u064A\u0627\u0646\u0627\u062A \u0641\u0639\u0627\u0644\u064B\u0627 \u0644\u0643\u0644 \u0645\u062C\u0645\u0648\u0639\u0629");
-    if (old.r === "sec" && old.br !== branch) fail2("\u062D\u0633\u0627\u0628 \u0627\u0644\u0633\u0643\u0631\u062A\u0627\u0631\u064A\u0629 \u0627\u0644\u0645\u062E\u062A\u0627\u0631 \u062A\u0627\u0628\u0639 \u0644\u0641\u0631\u0639 \u0622\u062E\u0631\u061B \u0627\u062E\u062A\u0631 \u062D\u0633\u0627\u0628 \u0627\u0644\u0641\u0631\u0639 \u0627\u0644\u0635\u062D\u064A\u062D", 409);
+    if (old.r === "sec" && old.br !== branch2) fail2("\u062D\u0633\u0627\u0628 \u0627\u0644\u0633\u0643\u0631\u062A\u0627\u0631\u064A\u0629 \u0627\u0644\u0645\u062E\u062A\u0627\u0631 \u062A\u0627\u0628\u0639 \u0644\u0641\u0631\u0639 \u0622\u062E\u0631\u061B \u0627\u062E\u062A\u0631 \u062D\u0633\u0627\u0628 \u0627\u0644\u0641\u0631\u0639 \u0627\u0644\u0635\u062D\u064A\u062D", 409);
     if (Object.entries(state.roles).some(([other, r]) => other !== id2 && r.u === username)) fail2("\u0627\u0633\u0645 \u0627\u0644\u062F\u062E\u0648\u0644 " + username + " \u0645\u0633\u062A\u062E\u062F\u0645 \u0628\u0627\u0644\u0641\u0639\u0644", 409);
-    roles.push({ uid: id2, before: old, role: { ...old, u: username, r: "sec", br: branch, scope: "branch", displayName: name, permissions: { ...old.permissions, ...Object.fromEntries(grants.map((key) => [key, true])) } } });
+    roles.push({ uid: id2, before: old, role: { ...old, u: username, r: "sec", br: branch2, scope: "branch", displayName: name, permissions: { ...old.permissions, ...Object.fromEntries(grants.map((key) => [key, true])) } } });
   }
   const counts = { alex: 0, matrouh: 0, dmn: 0, libya: 0 };
   for (const [phone3, b] of Object.entries(training_branch_assignments_500_default)) if (state.patients?.[phone3]) counts[b]++;
@@ -1401,7 +2898,7 @@ function organize(original, uid) {
   if (role(original, uid).r !== "admin") fail2("\u063A\u064A\u0631 \u0645\u0635\u0631\u062D", 403);
   const s = structuredClone(original);
   if (!branchIds(s).includes("libya")) fail2("\u0641\u0631\u0639 \u0644\u064A\u0628\u064A\u0627 \u063A\u064A\u0631 \u0645\u0648\u062C\u0648\u062F", 409);
-  for (const [phone3, branch] of Object.entries(training_branch_assignments_500_default)) if (s.patients?.[phone3]) s.patients[phone3].br = branch;
+  for (const [phone3, branch2] of Object.entries(training_branch_assignments_500_default)) if (s.patients?.[phone3]) s.patients[phone3].br = branch2;
   return s;
 }
 
@@ -1411,16 +2908,16 @@ var nurseGrants = [...queueGrants, "patients.read", "complaints.read", "complain
 function plan(state, uid, core) {
   if (core.role(state, uid).r !== "admin") core.fail("\u0636\u0628\u0637 \u062D\u0633\u0627\u0628\u0627\u062A \u0627\u0644\u0641\u0631\u0648\u0639 \u0645\u062A\u0627\u062D \u0644\u0644\u0623\u062F\u0645\u0646 \u0641\u0642\u0637", 403);
   const registry = branches(state), roles = Object.entries(state.roles || {}), staff = [];
-  for (const [branch, username] of [["alex", "alex-sec"], ["matrouh", "matrouh-sec"], ["dmn", "dmn-sec"], ["libya", "libya-sec"]]) {
-    if (!registry[branch]) core.fail("\u0623\u0636\u0641 \u0641\u0631\u0639 " + branch + " \u0642\u0628\u0644 \u0636\u0628\u0637 \u062D\u0633\u0627\u0628\u0627\u062A\u0647", 409);
+  for (const [branch2, username] of [["alex", "alex-sec"], ["matrouh", "matrouh-sec"], ["dmn", "dmn-sec"], ["libya", "libya-sec"]]) {
+    if (!registry[branch2]) core.fail("\u0623\u0636\u0641 \u0641\u0631\u0639 " + branch2 + " \u0642\u0628\u0644 \u0636\u0628\u0637 \u062D\u0633\u0627\u0628\u0627\u062A\u0647", 409);
     const named = roles.find(([, r]) => r.u === username);
-    if (named && (!["sec", "staff"].includes(named[1].r) || named[1].br !== branch || named[1].archivedAt || named[1].deletePending)) core.fail("\u0627\u0633\u0645 " + username + " \u0645\u0631\u062A\u0628\u0637 \u0628\u062D\u0633\u0627\u0628 \u0645\u062E\u062A\u0644\u0641 \u0623\u0648 \u0645\u0624\u0631\u0634\u0641\u061B \u0631\u0627\u062C\u0639\u0647 \u0645\u0646 \u0627\u0644\u0645\u0633\u062A\u062E\u062F\u0645\u064A\u0646 \u0623\u0648\u0644\u064B\u0627", 409);
-    const matches = roles.filter(([, r]) => r.r === "sec" && r.br === branch && r.enabled !== false && !r.archivedAt && !r.deletePending);
-    if (!named && matches.length > 1) core.fail("\u064A\u0648\u062C\u062F \u0623\u0643\u062B\u0631 \u0645\u0646 \u062D\u0633\u0627\u0628 \u0633\u0643\u0631\u062A\u0627\u0631\u064A\u0629 \u0644\u0644\u0641\u0631\u0639 " + registry[branch].name + "\u061B \u062D\u062F\u0651\u062F \u0627\u0644\u062D\u0633\u0627\u0628 \u0627\u0644\u0645\u0637\u0644\u0648\u0628 \u0628\u062A\u0633\u0645\u064A\u062A\u0647 " + username + " \u0623\u0648\u0644\u064B\u0627", 409);
-    const dataMatches = roles.filter(([, r]) => r.r === "staff" && r.br === branch && r.enabled !== false && !r.archivedAt && !r.deletePending && /data/i.test(r.u));
-    if (!named && !matches.length && dataMatches.length > 1) core.fail("\u064A\u0648\u062C\u062F \u0623\u0643\u062B\u0631 \u0645\u0646 \u062D\u0633\u0627\u0628 \u062F\u0627\u062A\u0627 \u0644\u0644\u0641\u0631\u0639 " + registry[branch].name + "\u061B \u0631\u0627\u062C\u0639 \u0627\u0644\u062D\u0633\u0627\u0628 \u0627\u0644\u0645\u0637\u0644\u0648\u0628 \u0623\u0648\u0644\u064B\u0627", 409);
+    if (named && (!["sec", "staff"].includes(named[1].r) || named[1].br !== branch2 || named[1].archivedAt || named[1].deletePending)) core.fail("\u0627\u0633\u0645 " + username + " \u0645\u0631\u062A\u0628\u0637 \u0628\u062D\u0633\u0627\u0628 \u0645\u062E\u062A\u0644\u0641 \u0623\u0648 \u0645\u0624\u0631\u0634\u0641\u061B \u0631\u0627\u062C\u0639\u0647 \u0645\u0646 \u0627\u0644\u0645\u0633\u062A\u062E\u062F\u0645\u064A\u0646 \u0623\u0648\u0644\u064B\u0627", 409);
+    const matches = roles.filter(([, r]) => r.r === "sec" && r.br === branch2 && r.enabled !== false && !r.archivedAt && !r.deletePending);
+    if (!named && matches.length > 1) core.fail("\u064A\u0648\u062C\u062F \u0623\u0643\u062B\u0631 \u0645\u0646 \u062D\u0633\u0627\u0628 \u0633\u0643\u0631\u062A\u0627\u0631\u064A\u0629 \u0644\u0644\u0641\u0631\u0639 " + registry[branch2].name + "\u061B \u062D\u062F\u0651\u062F \u0627\u0644\u062D\u0633\u0627\u0628 \u0627\u0644\u0645\u0637\u0644\u0648\u0628 \u0628\u062A\u0633\u0645\u064A\u062A\u0647 " + username + " \u0623\u0648\u0644\u064B\u0627", 409);
+    const dataMatches = roles.filter(([, r]) => r.r === "staff" && r.br === branch2 && r.enabled !== false && !r.archivedAt && !r.deletePending && /data/i.test(r.u));
+    if (!named && !matches.length && dataMatches.length > 1) core.fail("\u064A\u0648\u062C\u062F \u0623\u0643\u062B\u0631 \u0645\u0646 \u062D\u0633\u0627\u0628 \u062F\u0627\u062A\u0627 \u0644\u0644\u0641\u0631\u0639 " + registry[branch2].name + "\u061B \u0631\u0627\u062C\u0639 \u0627\u0644\u062D\u0633\u0627\u0628 \u0627\u0644\u0645\u0637\u0644\u0648\u0628 \u0623\u0648\u0644\u064B\u0627", 409);
     const selected = named || matches[0] || dataMatches[0], old = selected?.[1] || {};
-    const role2 = { ...old, u: username, r: "sec", br: branch, scope: "branch", enabled: true, displayName: old.displayName || "\u0633\u0643\u0631\u062A\u0627\u0631\u064A\u0629 " + registry[branch].name, permissions: { ...old.permissions, ...Object.fromEntries(queueGrants.map((key) => [key, true])) } };
+    const role2 = { ...old, u: username, r: "sec", br: branch2, scope: "branch", enabled: true, displayName: old.displayName || "\u0633\u0643\u0631\u062A\u0627\u0631\u064A\u0629 " + registry[branch2].name, permissions: { ...old.permissions, ...Object.fromEntries(queueGrants.map((key) => [key, true])) } };
     staff.push({ before: selected?.[1] || null, uid: selected?.[0] || null, username, create: !selected, role: validateRole(role2, core.fail, Object.keys(registry)) });
   }
   for (const [id2, old] of roles.filter(([, r]) => r.r === "nurse" && r.enabled !== false && !r.archivedAt && !r.deletePending)) {
@@ -1504,7 +3001,7 @@ var legacyValues = /* @__PURE__ */ new Set([
   "\u0639\u0644\u0627\u062C \u062A\u062C\u0631\u064A\u0628\u064A \u0645\u0633\u062C\u0644 \u0644\u0644\u0627\u062E\u062A\u0628\u0627\u0631 \u0641\u0642\u0637"
 ]);
 var legacyText = (value) => typeof value === "string" && legacyValues.has(value.trim());
-function normalize2(original, uid) {
+function normalize4(original, uid) {
   requirePermission(role(original, uid), "data.import");
   const s = structuredClone(original);
   s.patients = { ...indexPatients({ ...s, patients: { ...s.patients } }).patients, ...s.patients };
@@ -1593,859 +3090,28 @@ function normalize2(original, uid) {
   return { state: s, summary };
 }
 
-// supabase/functions/clinic-api/history.js
-var ROOTS = ["patients", "files", "complaints", "attachments", "bookings", "inbox", "followups", "deletedBookings", "sessions", "complaintSequences", "settings", "roles"];
-var object = (x) => x !== null && typeof x === "object" && !Array.isArray(x);
-var same = (a, b) => JSON.stringify(a) === JSON.stringify(b);
-function diff(before, after, path = [], out = []) {
-  if (same(before, after)) return out;
-  if (object(before) && object(after)) {
-    for (const key of /* @__PURE__ */ new Set([...Object.keys(before), ...Object.keys(after)])) diff(before[key], after[key], path.concat(key), out);
-  } else out.push({ path, before: before === void 0 ? null : before, after: after === void 0 ? null : after, removed: after === void 0, added: before === void 0 });
-  return out;
-}
-function safe(value) {
-  if (Array.isArray(value)) return value.map(safe);
-  if (object(value)) return Object.fromEntries(Object.entries(value).filter(([k]) => !/(password|token|secret|hash|salt)/i.test(k)).map(([k, v]) => [k, safe(v)]));
-  return typeof value === "string" && value.startsWith("data:image/") ? "[\u0635\u0648\u0631\u0629 \u0645\u0636\u0645\u0651\u0646\u0629]" : value;
-}
-function context(before, next, changes, input = {}) {
-  const out = { patients: {}, bookings: {}, branches: {}, users: {} };
-  for (const state of [before, next]) {
-    for (const [p, x] of Object.entries(state.patients || {})) if (x.n) out.patients[p] = x.n;
-    for (const [d, rows] of Object.entries(state.bookings || {})) for (const x of Object.values(rows)) {
-      out.patients[x.phone] ||= x.name;
-      out.bookings[d + "/" + x.id] = { name: x.name, phone: x.phone, no: x.no, b: x.b, date: d };
-    }
-    for (const [b, x] of Object.entries(state.settings?.branches || state.settings?.site?.branches || {})) out.branches[b] = x.name;
-    for (const [id2, x] of Object.entries(state.roles || {})) {
-      out.users[id2] = x.displayName || x.u;
-      out.users[x.u] = x.displayName || x.u;
-    }
-  }
-  const phones = /* @__PURE__ */ new Set(), tickets = /* @__PURE__ */ new Set(), users = new Set([input.uid, input.actor].filter(Boolean));
-  for (const c of changes) {
-    const [root, a, b] = c.path;
-    if (["patients", "files", "complaints", "attachments", "inbox", "followups"].includes(root)) phones.add(a);
-    if (root === "patients") {
-      for (const v of [c.before, c.after]) if (v && typeof v === "object" && v.n) out.patients[a] = v.n;
-      if (b === "n" && typeof (c.after || c.before) === "string") out.patients[a] = c.after || c.before;
-    }
-    if (root === "roles") users.add(a);
-    if (root === "bookings") {
-      if (b) tickets.add(a + "/" + b);
-      for (const v of [c.before, c.after]) if (v && typeof v === "object") {
-        const rows = b ? [v] : Object.values(v);
-        for (const x of rows) if (x?.id) {
-          out.bookings[a + "/" + x.id] = { name: x.name, phone: x.phone, no: x.no, b: x.b, date: a };
-          out.patients[x.phone] ||= x.name;
-          phones.add(x.phone);
-          tickets.add(a + "/" + x.id);
-        }
-      }
-    }
-  }
-  for (const k of tickets) if (out.bookings[k]?.phone) phones.add(out.bookings[k].phone);
-  out.patients = Object.fromEntries(Object.entries(out.patients).filter(([p]) => phones.has(p)));
-  out.bookings = Object.fromEntries(Object.entries(out.bookings).filter(([k]) => tickets.has(k)));
-  out.users = Object.fromEntries(Object.entries(out.users).filter(([id2]) => users.has(id2) || changes.some((c) => ["by", "editedBy", "archivedBy"].includes(c.path.at(-1)) && [c.before, c.after].includes(id2))));
-  return out;
-}
-function record(before, next, input, uid) {
-  const changes = [];
-  for (const root of ROOTS) diff(before[root] || {}, next[root] || {}, [root], changes);
-  const id2 = crypto.randomUUID(), at = (/* @__PURE__ */ new Date()).toISOString(), branches2 = [...new Set((input.puts || []).map((x) => x.n?.b).concat((input.dels || []).map((x) => x.b)).filter(Boolean))];
-  const phones = /* @__PURE__ */ new Set();
-  for (const change of changes) {
-    const [root, a, b] = change.path;
-    if (["patients", "files", "complaints", "attachments"].includes(root)) phones.add(a);
-    if (root === "bookings" && b) {
-      for (const state of [before, next]) {
-        const booking2 = state.bookings?.[a]?.[b];
-        if (booking2?.b) branches2.push(booking2.b);
-        if (booking2?.phone) phones.add(booking2.phone);
-      }
-    }
-    if (root === "settings" && ["sched", "branches"].includes(a) && b) branches2.push(b);
-  }
-  for (const state of [before, next]) for (const rows of Object.values(state.bookings || {})) for (const booking2 of Object.values(rows)) if (phones.has(booking2.phone)) branches2.push(booking2.b);
-  branches2.splice(0, branches2.length, ...new Set(branches2.filter(Boolean)));
-  if (changes.some((x) => x.path[0] === "settings" && x.path[1] === "sched")) {
-    next.settings ||= {};
-    next.settings.scheduleUpdatedAt = at;
-  }
-  if (input.action !== "siteContentSave" && changes.some((x) => x.path[0] === "settings" && x.path[1] === "site" && ["sections", "layout"].includes(x.path[2]))) {
-    next.settings.contentRev = (before.settings?.contentRev || 0) + 1;
-  }
-  const watermarkState = (x) => Object.fromEntries(Object.entries(x.settings?.site?.design || {}).filter(([key]) => key.startsWith("watermark")));
-  if (input.action !== "watermarkSave" && JSON.stringify(watermarkState(before)) !== JSON.stringify(watermarkState(next))) next.settings.watermarkRev = (before.settings?.watermarkRev || 0) + 1;
-  const aboutState = (x) => [x.settings?.site?.about, Object.fromEntries(Object.entries(x.settings?.site?.design || {}).filter(([key]) => key.startsWith("about")))];
-  if (input.action !== "aboutSave" && JSON.stringify(aboutState(before)) !== JSON.stringify(aboutState(next))) next.settings.aboutRev = (before.settings?.aboutRev || 0) + 1;
-  if (input.action !== "headerSave" && changes.some((x) => x.path[0] === "settings" && x.path[1] === "site" && (!x.path[2] || ["design", "headerTitle", "headerSubtitle", "headerText", "doctorName", "specialty"].includes(x.path[2])))) {
-    next.settings.headerRev = (before.settings?.headerRev || 0) + 1;
-  }
-  const entry = { id: id2, at, actor: uid, actorName: before.roles?.[uid]?.displayName || before.roles?.[uid]?.u, action: input.action, target: input.uid, branch: input.branch || (branches2.length === 1 ? branches2[0] : void 0), branches: branches2, changeCount: changes.length };
-  next.audit = [...before.audit || [], entry];
-  next.activityDetails = { ...next.activityDetails || {}, [id2]: changes.map((x) => safe(x)) };
-  next.activityContext = { ...next.activityContext || {}, [id2]: context(before, next, changes, { ...input, actor: uid }) };
-  if (input.action === "bookingRestore") for (const group of Object.values(next.recycleBin || {})) {
-    group.items = (group.items || []).filter((x) => !(x.path[0] === "bookings" && x.path[2] === input.id));
-    if (!group.items.length) group.restoredAt = at;
-  }
-  const removed = changes.filter((x) => x.removed && !["roles", "sessions", "complaintSequences"].includes(x.path[0]));
-  if (removed.length && !["trashRestore", "bookingRestore", "patientSave", "userCredentials"].includes(input.action)) {
-    next.recycleBin = { ...next.recycleBin || {}, [id2]: { ...entry, items: structuredClone(removed) } };
-  }
-  for (const group of Object.values(next.recycleBin || {})) if (!group.restoredAt) {
-    for (const item of group.items || []) if (item.path[0] === "attachments") {
-      const collect = (x) => {
-        if (!object(x)) return;
-        if (x.key && next.attachmentGarbage) delete next.attachmentGarbage[x.key];
-        for (const v of Object.values(x)) if (object(v)) collect(v);
-      };
-      collect(item.before);
-    }
-  }
-  return next;
-}
-function admin(state, uid, key = "data.restore") {
-  requirePermission(role(state, uid), key);
-}
-function get(state, path) {
-  let x = state;
-  for (const k of path) x = x?.[k];
-  return x;
-}
-function restore(original, uid, id2) {
-  admin(original, uid);
-  const s = structuredClone(original), group = s.recycleBin?.[id2];
-  if (!group || group.restoredAt) fail2("\u0627\u0644\u0645\u062D\u0630\u0648\u0641\u0627\u062A \u063A\u064A\u0631 \u0645\u0648\u062C\u0648\u062F\u0629 \u0623\u0648 \u0633\u0628\u0642 \u0627\u0633\u062A\u0639\u0627\u062F\u062A\u0647\u0627", 404);
-  for (const item of group.items) {
-    if (get(s, item.path) !== void 0) fail2("\u062A\u0639\u0627\u0631\u0636 \u0645\u0639 \u0628\u064A\u0627\u0646\u0627\u062A \u062D\u0627\u0644\u064A\u0629 \u0641\u064A " + item.path.join("/") + "\u061B \u0644\u0645 \u064A\u062A\u0645 \u062A\u063A\u064A\u064A\u0631 \u0623\u064A \u0628\u064A\u0627\u0646\u0627\u062A", 409);
-  }
-  for (const item of group.items) {
-    let parent = s;
-    for (const key of item.path.slice(0, -1)) {
-      if (parent[key] !== void 0 && !object(parent[key])) fail2("\u062A\u0639\u0627\u0631\u0636 \u0645\u0639 \u0628\u064A\u0627\u0646\u0627\u062A \u0623\u062D\u062F\u062B", 409);
-      parent = parent[key] ||= {};
-    }
-    parent[item.path.at(-1)] = structuredClone(item.before);
-  }
-  for (const item of group.items.filter((x) => x.path[0] === "bookings")) {
-    const rows = s.bookings[item.path[1]] || {};
-    const restored = item.path.length === 2 ? Object.values(rows) : [rows[item.path[2]]];
-    for (const n of restored) {
-      if (!n?.id) continue;
-      if (Object.values(rows).some((x) => x.id !== n.id && x.phone === n.phone)) fail2("\u064A\u0648\u062C\u062F \u062D\u062C\u0632 \u0622\u062E\u0631 \u0644\u0646\u0641\u0633 \u0627\u0644\u0645\u0631\u064A\u0636 \u0641\u064A \u0627\u0644\u064A\u0648\u0645 \u0646\u0641\u0633\u0647", 409);
-      if (!branchIds(s).includes(n.b)) fail2("\u0627\u0633\u062A\u0639\u062F \u0627\u0644\u0641\u0631\u0639 \u0623\u0648\u0644\u064B\u0627 \u0642\u0628\u0644 \u0627\u0644\u062D\u062C\u0648\u0632\u0627\u062A", 409);
-      s.sequences ||= {};
-      const key = n.date + "_" + n.b;
-      n.no = Math.max(s.sequences[key] || 0, ...Object.values(rows).map((x) => x.b === n.b ? x.no || 0 : 0)) + 1;
-      s.sequences[key] = n.no;
-      n.s = "wait";
-      n.rev = (n.rev || 0) + 1;
-      delete n.startedAt;
-      delete s.deletedBookings?.[n.id];
-    }
-  }
-  for (const [phone3, rows] of Object.entries(s.complaints || {})) {
-    s.complaintSequences ||= {};
-    s.complaintSequences[phone3] = Math.max(original.complaintSequences?.[phone3] || 0, s.complaintSequences[phone3] || 0, ...Object.values(rows).map((x) => x.no || 0));
-  }
-  group.restoredAt = (/* @__PURE__ */ new Date()).toISOString();
-  group.restoredBy = uid;
-  rebuild(s);
-  return s;
-}
-function list(state, uid, input) {
-  admin(state, uid);
-  const page = Math.max(0, Math.floor(Number(input.page) || 0)), size = 30;
-  let rows = Object.values(state.recycleBin || {}).filter((x) => !x.restoredAt).sort((a, b) => b.at.localeCompare(a.at));
-  return { total: rows.length, page, rows: rows.slice(page * size, (page + 1) * size).map(({ items, ...entry }) => ({ ...entry, count: items.length, paths: items.map((x) => x.path.join("/")) })) };
-}
-
-// supabase/functions/clinic-api/management.js
-import { Buffer as Buffer2 } from "node:buffer";
-
-// supabase/functions/clinic-api/display-options.js
-var numbers = [["currentShare", 71, 60, 85], ["currentScale", 72, 60, 85], ["nextScale", 24, 12, 28], ["radius", 22, 0, 40], ["gap", 18, 8, 40], ["pollSeconds", 5, 5, 30], ["musicVolume", 18, 0, 100], ["callVolume", 85, 0, 100], ["musicTrack", 0, 0, 113]];
-var noticeNumbers = [["noticeFontSize", 18, 12, 48], ["noticeMaxWidth", 620, 160, 1e3], ["noticeBorderWidth", 2, 0, 8], ["noticeRadius", 12, 0, 48], ["noticePadding", 10, 4, 48], ["noticeNeonSize", 18, 0, 40]];
-var noticeColors = { noticeTextColor: "#ad362e", noticeBackground: "#fcecea", noticeBorderColor: "#ad362e", noticeNeonColor: "#ef4444" };
-var flags = { showNext: true, showWaiting: true, showClock: true, showDate: true, showSchedule: true, showFooter: true, showConnection: true, showControls: true, showGuide: true, customColors: false, managedAudio: false };
-var texts = { currentLabel: "\u0631\u0642\u0645 \u0627\u0644\u062D\u0627\u0644\u0629 \u0627\u0644\u062D\u0627\u0644\u064A\u0629", nextLabel: "\u0627\u0644\u062F\u0648\u0631 \u0627\u0644\u062A\u0627\u0644\u064A", guideText: "\u064A\u0631\u062C\u0649 \u0627\u0644\u0627\u0646\u062A\u0638\u0627\u0631 \u062D\u062A\u0649 \u0638\u0647\u0648\u0631 \u0631\u0642\u0645\u0643 \u0639\u0644\u0649 \u0627\u0644\u0634\u0627\u0634\u0629", emptyText: "\u0644\u0627 \u062A\u0648\u062C\u062F \u062D\u0627\u0644\u0627\u062A \u0641\u064A \u0627\u0644\u0627\u0646\u062A\u0638\u0627\u0631", footerText: "\u0627\u0644\u0637\u0648\u0627\u0631\u0626 \u0644\u0647\u0627 \u0623\u0648\u0644\u0648\u064A\u0629 \u0628\u0639\u062F \u0627\u0644\u062D\u0627\u0644\u0629 \u0627\u0644\u062D\u0627\u0644\u064A\u0629", runningText: "\u062C\u0627\u0631\u064A \u0627\u0644\u0643\u0634\u0641 \u2014 \u062A\u0641\u0636\u0644 \u0628\u0627\u0644\u062F\u062E\u0648\u0644", pausedText: "\u0627\u0644\u0643\u0634\u0641 \u0645\u062A\u0648\u0642\u0641 \u0645\u0624\u0642\u062A\u064B\u0627", endedText: "\u0627\u0646\u062A\u0647\u062A \u062C\u0644\u0633\u0629 \u0627\u0644\u0643\u0634\u0641", idleText: "\u0627\u0644\u0637\u0628\u064A\u0628 \u0644\u0645 \u064A\u0628\u062F\u0623 \u0627\u0644\u0643\u0634\u0641 \u0628\u0639\u062F" };
-var colorKeys = ["background", "currentBackground", "currentText", "nextBackground", "nextText", "accent"];
-var colors = { light: { background: "#eef2f6", currentBackground: "#25406b", currentText: "#ffffff", nextBackground: "#ffffff", nextText: "#25406b", accent: "#c9a24f" }, dark: { background: "#0e1424", currentBackground: "#e2bc73", currentText: "#14203c", nextBackground: "#171f35", nextText: "#eef1f6", accent: "#e2bc73" } };
-function bad(message) {
-  const e = Error(message);
-  e.status = 400;
-  throw e;
-}
-function validDate2(value) {
-  return /^\d{4}-\d{2}-\d{2}$/.test(value) && Number.isFinite(Date.parse(value + "T12:00:00Z")) && (/* @__PURE__ */ new Date(value + "T12:00:00Z")).toISOString().slice(0, 10) === value;
-}
-function normalize3(input = {}, branches2 = []) {
-  if (!input || typeof input !== "object" || Array.isArray(input)) bad("\u0625\u0639\u062F\u0627\u062F\u0627\u062A \u0634\u0627\u0634\u0629 \u0627\u0644\u062F\u0648\u0631 \u063A\u064A\u0631 \u0635\u062D\u064A\u062D\u0629");
-  const out = {};
-  for (const [key, fallback, min, max] of numbers) {
-    const value = input[key] ?? fallback;
-    if (!Number.isInteger(value) || value < min || value > max) bad("\u0631\u0627\u062C\u0639 \u0645\u0642\u0627\u0633 \u0623\u0648 \u0645\u0633\u062A\u0648\u0649 " + key + " (\u0645\u0646 " + min + " \u0625\u0644\u0649 " + max + ")");
-    out[key] = value;
-  }
-  for (const [key, fallback] of Object.entries(flags)) {
-    const value = input[key] ?? fallback;
-    if (typeof value !== "boolean") bad("\u062E\u064A\u0627\u0631 \u0639\u0631\u0636 \u063A\u064A\u0631 \u0635\u062D\u064A\u062D");
-    out[key] = value;
-  }
-  for (const [key, fallback] of Object.entries(texts)) {
-    const value = input[key] ?? fallback;
-    if (typeof value !== "string" || value.length > 160) bad("\u0646\u0635 \u0627\u0644\u0634\u0627\u0634\u0629 \u064A\u062C\u0628 \u0623\u0644\u0627 \u064A\u062A\u062C\u0627\u0648\u0632 160 \u062D\u0631\u0641\u064B\u0627");
-    out[key] = value;
-  }
-  out.dateMode = input.dateMode ?? "local";
-  if (!["local", "today", "fixed"].includes(out.dateMode)) bad("\u0648\u0636\u0639 \u062A\u0627\u0631\u064A\u062E \u0627\u0644\u0634\u0627\u0634\u0629 \u063A\u064A\u0631 \u0635\u062D\u064A\u062D");
-  out.date = input.date ?? "";
-  if (typeof out.date !== "string" || out.date !== "" && !validDate2(out.date)) bad("\u062A\u0627\u0631\u064A\u062E \u0634\u0627\u0634\u0629 \u0627\u0644\u062F\u0648\u0631 \u063A\u064A\u0631 \u0635\u062D\u064A\u062D");
-  if (out.dateMode === "fixed" && !validDate2(out.date)) bad("\u0627\u062E\u062A\u0631 \u062A\u0627\u0631\u064A\u062E\u064B\u0627 \u0635\u062D\u064A\u062D\u064B\u0627 \u0644\u062A\u062B\u0628\u064A\u062A \u0634\u0627\u0634\u0629 \u0627\u0644\u062F\u0648\u0631");
-  for (const [key, fallback, min, max] of noticeNumbers) {
-    const value = input[key] ?? fallback;
-    if (!Number.isInteger(value) || value < min || value > max) bad("\u0631\u0627\u062C\u0639 \u0645\u0642\u0627\u0633 \u0628\u0631\u0648\u0627\u0632 \u0627\u0644\u0637\u0648\u0627\u0631\u0626: " + key);
-    out[key] = value;
-  }
-  for (const [key, fallback] of Object.entries(noticeColors)) {
-    const value = input[key] ?? fallback;
-    if (!/^#[0-9a-f]{6}$/i.test(value)) bad("\u0644\u0648\u0646 \u0628\u0631\u0648\u0627\u0632 \u0627\u0644\u0637\u0648\u0627\u0631\u0626 \u063A\u064A\u0631 \u0635\u062D\u064A\u062D");
-    out[key] = value;
-  }
-  out.noticeNeonEnabled = input.noticeNeonEnabled ?? false;
-  if (typeof out.noticeNeonEnabled !== "boolean") bad("\u062E\u064A\u0627\u0631 \u0646\u064A\u0648\u0646 \u0627\u0644\u0637\u0648\u0627\u0631\u0626 \u063A\u064A\u0631 \u0635\u062D\u064A\u062D");
-  out.noticeAlign = input.noticeAlign ?? "center";
-  if (!["start", "center", "end"].includes(out.noticeAlign)) bad("\u0645\u062D\u0627\u0630\u0627\u0629 \u0631\u0633\u0627\u0644\u0629 \u0627\u0644\u0637\u0648\u0627\u0631\u0626 \u063A\u064A\u0631 \u0635\u062D\u064A\u062D\u0629");
-  out.branchMode = input.branchMode || "local";
-  if (!["local", "doctor", "fixed"].includes(out.branchMode)) bad("\u0648\u0636\u0639 \u0641\u0631\u0639 \u0627\u0644\u0634\u0627\u0634\u0629 \u063A\u064A\u0631 \u0635\u062D\u064A\u062D");
-  if (input.branch !== void 0 && typeof input.branch !== "string") bad("\u0641\u0631\u0639 \u0627\u0644\u0634\u0627\u0634\u0629 \u063A\u064A\u0631 \u0635\u062D\u064A\u062D");
-  out.branch = input.branch || "";
-  if (out.branch && !/^[a-z][a-z0-9-]{1,31}$/.test(out.branch)) bad("\u0641\u0631\u0639 \u0627\u0644\u0634\u0627\u0634\u0629 \u063A\u064A\u0631 \u0635\u062D\u064A\u062D");
-  if (out.branchMode === "fixed" && !branches2.includes(out.branch)) bad("\u0627\u062E\u062A\u0631 \u0641\u0631\u0639\u064B\u0627 \u0641\u0639\u0627\u0644\u064B\u0627 \u0644\u062A\u062B\u0628\u064A\u062A \u0627\u0644\u0634\u0627\u0634\u0629");
-  out.colors = {};
-  for (const mode of ["light", "dark"]) {
-    out.colors[mode] = {};
-    for (const key of colorKeys) {
-      const value = input.colors?.[mode]?.[key] ?? colors[mode][key];
-      if (!/^#[0-9a-f]{6}$/i.test(value)) bad("\u0644\u0648\u0646 \u0634\u0627\u0634\u0629 \u0627\u0644\u062F\u0648\u0631 \u063A\u064A\u0631 \u0635\u062D\u064A\u062D");
-      out.colors[mode][key] = value;
-    }
-  }
-  return out;
-}
-
-// supabase/functions/clinic-api/site-content.js
-var SECTION_KEYS = ["header", "contacts", "about", "branches", "lookup", "footer"];
-function validate(value, layout = {}, fail4) {
-  const rows = Array.isArray(value) ? value : Object.values(value || {});
-  if (rows.length > 24) fail4("\u0627\u0644\u062D\u062F \u0627\u0644\u0623\u0642\u0635\u0649 24 \u0642\u0633\u0645\u064B\u0627");
-  const sections = {};
-  for (const [order, x] of rows.entries()) {
-    if (!x || typeof x !== "object" || !/^[-_a-zA-Z0-9]{1,80}$/.test(x.id || "") || Object.hasOwn(sections, x.id) || ["__proto__", "constructor", "prototype"].includes(x.id)) fail4("\u0645\u0639\u0631\u0651\u0641 \u0642\u0633\u0645 \u063A\u064A\u0631 \u0635\u062D\u064A\u062D \u0623\u0648 \u0645\u0643\u0631\u0631");
-    const item = { id: x.id, order, visible: x.visible !== false };
-    for (const [key, max] of [["title", 120], ["body", 4e3], ["linkLabel", 80]]) {
-      if (x[key] !== void 0 && (typeof x[key] !== "string" || x[key].length > max)) fail4("\u0646\u0635 \u0627\u0644\u0642\u0633\u0645 \u0637\u0648\u064A\u0644 \u0623\u0648 \u063A\u064A\u0631 \u0635\u062D\u064A\u062D");
-      item[key] = x[key] || "";
-    }
-    if (x.visible !== void 0 && typeof x.visible !== "boolean") fail4("\u062D\u0627\u0644\u0629 \u0625\u0638\u0647\u0627\u0631 \u0627\u0644\u0642\u0633\u0645 \u063A\u064A\u0631 \u0635\u062D\u064A\u062D\u0629");
-    item.kind = x.kind || "text";
-    if (!["text", "notice", "image"].includes(item.kind)) fail4("\u0646\u0648\u0639 \u0627\u0644\u0642\u0633\u0645 \u063A\u064A\u0631 \u0635\u062D\u064A\u062D");
-    item.link = x.link || "";
-    if (typeof item.link !== "string" || item.link.length > 1e3) fail4("\u0631\u0627\u0628\u0637 \u063A\u064A\u0631 \u0635\u062D\u064A\u062D");
-    if (item.link) {
-      let valid = /^tel:\+?\d{7,15}$/.test(item.link);
-      try {
-        const url = new URL(item.link);
-        valid ||= url.protocol === "https:" && !url.username && !url.password;
-      } catch {
-      }
-      if (!valid) fail4("\u0627\u0644\u0631\u0627\u0628\u0637 \u064A\u062C\u0628 \u0623\u0646 \u064A\u0628\u062F\u0623 \u0628\u0640 https:// \u0623\u0648 tel:");
-    }
-    item.image = x.image || "";
-    if (item.image) {
-      const match = typeof item.image === "string" && item.image.match(/^data:image\/(png|jpeg|webp);base64,([A-Za-z0-9+/]+=*)$/);
-      if (!match || match[2].length > 267e3) fail4("\u0635\u0648\u0631\u0629 \u0627\u0644\u0642\u0633\u0645 \u064A\u062C\u0628 \u0623\u0646 \u062A\u0643\u0648\u0646 PNG \u0623\u0648 JPEG \u0623\u0648 WebP \u062D\u062A\u0649 200 \u0643\u064A\u0644\u0648\u0628\u0627\u064A\u062A");
-      let bytes;
-      try {
-        bytes = Uint8Array.from(atob(match[2]), (c) => c.charCodeAt(0));
-      } catch {
-        fail4("\u0645\u062D\u062A\u0648\u0649 \u0627\u0644\u0635\u0648\u0631\u0629 \u063A\u064A\u0631 \u0635\u062D\u064A\u062D");
-      }
-      const good = bytes.length >= 12 && bytes.length <= 2e5 && (match[1] === "png" ? [137, 80, 78, 71, 13, 10, 26, 10].every((v, i) => bytes[i] === v) : match[1] === "jpeg" ? bytes[0] === 255 && bytes[1] === 216 && bytes[2] === 255 : String.fromCharCode(...bytes.slice(0, 4)) === "RIFF" && String.fromCharCode(...bytes.slice(8, 12)) === "WEBP");
-      if (!good) fail4("\u0645\u062D\u062A\u0648\u0649 \u0627\u0644\u0635\u0648\u0631\u0629 \u0644\u0627 \u064A\u0637\u0627\u0628\u0642 \u0646\u0648\u0639\u0647\u0627");
-    }
-    sections[item.id] = item;
-  }
-  if (!layout || typeof layout !== "object" || Array.isArray(layout) || Object.entries(layout).some(([k, v]) => !SECTION_KEYS.includes(k) || typeof v !== "boolean")) fail4("\u0625\u0639\u062F\u0627\u062F\u0627\u062A \u0638\u0647\u0648\u0631 \u0627\u0644\u0623\u0642\u0633\u0627\u0645 \u063A\u064A\u0631 \u0635\u062D\u064A\u062D\u0629");
-  if (JSON.stringify(sections).length > 65e4) fail4("\u0635\u0648\u0631 \u0648\u0645\u062D\u062A\u0648\u0649 \u0627\u0644\u0623\u0642\u0633\u0627\u0645 \u0623\u0643\u0628\u0631 \u0645\u0646 \u0627\u0644\u062D\u062F \u0627\u0644\u0645\u0633\u0645\u0648\u062D");
-  return { sections, layout: { ...layout } };
-}
-
-// supabase/functions/clinic-api/design-options.js
-var fail3 = (message) => {
-  const e = Error(message);
-  e.status = 400;
-  throw e;
-};
-var COLOR_KEYS = ["background", "card", "text", "primary", "accent", "muted", "line", "headerBackground", "headerText"];
-function validate2(d) {
-  const out = {};
-  if (d.themePreset !== void 0) {
-    if (!Number.isInteger(d.themePreset) || d.themePreset < 0 || d.themePreset > 9) fail3("\u062B\u064A\u0645 \u063A\u064A\u0631 \u0635\u062D\u064A\u062D");
-    out.themePreset = d.themePreset;
-  }
-  if (d.defaultMode !== void 0) {
-    if (!["system", "light", "dark"].includes(d.defaultMode)) fail3("\u0648\u0636\u0639 \u063A\u064A\u0631 \u0635\u062D\u064A\u062D");
-    out.defaultMode = d.defaultMode;
-  }
-  for (const [k, min, max] of [["headerWidth", 50, 100], ["headerRadius", 0, 48], ["headerHeight", 80, 420], ["logoSize", 40, 180], ["photoSize", 40, 160], ["aboutFontSize", 16, 48], ["aboutBorderWidth", 0, 8], ["aboutRadius", 0, 48], ["aboutPadding", 8, 48], ["aboutNeonSize", 0, 40], ["watermarkOpacity", 0, 100], ["watermarkSize", 100, 1200], ["headerTitleSize", 18, 64], ["headerSubtitleSize", 12, 36], ["headerTextSize", 12, 36], ["headerPadding", 0, 60], ["headerGap", 0, 48]]) if (d[k] !== void 0) {
-    if (!Number.isInteger(d[k]) || d[k] < min || d[k] > max) fail3("\u0645\u0642\u0627\u0633 \u062A\u0635\u0645\u064A\u0645 \u063A\u064A\u0631 \u0635\u062D\u064A\u062D");
-    out[k] = d[k];
-  }
-  if (d.headerAlign !== void 0) {
-    if (!["start", "center", "end"].includes(d.headerAlign)) fail3("\u0645\u062D\u0627\u0630\u0627\u0629 \u0627\u0644\u0647\u064A\u062F\u0631 \u063A\u064A\u0631 \u0635\u062D\u064A\u062D\u0629");
-    out.headerAlign = d.headerAlign;
-  }
-  for (const key of ["aboutTextColor", "aboutBackground", "aboutBorderColor", "aboutNeonColor"]) if (d[key] !== void 0) {
-    if (!/^#[0-9a-f]{6}$/i.test(d[key])) fail3("\u0644\u0648\u0646 \u0627\u0644\u0646\u0628\u0630\u0629 \u063A\u064A\u0631 \u0635\u062D\u064A\u062D");
-    out[key] = d[key];
-  }
-  if (d.watermarkEnabled !== void 0) {
-    if (typeof d.watermarkEnabled !== "boolean") fail3("\u062E\u064A\u0627\u0631 \u0627\u0644\u0644\u0648\u062C\u0648 \u0627\u0644\u062E\u0644\u0641\u064A\u0629 \u063A\u064A\u0631 \u0635\u062D\u064A\u062D");
-    out.watermarkEnabled = d.watermarkEnabled;
-  }
-  if (d.watermarkPosition !== void 0) {
-    if (!["center", "top", "bottom"].includes(d.watermarkPosition)) fail3("\u0645\u0643\u0627\u0646 \u0627\u0644\u0644\u0648\u062C\u0648 \u0627\u0644\u062E\u0644\u0641\u064A\u0629 \u063A\u064A\u0631 \u0635\u062D\u064A\u062D");
-    out.watermarkPosition = d.watermarkPosition;
-  }
-  if (d.aboutNeonEnabled !== void 0) {
-    if (typeof d.aboutNeonEnabled !== "boolean") fail3("\u062E\u064A\u0627\u0631 \u0627\u0644\u0646\u064A\u0648\u0646 \u063A\u064A\u0631 \u0635\u062D\u064A\u062D");
-    out.aboutNeonEnabled = d.aboutNeonEnabled;
-  }
-  if (d.aboutAlign !== void 0) {
-    if (!["start", "center", "end"].includes(d.aboutAlign)) fail3("\u0645\u062D\u0627\u0630\u0627\u0629 \u063A\u064A\u0631 \u0635\u062D\u064A\u062D\u0629");
-    out.aboutAlign = d.aboutAlign;
-  }
-  if (d.headerColors !== void 0) {
-    if (!d.headerColors || typeof d.headerColors !== "object" || Array.isArray(d.headerColors)) fail3("\u0623\u0644\u0648\u0627\u0646 \u0627\u0644\u0647\u064A\u062F\u0631 \u063A\u064A\u0631 \u0635\u062D\u064A\u062D\u0629");
-    out.headerColors = {};
-    for (const mode of ["light", "dark"]) {
-      const p = d.headerColors[mode];
-      if (!p || !/^#[0-9a-f]{6}$/i.test(p.background) || !/^#[0-9a-f]{6}$/i.test(p.text)) fail3("\u0623\u0644\u0648\u0627\u0646 \u0627\u0644\u0647\u064A\u062F\u0631 \u063A\u064A\u0631 \u0635\u062D\u064A\u062D\u0629");
-      out.headerColors[mode] = { background: p.background, text: p.text };
-    }
-  }
-  if (d.palettes !== void 0) {
-    if (!d.palettes || typeof d.palettes !== "object") fail3("\u0623\u0644\u0648\u0627\u0646 \u063A\u064A\u0631 \u0635\u062D\u064A\u062D\u0629");
-    out.palettes = {};
-    for (const mode of ["light", "dark"]) {
-      if (!d.palettes[mode]) continue;
-      out.palettes[mode] = {};
-      for (const k of COLOR_KEYS) if (d.palettes[mode][k] !== void 0) {
-        if (!/^#[0-9a-f]{6}$/i.test(d.palettes[mode][k])) fail3("\u0644\u0648\u0646 \u063A\u064A\u0631 \u0635\u062D\u064A\u062D");
-        out.palettes[mode][k] = d.palettes[mode][k];
-      }
-    }
-  }
-  return out;
-}
-
-// supabase/functions/clinic-api/storage-cleanup.js
-function enqueue(state, items) {
-  state.attachmentGarbage ||= {};
-  for (const item of Object.values(items || {})) if (/^[0-9a-f-]{36}$/.test(item?.key)) state.attachmentGarbage[item.key] = { queuedAt: (/* @__PURE__ */ new Date()).toISOString() };
-}
-async function drain(adapter2) {
-  const snapshot = await adapter2.read(), keys2 = Object.keys(snapshot.attachmentGarbage || {});
-  for (const key of keys2) {
-    if (!adapter2.deleteAttachment) continue;
-    try {
-      await adapter2.deleteAttachment(key);
-      await adapter2.mutate((original) => {
-        const s = structuredClone(original);
-        delete s.attachmentGarbage?.[key];
-        return s;
-      });
-    } catch {
-    }
-  }
-  return Object.keys((await adapter2.read()).attachmentGarbage || {}).length;
-}
-
-// supabase/functions/clinic-api/management.js
-function site(value, fail4) {
-  if (!value || typeof value !== "object" || Array.isArray(value)) fail4("\u0628\u064A\u0627\u0646\u0627\u062A \u0627\u0644\u0645\u0648\u0642\u0639 \u063A\u064A\u0631 \u0635\u062D\u064A\u062D\u0629");
-  const result = {};
-  for (const k of ["doctorName", "specialty", "clinicName", "bookingPhone", "emergencyPhone", "about", "footer", "headerTitle", "headerSubtitle", "headerText"]) {
-    if (value[k] !== void 0) {
-      if (typeof value[k] !== "string" || value[k].length > (["about", "footer", "headerTitle", "headerSubtitle", "headerText"].includes(k) ? 2e3 : 160)) fail4("\u0627\u0644\u0646\u0635 \u0637\u0648\u064A\u0644 \u0623\u0648 \u063A\u064A\u0631 \u0635\u062D\u064A\u062D");
-      result[k] = value[k];
-    }
-  }
-  for (const k of ["bookingPhone", "emergencyPhone"]) if (result[k] && !/^\+?[0-9]{7,15}$/.test(result[k])) fail4("\u0631\u0642\u0645 \u0627\u0644\u0647\u0627\u062A\u0641 \u063A\u064A\u0631 \u0635\u062D\u064A\u062D");
-  result.branches = {};
-  for (const b of Object.keys(value.branches || {})) {
-    if (!validId(b)) fail4("\u0631\u0645\u0632 \u0641\u0631\u0639 \u063A\u064A\u0631 \u0635\u062D\u064A\u062D");
-    const x = value.branches?.[b];
-    if (!x) continue;
-    result.branches[b] = {};
-    for (const k of ["name", "address", "phone"]) {
-      if (typeof x[k] !== "string" || x[k].length > 300) fail4("\u0628\u064A\u0627\u0646\u0627\u062A \u0627\u0644\u0641\u0631\u0639 \u063A\u064A\u0631 \u0635\u062D\u064A\u062D\u0629");
-      result.branches[b][k] = x[k];
-    }
-    if (x.phone && !/^\+?[0-9]{7,15}$/.test(x.phone)) fail4("\u0647\u0627\u062A\u0641 \u0627\u0644\u0641\u0631\u0639 \u063A\u064A\u0631 \u0635\u062D\u064A\u062D");
-  }
-  Object.assign(result, validate(value.sections, value.layout, fail4));
-  const d = value.design || {};
-  result.design = validate2(d);
-  for (const k of ["primary", "background", "text", "accent", "card"]) {
-    if (d[k] !== void 0) {
-      if (!/^#[0-9a-f]{6}$/i.test(d[k])) fail4("\u0644\u0648\u0646 \u063A\u064A\u0631 \u0635\u062D\u064A\u062D");
-      result.design[k] = d[k];
-    }
-  }
-  for (const [k, min, max] of [["radius", 0, 40], ["width", 600, 1200], ["fontSize", 14, 22]]) if (d[k] !== void 0) {
-    if (!Number.isInteger(d[k]) || d[k] < min || d[k] > max) fail4("\u0642\u064A\u0645\u0629 \u062A\u0635\u0645\u064A\u0645 \u063A\u064A\u0631 \u0635\u062D\u064A\u062D\u0629");
-    result.design[k] = d[k];
-  }
-  if (d.showBackground !== void 0) {
-    if (typeof d.showBackground !== "boolean") fail4("\u062E\u064A\u0627\u0631 \u0627\u0644\u062E\u0644\u0641\u064A\u0629 \u063A\u064A\u0631 \u0635\u062D\u064A\u062D");
-    result.design.showBackground = d.showBackground;
-  }
-  for (const k of ["logo", "doctorPhoto", "watermarkImage"]) if (d[k] !== void 0) {
-    if (d[k] === "") {
-      result.design[k] = "";
-      continue;
-    }
-    const match = String(d[k]).match(/^data:image\/(png|jpeg|webp);base64,([A-Za-z0-9+/]+=*)$/);
-    if (!match) fail4("\u0627\u0644\u0635\u0648\u0631\u0629 \u064A\u062C\u0628 \u0623\u0646 \u062A\u0643\u0648\u0646 PNG \u0623\u0648 JPEG \u0623\u0648 WebP");
-    const bytes = Buffer2.from(match[2], "base64");
-    if (bytes.length > 2e5 || bytes.length < 12) fail4("\u062D\u062C\u0645 \u0627\u0644\u0635\u0648\u0631\u0629 \u063A\u064A\u0631 \u0645\u0646\u0627\u0633\u0628");
-    const good = match[1] === "png" ? bytes.subarray(0, 8).equals(Buffer2.from([137, 80, 78, 71, 13, 10, 26, 10])) : match[1] === "jpeg" ? bytes[0] === 255 && bytes[1] === 216 : bytes.toString("ascii", 0, 4) === "RIFF" && bytes.toString("ascii", 8, 12) === "WEBP";
-    if (!good) fail4("\u0645\u062D\u062A\u0648\u0649 \u0627\u0644\u0635\u0648\u0631\u0629 \u063A\u064A\u0631 \u0635\u062D\u064A\u062D");
-    result.design[k] = d[k];
-  }
-  return result;
-}
-function mutate(original, uid, input, core) {
-  const s = structuredClone(original), r = core.role(s, uid);
-  if (input.action === "displaySave") {
-    requirePermission(r, "display.manage");
-    if (input.revision !== (s.settings?.displayRev || 0)) core.fail("\u062A\u063A\u064A\u0631\u062A \u0625\u0639\u062F\u0627\u062F\u0627\u062A \u0627\u0644\u0634\u0627\u0634\u0629 \u0645\u0646 \u062C\u0644\u0633\u0629 \u0623\u062E\u0631\u0649\u061B \u0623\u0639\u062F \u0627\u0644\u062A\u062D\u0645\u064A\u0644 \u0623\u0648\u0644\u064B\u0627", 409);
-    s.settings ||= {};
-    s.settings.display = normalize3(input.config, core.branchIds(s, true));
-    s.settings.displayRev = (s.settings.displayRev || 0) + 1;
-    return s;
-  }
-  if (input.action === "siteContentSave") {
-    requirePermission(r, "site.manage");
-    if (input.revision !== (s.settings?.contentRev || 0)) core.fail("\u062A\u0645 \u062A\u0639\u062F\u064A\u0644 \u0627\u0644\u0645\u062D\u062A\u0648\u0649 \u0645\u0646 \u062C\u0644\u0633\u0629 \u0623\u062E\u0631\u0649\u061B \u0623\u0639\u062F \u0627\u0644\u062A\u062D\u0645\u064A\u0644 \u0642\u0628\u0644 \u0627\u0644\u062D\u0641\u0638", 409);
-    const content = validate(input.sections, input.layout, core.fail);
-    s.settings ||= {};
-    s.settings.site = { ...s.settings.site, ...content };
-    s.settings.contentRev = (s.settings.contentRev || 0) + 1;
-    return s;
-  }
-  if (input.action === "watermarkSave") {
-    requirePermission(r, "site.manage");
-    if (input.revision !== (s.settings?.watermarkRev || 0)) core.fail("\u062A\u0645 \u062A\u0639\u062F\u064A\u0644 \u0627\u0644\u0644\u0648\u062C\u0648 \u0627\u0644\u062E\u0644\u0641\u064A\u0629 \u0645\u0646 \u062C\u0644\u0633\u0629 \u0623\u062E\u0631\u0649\u061B \u0623\u0639\u062F \u062A\u062D\u0645\u064A\u0644 \u0627\u0644\u0625\u0639\u062F\u0627\u062F\u0627\u062A \u0623\u0648\u0644\u064B\u0627", 409);
-    const incoming = site({ design: input.design }, core.fail);
-    s.settings ||= {};
-    const current = s.settings.site || {}, design = { ...current.design };
-    for (const key of Object.keys(design)) if (key.startsWith("watermark")) delete design[key];
-    for (const [key, value] of Object.entries(incoming.design)) if (key.startsWith("watermark")) design[key] = value;
-    s.settings.previousDesign = structuredClone(current.design || {});
-    s.settings.site = { ...current, design };
-    s.settings.watermarkRev = (s.settings.watermarkRev || 0) + 1;
-    return s;
-  }
-  if (input.action === "aboutSave") {
-    requirePermission(r, "site.manage");
-    if (input.revision !== (s.settings?.aboutRev || 0)) core.fail("\u062A\u0645 \u062A\u0639\u062F\u064A\u0644 \u0646\u0628\u0630\u0629 \u0627\u0644\u0639\u064A\u0627\u062F\u0629 \u0645\u0646 \u062C\u0644\u0633\u0629 \u0623\u062E\u0631\u0649\u061B \u0623\u0639\u062F \u062A\u062D\u0645\u064A\u0644 \u0627\u0644\u0625\u0639\u062F\u0627\u062F\u0627\u062A \u0623\u0648\u0644\u064B\u0627", 409);
-    if (typeof input.text !== "string") core.fail("\u0646\u0635 \u0627\u0644\u0646\u0628\u0630\u0629 \u063A\u064A\u0631 \u0635\u062D\u064A\u062D");
-    const incoming = site({ about: input.text, design: input.design }, core.fail);
-    s.settings ||= {};
-    const current = s.settings.site || {}, design = { ...current.design };
-    for (const key of Object.keys(design)) if (key.startsWith("about")) delete design[key];
-    for (const [key, value] of Object.entries(incoming.design)) if (key.startsWith("about")) design[key] = value;
-    if (JSON.stringify(current.design) !== JSON.stringify(design)) s.settings.previousDesign = structuredClone(current.design || {});
-    s.settings.site = { ...current, about: incoming.about, design };
-    s.settings.aboutRev = (s.settings.aboutRev || 0) + 1;
-    return s;
-  }
-  if (input.action === "headerSave") {
-    requirePermission(r, "site.manage");
-    if (input.revision !== (s.settings?.headerRev || 0)) core.fail("\u062A\u0645 \u062A\u0639\u062F\u064A\u0644 \u0627\u0644\u0647\u064A\u062F\u0631 \u0645\u0646 \u062C\u0644\u0633\u0629 \u0623\u062E\u0631\u0649\u061B \u0623\u0639\u062F \u062A\u062D\u0645\u064A\u0644 \u0627\u0644\u0625\u0639\u062F\u0627\u062F\u0627\u062A \u0623\u0648\u0644\u064B\u0627", 409);
-    const incoming = site(input.site, core.fail);
-    s.settings ||= {};
-    const current = s.settings.site || {}, next = { ...current }, design = { ...current.design };
-    for (const key of ["headerTitle", "headerSubtitle", "headerText"]) if (incoming[key] !== void 0) next[key] = incoming[key];
-    for (const key of ["headerWidth", "headerRadius", "headerHeight", "headerTitleSize", "headerSubtitleSize", "headerTextSize", "logoSize", "photoSize", "headerPadding", "headerGap", "headerAlign", "logo", "doctorPhoto"]) if (incoming.design[key] !== void 0) design[key] = incoming.design[key];
-    if (incoming.design.headerColors) design.headerColors = incoming.design.headerColors;
-    if (incoming.design.palettes) {
-      design.palettes = structuredClone(current.design?.palettes || {});
-      for (const mode of ["light", "dark"]) if (incoming.design.palettes?.[mode]) {
-        const colors2 = incoming.design.palettes[mode];
-        design.palettes[mode] = { ...colors2, ...design.palettes[mode] };
-        for (const key of ["headerBackground", "headerText"]) if (colors2[key] !== void 0) design.palettes[mode][key] = colors2[key];
-      }
-    }
-    if (JSON.stringify(current.design) !== JSON.stringify(design)) s.settings.previousDesign = structuredClone(current.design || {});
-    next.design = design;
-    s.settings.site = next;
-    s.settings.headerRev = (s.settings.headerRev || 0) + 1;
-    return s;
-  }
-  if (input.action === "siteSave") {
-    requirePermission(r, "site.manage");
-    s.settings ||= {};
-    const nextSite = site(input.site, core.fail);
-    nextSite.sections = s.settings.site?.sections || {};
-    nextSite.layout = s.settings.site?.layout || {};
-    if (JSON.stringify(s.settings.site?.design) !== JSON.stringify(nextSite.design)) s.settings.previousDesign = structuredClone(s.settings.site?.design || {});
-    s.settings.site = nextSite;
-    if (s.settings.branches) for (const [b, x] of Object.entries(s.settings.site.branches)) {
-      if (s.settings.branches[b]) s.settings.branches[b] = { ...s.settings.branches[b], ...x };
-    }
-    return s;
-  }
-  if (input.action === "userSave") {
-    requirePermission(r, "users.manage");
-    if (!s.roles[input.uid]) core.fail("\u0627\u0644\u0645\u0633\u062A\u062E\u062F\u0645 \u063A\u064A\u0631 \u0645\u0648\u062C\u0648\u062F", 404);
-    if (s.roles[input.uid].deletePending) core.fail("\u062D\u0630\u0641 \u0627\u0644\u062D\u0633\u0627\u0628 \u0645\u0639\u0644\u0642\u061B \u0627\u0633\u062A\u0643\u0645\u0644 \u0627\u0644\u062D\u0630\u0641 \u0623\u0648\u0644\u064B\u0627", 409);
-    const next = validateRole(input.role, core.fail, core.branchIds(s));
-    if (next.u !== s.roles[input.uid].u) core.fail("\u0627\u0633\u0645 \u0627\u0644\u062F\u062E\u0648\u0644 \u062B\u0627\u0628\u062A\u061B \u064A\u0645\u0643\u0646\u0643 \u062A\u0639\u062F\u064A\u0644 \u0627\u0644\u0627\u0633\u0645 \u0627\u0644\u0638\u0627\u0647\u0631");
-    if (s.roles[input.uid].r === "admin" && (next.r !== "admin" || next.enabled === false) && !Object.entries(s.roles).some(([id2, x]) => id2 !== input.uid && x.r === "admin" && x.enabled !== false)) core.fail("\u064A\u062C\u0628 \u0625\u0628\u0642\u0627\u0621 \u062D\u0633\u0627\u0628 \u0645\u062F\u064A\u0631 \u0641\u0639\u0627\u0644 \u0648\u0627\u062D\u062F \u0639\u0644\u0649 \u0627\u0644\u0623\u0642\u0644");
-    s.roles[input.uid] = next;
-    return s;
-  }
-  if (input.action === "patientSave") {
-    requirePermission(r, "patients.edit");
-    indexPatients(s);
-    const p = core.phone(input.phone), to = core.phone(input.newPhone || p), name = String(input.name || "").trim();
-    if (!/^01[0125]\d{8}$/.test(p) || !/^01[0125]\d{8}$/.test(to) || !name || name.length > 120) core.fail("\u0631\u0627\u062C\u0639 \u0627\u0633\u0645 \u0627\u0644\u062D\u0627\u0644\u0629 \u0648\u0627\u0644\u0647\u0627\u062A\u0641");
-    if (s.patients[p]) assertAccess(s, r, p);
-    if (p !== to && s.patients[to]) core.fail("\u0631\u0642\u0645 \u0627\u0644\u0647\u0627\u062A\u0641 \u0627\u0644\u062C\u062F\u064A\u062F \u0645\u0633\u062A\u062E\u062F\u0645 \u0644\u062D\u0627\u0644\u0629 \u0623\u062E\u0631\u0649", 409);
-    const spouse2 = {};
-    for (const k of ["spouseName", "spouseJob", "spousePhone"]) if (Object.hasOwn(input, k)) {
-      if (typeof input[k] !== "string" || input[k].length > 120) core.fail("\u0631\u0627\u062C\u0639 \u0628\u064A\u0627\u0646\u0627\u062A \u0627\u0644\u0632\u0648\u062C");
-      spouse2[k] = k === "spousePhone" ? core.phone(input[k]) : input[k].trim();
-      if (k === "spousePhone" && spouse2[k] && !/^01[0125]\d{8}$/.test(spouse2[k])) core.fail("\u0631\u0642\u0645 \u0645\u0648\u0628\u0627\u064A\u0644 \u0627\u0644\u0632\u0648\u062C \u063A\u064A\u0631 \u0635\u062D\u064A\u062D");
-    }
-    s.patients[to] = { ...s.patients[p], ...spouse2, n: name, d: s.patients[p]?.d || core.today(), ...!allPatients(r) ? { br: r.br } : {} };
-    if (p !== to) delete s.patients[p];
-    for (const rows of Object.values(s.bookings || {})) for (const x of Object.values(rows)) if (x.phone === p) {
-      x.phone = to;
-      x.name = name;
-      x.rev = (x.rev || 0) + 1;
-    }
-    if (p !== to) {
-      for (const kind of ["files", "complaints", "followups", "attachments", "complaintSequences"]) if (s[kind]?.[p]) {
-        s[kind][to] = s[kind][p];
-        delete s[kind][p];
-      }
-    }
-    for (const n of Object.values(s.inbox || {})) if (n.p === p) {
-      n.p = to;
-      n.n = name;
-    }
-    core.rebuild(s);
-    return s;
-  }
-  if (input.action === "patientDelete") {
-    requirePermission(r, "patients.delete");
-    const p = core.phone(input.phone);
-    if (!/^01[0125]\d{8}$/.test(p)) core.fail("\u0647\u0627\u062A\u0641 \u063A\u064A\u0631 \u0635\u062D\u064A\u062D");
-    enqueue(s, s.attachments?.[p]);
-    delete s.complaintSequences?.[p];
-    for (const rows of Object.values(s.bookings || {})) for (const [id2, x] of Object.entries(rows)) if (x.phone === p) delete rows[id2];
-    for (const [id2, x] of Object.entries(s.deletedBookings || {})) if (x.booking.phone === p) delete s.deletedBookings[id2];
-    for (const kind of ["patients", "files", "complaints", "followups", "attachments", "complaintSequences"]) delete s[kind]?.[p];
-    for (const [id2, x] of Object.entries(s.inbox || {})) if (x.p === p) delete s.inbox[id2];
-    core.rebuild(s);
-    return s;
-  }
-  if (input.action === "dataClear") {
-    requirePermission(r, "data.delete");
-    if (input.confirmation !== "DELETE_CLINIC_DATA") core.fail("\u062A\u0623\u0643\u064A\u062F \u0627\u0644\u062D\u0630\u0641 \u0645\u0637\u0644\u0648\u0628");
-    for (const items of Object.values(s.attachments || {})) enqueue(s, items);
-    for (const kind of ["bookings", "patients", "files", "complaints", "inbox", "track", "deletedBookings", "sessions", "followups", "attachments", "complaintSequences"]) s[kind] = {};
-    return s;
-  }
-  core.fail("\u0639\u0645\u0644\u064A\u0629 \u063A\u064A\u0631 \u0645\u0633\u0645\u0648\u062D\u0629", 403);
-}
-
 // supabase/functions/clinic-api/clinic-features.js
 function publicQueue(s, b, d = today()) {
   if (!branchIds(s, true).includes(b)) fail2("\u0627\u0644\u0641\u0631\u0639 \u063A\u064A\u0631 \u0645\u062A\u0627\u062D \u0644\u0644\u0639\u0631\u0636 \u0627\u0644\u0639\u0627\u0645", 404);
   date(d);
-  const rows = Object.values(s.bookings?.[d] || {}).filter((x) => x.b === b).sort(queueOrder), session = s.sessions?.[d + "_" + b], active = rows.find((x) => x.s === "exam"), running = (!presence(s, d) || presence(s, d) === b) && (session?.status === "running" || !session && !!active);
-  const registry = branches(s), planned = availability(registry, s.settings?.sched || {}, d), time = d === today() ? new Intl.DateTimeFormat("en-GB", { timeZone: "Africa/Cairo", hour: "2-digit", minute: "2-digit", hour12: false }).format(/* @__PURE__ */ new Date()) : null, plannedBranch = choose(registry, s.settings?.sched || {}, d, time);
+  const rows = Object.values(s.bookings?.[d] || {}).filter((x) => x.b === b).sort(queueOrder), session2 = s.sessions?.[d + "_" + b], active = rows.find((x) => x.s === "exam"), running = (!presence(s, d) || presence(s, d) === b) && (session2?.status === "running" || !session2 && !!active);
+  const registry = branches(s), planned = availability(registry, s.settings?.sched || {}, d), time2 = d === today() ? new Intl.DateTimeFormat("en-GB", { timeZone: "Africa/Cairo", hour: "2-digit", minute: "2-digit", hour12: false }).format(/* @__PURE__ */ new Date()) : null, plannedBranch = choose(registry, s.settings?.sched || {}, d, time2);
   const operational = Object.values(s.bookings?.[d] || {}).some((x) => x.s === "exam") || Object.entries(s.sessions || {}).some(([key, value]) => key.startsWith(d + "_") && ["running", "paused"].includes(value.status));
   const selected = s.sessions?.[d + "_presence"], freshManual = selected?.source === "manual" && Number.isFinite(Date.parse(selected.selectedAt)) && (!s.settings?.scheduleUpdatedAt || Date.parse(selected.selectedAt) >= Date.parse(s.settings.scheduleUpdatedAt));
   const followBranch = operational || freshManual ? presence(s, d) : plannedBranch || (planned.flexible.includes(presence(s, d)) ? presence(s, d) : null);
   const livePresence = operational || freshManual ? presence(s, d) : null;
-  return { branch: b, date: d, plannedBranch, plannedBranches: planned.scheduled.map((x) => x.id), followBranch, presence: livePresence, status: livePresence && livePresence !== b ? "absent" : session?.status || (active ? "running" : "not_started"), current: running && active ? active.no : null, currentEmergency: !!(running && active?.v === "emergency"), next: rows.filter((x) => x.s === "wait").slice(0, 8).map((x) => ({ no: x.no, emergency: x.v === "emergency" })), waiting: rows.filter((x) => x.s === "wait").length };
-}
-
-// supabase/functions/clinic-api/data-import.js
-import { createHash as createHash2 } from "node:crypto";
-var bad2 = (path, message) => fail2("\u0645\u0644\u0641 \u0627\u0644\u0627\u0633\u062A\u064A\u0631\u0627\u062F: " + path + " - " + message);
-var object2 = (x) => !!x && typeof x === "object" && !Array.isArray(x);
-var safeId = (x) => typeof x === "string" && /^[A-Za-z0-9_-]{1,128}$/.test(x) && !Object.hasOwn(Object.prototype, x);
-function canonical(x) {
-  return Array.isArray(x) ? x.map(canonical) : object2(x) ? Object.fromEntries(Object.keys(x).sort().map((k) => [k, canonical(x[k])])) : x;
-}
-var same2 = (a, b) => JSON.stringify(canonical(a)) === JSON.stringify(canonical(b));
-function text(x, max, path, optional = false) {
-  if (optional && x === void 0) return "";
-  if (typeof x !== "string" || x.length > max) bad2(path, "\u0646\u0635 \u063A\u064A\u0631 \u0635\u062D\u064A\u062D \u0623\u0648 \u0623\u0637\u0648\u0644 \u0645\u0646 \u0627\u0644\u062D\u062F \u0627\u0644\u0645\u0633\u0645\u0648\u062D");
-  return x;
-}
-function stamp(x, path) {
-  if (x === void 0 || x === "") return void 0;
-  if (typeof x !== "string" || x.length > 60 || !Number.isFinite(Date.parse(x))) bad2(path, "\u062A\u0648\u0642\u064A\u062A \u063A\u064A\u0631 \u0635\u062D\u064A\u062D");
-  return new Date(x).toISOString();
-}
-function phone2(x, path) {
-  const p = phone(x);
-  if (!/^01[0125]\d{8}$/.test(p)) bad2(path, "\u0631\u0642\u0645 \u0645\u0648\u0628\u0627\u064A\u0644 \u063A\u064A\u0631 \u0635\u062D\u064A\u062D");
-  return p;
-}
-function guardTree(value, depth = 0) {
-  if (depth > 18) bad2("\u0627\u0644\u0645\u0644\u0641", "\u0628\u0646\u064A\u0629 \u0645\u062A\u062F\u0627\u062E\u0644\u0629 \u0623\u0643\u062B\u0631 \u0645\u0646 \u0627\u0644\u0645\u0633\u0645\u0648\u062D");
-  if (object2(value) || Array.isArray(value)) for (const [k, v] of Object.entries(value)) {
-    if (["__proto__", "constructor", "prototype"].includes(k)) bad2("\u0627\u0644\u0645\u0644\u0641", "\u0645\u0641\u062A\u0627\u062D \u063A\u064A\u0631 \u0645\u0633\u0645\u0648\u062D");
-    guardTree(v, depth + 1);
-  }
-}
-function normalize4(input, state = {}, withSettings = false) {
-  if (!object2(input)) bad2("\u0627\u0644\u0645\u0644\u0641", "\u0627\u062E\u062A\u0631 \u0646\u0633\u062E\u0629 JSON \u0635\u062D\u064A\u062D\u0629 \u0623\u0648 \u0627\u0644\u0642\u0627\u0644\u0628 \u0627\u0644\u0645\u062E\u0635\u0635");
-  if (Buffer.byteLength(JSON.stringify(input), "utf8") > 85e4) bad2("\u0627\u0644\u062D\u062C\u0645", "\u0627\u0644\u0628\u064A\u0627\u0646\u0627\u062A \u0628\u0639\u062F \u0627\u0644\u0642\u0631\u0627\u0621\u0629 \u062A\u062A\u062C\u0627\u0648\u0632 850 \u0643\u064A\u0644\u0648\u0628\u0627\u064A\u062A\u061B \u0642\u0633\u0651\u0645 \u0627\u0644\u0645\u0644\u0641");
-  guardTree(input);
-  const data = object2(input.payload) ? input.payload : input;
-  if (data.schemaVersion !== void 0 && data.schemaVersion !== 1) bad2("\u0627\u0644\u0625\u0635\u062F\u0627\u0631", "\u0625\u0635\u062F\u0627\u0631 \u0627\u0644\u0646\u0633\u062E\u0629 \u063A\u064A\u0631 \u0645\u062F\u0639\u0648\u0645");
-  if (!["patients", "bookings", "files", "complaints", "settings"].some((k) => Object.hasOwn(data, k))) bad2("\u0627\u0644\u0645\u062D\u062A\u0648\u0649", "\u0644\u0627 \u062A\u0648\u062C\u062F \u0628\u064A\u0627\u0646\u0627\u062A \u0639\u064A\u0627\u062F\u0629 \u0642\u0627\u0628\u0644\u0629 \u0644\u0644\u0627\u0633\u062A\u064A\u0631\u0627\u062F");
-  if (withSettings && data.settings?.branches) {
-    for (const [b, x] of Object.entries(data.settings.branches)) if (x?.enabled === false && (Object.values(state.bookings?.[today()] || {}).some((v) => v.b === b && v.s === "exam") || ["running", "paused"].includes(state.sessions?.[today() + "_" + b]?.status))) fail2("\u0623\u0646\u0647 \u062C\u0644\u0633\u0629 \u0627\u0644\u0641\u0631\u0639 \u0642\u0628\u0644 \u0627\u0633\u062A\u064A\u0631\u0627\u062F \u062A\u0639\u0637\u064A\u0644\u0647", 409);
-  }
-  if (withSettings && data.settings?.branches) state = { ...state, settings: { ...state.settings, branches: { ...branches(state), ...validateRegistry(data.settings.branches, fail2) } } };
-  const out = { patients: {}, bookings: {}, files: {}, complaints: {}, complaintSequences: {}, settings: null, ignored: Object.keys(data).filter((k) => !["patients", "bookings", "files", "complaints", "complaintSequences", "settings", "exportedAt", "format", "schemaVersion"].includes(k)) };
-  let count = 0;
-  const map = (value, path, fn) => {
-    if (value === void 0) return;
-    if (!object2(value)) bad2(path, "\u064A\u062C\u0628 \u0623\u0646 \u064A\u0643\u0648\u0646 \u0645\u062C\u0645\u0648\u0639\u0629 \u0633\u062C\u0644\u0627\u062A");
-    for (const [k, v] of Object.entries(value)) {
-      if (++count > 5e3) bad2("\u0627\u0644\u0633\u062C\u0644\u0627\u062A", "\u0639\u062F\u062F \u0627\u0644\u0633\u062C\u0644\u0627\u062A \u0623\u0643\u0628\u0631 \u0645\u0646 \u0627\u0644\u0645\u0633\u0645\u0648\u062D");
-      fn(k, v);
-    }
-  };
-  map(data.patients, "patients", (raw, x) => {
-    const p = phone2(raw, "patients");
-    if (out.patients[p]) bad2("patients", "\u0631\u0642\u0645 \u0645\u0643\u0631\u0631 \u0628\u0635\u064A\u063A\u0629 \u0645\u062E\u062A\u0644\u0641\u0629");
-    if (!object2(x)) bad2("patients", "\u0633\u062C\u0644 \u063A\u064A\u0631 \u0635\u062D\u064A\u062D");
-    const n = text(x.n, 120, "\u0627\u0633\u0645 \u0627\u0644\u0645\u0631\u064A\u0636").trim();
-    if (!n) bad2("\u0627\u0644\u0627\u0633\u0645", "\u0627\u0633\u0645 \u0627\u0644\u062D\u0627\u0644\u0629 \u0645\u0637\u0644\u0648\u0628");
-    out.patients[p] = { n, d: x.d ? date(x.d) : today() };
-    if (x.br !== void 0) {
-      if (!branchIds(state).includes(x.br)) bad2("\u0641\u0631\u0639 \u0627\u0644\u062D\u0627\u0644\u0629", "\u0641\u0631\u0639 \u063A\u064A\u0631 \u0645\u0639\u0631\u0648\u0641");
-      out.patients[p].br = x.br;
-    }
-    if (x.visitType !== void 0) {
-      if (!["exam", "cons", "follow", "emergency"].includes(x.visitType)) bad2("\u0646\u0648\u0639 \u0627\u0644\u0632\u064A\u0627\u0631\u0629", "\u0642\u064A\u0645\u0629 \u063A\u064A\u0631 \u0635\u062D\u064A\u062D\u0629");
-      out.patients[p].visitType = x.visitType;
-    }
-    for (const k of ["spouseName", "spouseJob", "spousePhone"]) if (x[k] !== void 0) out.patients[p][k] = k === "spousePhone" ? x[k] ? phone2(x[k], k) : "" : text(x[k], 120, k);
-  });
-  const seenIds = /* @__PURE__ */ new Set(), seenPhones = /* @__PURE__ */ new Set();
-  map(data.bookings, "bookings", (d, rows) => {
-    date(d);
-    map(rows, "bookings/" + d, (id2, x) => {
-      if (!object2(x) || x.id !== id2 || x.date !== d || !safeId(id2)) bad2("bookings/" + d, "\u0645\u0639\u0631\u0651\u0641 \u0623\u0648 \u062A\u0627\u0631\u064A\u062E \u062D\u062C\u0632 \u063A\u064A\u0631 \u0645\u062A\u0637\u0627\u0628\u0642");
-      const n = booking(x, state);
-      if (seenIds.has(id2) || seenPhones.has(d + "|" + n.phone)) bad2("bookings/" + d, "\u062D\u062C\u0632 \u0645\u0643\u0631\u0631 \u0641\u064A \u0627\u0644\u0645\u0644\u0641");
-      seenIds.add(id2);
-      seenPhones.add(d + "|" + n.phone);
-      if (seenIds.size > 1e3) bad2("\u0627\u0644\u062D\u062C\u0648\u0632\u0627\u062A", "\u0627\u0644\u062D\u062F \u0627\u0644\u0623\u0642\u0635\u0649 1000 \u062D\u062C\u0632 \u0641\u064A \u0627\u0644\u0639\u0645\u0644\u064A\u0629");
-      if (x.no !== void 0 && (!Number.isSafeInteger(x.no) || x.no < 1 || x.no > 1e7)) bad2("\u0631\u0642\u0645 \u0627\u0644\u062A\u0630\u0643\u0631\u0629", "\u0631\u0642\u0645 \u063A\u064A\u0631 \u0635\u062D\u064A\u062D");
-      const startedAt = stamp(x.startedAt, "\u0628\u062F\u0621 \u0627\u0644\u0643\u0634\u0641");
-      out.bookings[d] ||= {};
-      out.bookings[d][id2] = { ...n, ...x.no ? { no: x.no } : {}, ...startedAt ? { startedAt } : {}, rev: 1 };
-    });
-  });
-  map(data.files, "files", (raw, x) => {
-    const p = phone2(raw, "files");
-    if (!object2(x) || out.files[p]) bad2("files", "\u0645\u0644\u0641 \u063A\u064A\u0631 \u0635\u062D\u064A\u062D \u0623\u0648 \u0631\u0642\u0645 \u0645\u0643\u0631\u0631");
-    const f = { n: text(x.n, 5e3, "\u0645\u0644\u0627\u062D\u0638\u0627\u062A \u0627\u0644\u0637\u0628\u064A\u0628", true) };
-    for (const k of ["allergies", "chronic", "diagnosis", "treatment", "followUp", "source"]) if (x[k] !== void 0) {
-      f[k] = text(x[k], k === "source" ? 512 : 2e3, "files/" + k);
-      if (k === "followUp" && f[k]) date(f[k]);
-    }
-    if (x.t) f.t = stamp(x.t, "\u062A\u062D\u062F\u064A\u062B \u0627\u0644\u0645\u0644\u0641");
-    out.files[p] = f;
-  });
-  map(data.complaints, "complaints", (raw, rows) => {
-    const p = phone2(raw, "complaints");
-    if (out.complaints[p]) bad2("complaints", "\u0631\u0642\u0645 \u0645\u0643\u0631\u0631");
-    out.complaints[p] = {};
-    map(rows, "complaints/" + p, (id2, x) => {
-      if (!safeId(id2) || !object2(x) || x.id !== id2) bad2("complaints", "\u0645\u0639\u0631\u0651\u0641 \u0634\u0643\u0648\u0649 \u063A\u064A\u0631 \u0635\u062D\u064A\u062D");
-      const date2 = date(x.date);
-      if (date2 > today()) bad2("complaints", "\u062A\u0627\u0631\u064A\u062E \u0627\u0644\u0634\u0643\u0648\u0649 \u0644\u0627 \u064A\u0643\u0648\u0646 \u0641\u064A \u0627\u0644\u0645\u0633\u062A\u0642\u0628\u0644");
-      const body = text(x.text, 2e3, "\u0627\u0644\u0634\u0643\u0648\u0649");
-      if (!body.trim()) bad2("\u0627\u0644\u0634\u0643\u0648\u0649", "\u0627\u0644\u0646\u0635 \u0645\u0637\u0644\u0648\u0628");
-      if (x.no !== void 0 && (!Number.isSafeInteger(x.no) || x.no < 1)) bad2("complaints", "\u0631\u0642\u0645 \u0634\u0643\u0648\u0649 \u063A\u064A\u0631 \u0635\u062D\u064A\u062D");
-      out.complaints[p][id2] = { id: id2, ...x.no ? { no: x.no } : {}, reason: text(x.reason, 2e3, "\u0633\u0628\u0628 \u0627\u0644\u0634\u0643\u0648\u0649", true), date: date2, text: body, tx: text(x.tx, 1e3, "\u0627\u0644\u0639\u0644\u0627\u062C", true), by: text(x.by, 128, "\u0643\u0627\u062A\u0628 \u0627\u0644\u0634\u0643\u0648\u0649", true) || "\u0645\u0633\u062A\u0648\u0631\u062F", ...x.at ? { at: stamp(x.at, "\u0648\u0642\u062A \u0627\u0644\u0634\u0643\u0648\u0649") } : {} };
-    });
-  });
-  map(data.complaintSequences, "complaintSequences", (raw, value) => {
-    const p = phone2(raw, "complaintSequences");
-    if (!Number.isSafeInteger(value) || value < 0 || value > 1e8) bad2("complaintSequences", "\u0639\u062F\u0627\u062F \u0634\u0643\u0648\u0649 \u063A\u064A\u0631 \u0635\u062D\u064A\u062D");
-    out.complaintSequences[p] = value;
-  });
-  if (data.settings !== void 0) {
-    if (!object2(data.settings)) bad2("settings", "\u0625\u0639\u062F\u0627\u062F\u0627\u062A \u063A\u064A\u0631 \u0635\u062D\u064A\u062D\u0629");
-    out.settings = {};
-    if (data.settings.branches !== void 0) out.settings.branches = validateRegistry(data.settings.branches, fail2);
-    if (data.settings.avg !== void 0) {
-      if (!Number.isInteger(data.settings.avg) || data.settings.avg < 1 || data.settings.avg > 180) bad2("\u0627\u0644\u0645\u062A\u0648\u0633\u0637", "\u0645\u0646 1 \u0625\u0644\u0649 180 \u062F\u0642\u064A\u0642\u0629");
-      out.settings.avg = data.settings.avg;
-    }
-    if (data.settings.sched !== void 0) {
-      if (!object2(data.settings.sched)) bad2("\u0627\u0644\u0645\u0648\u0627\u0639\u064A\u062F", "\u0625\u0639\u062F\u0627\u062F \u063A\u064A\u0631 \u0635\u062D\u064A\u062D");
-      out.settings.sched = {};
-      for (const b of Object.keys(data.settings.sched)) {
-        if (!branchIds(state).includes(b)) bad2("\u0627\u0644\u0645\u0648\u0627\u0639\u064A\u062F", "\u0641\u0631\u0639 \u063A\u064A\u0631 \u0635\u062D\u064A\u062D");
-        out.settings.sched[b] = schedule2(data.settings.sched[b]);
-      }
-    }
-    if (data.settings.site !== void 0) out.settings.site = site(data.settings.site, fail2);
-  }
-  return out;
-}
-function prepare(original, uid, input, options = {}) {
-  requirePermission(role(original, uid), "data.import");
-  if (!object2(options) || Object.keys(options).some((k) => k !== "importSettings") || options.importSettings !== void 0 && typeof options.importSettings !== "boolean") fail2("\u062E\u064A\u0627\u0631\u0627\u062A \u0627\u0644\u0627\u0633\u062A\u064A\u0631\u0627\u062F \u063A\u064A\u0631 \u0635\u062D\u064A\u062D\u0629");
-  const data = normalize4(input, original, options.importSettings === true), s = structuredClone(original), summary = { patients: { added: 0, duplicates: 0, conflicts: 0 }, bookings: { added: 0, duplicates: 0, conflicts: 0 }, files: { added: 0, duplicates: 0, conflicts: 0 }, complaints: { added: 0, duplicates: 0, conflicts: 0 }, renumbered: 0, examsToWaiting: 0, settingsChanged: false, ignored: data.ignored };
-  s.patients ||= {};
-  s.bookings ||= {};
-  s.files ||= {};
-  s.complaints ||= {};
-  s.sequences ||= {};
-  const blockedPhones = /* @__PURE__ */ new Set();
-  const addPatient = (p, x) => {
-    const old = s.patients[p];
-    if (!old) {
-      s.patients[p] = x;
-      summary.patients.added++;
-    } else {
-      summary.patients[same2(old, x) ? "duplicates" : "conflicts"]++;
-      if (old.n !== x.n) blockedPhones.add(p);
-    }
-  };
-  for (const [p, x] of Object.entries(data.patients)) addPatient(p, x);
-  const ids2 = /* @__PURE__ */ new Map(), phones = /* @__PURE__ */ new Set();
-  for (const [d, rows] of Object.entries(s.bookings)) for (const x of Object.values(rows)) {
-    ids2.set(x.id, x);
-    phones.add(d + "|" + x.phone);
-  }
-  for (const [d, rows] of Object.entries(data.bookings)) for (const incoming of Object.values(rows)) {
-    const old = ids2.get(incoming.id), p = incoming.phone;
-    if (original.deletedBookings?.[incoming.id]) {
-      summary.bookings.conflicts++;
-      continue;
-    }
-    if (old) {
-      const comparison = { ...incoming, no: old.no };
-      if (comparison.s === "exam") {
-        comparison.s = "wait";
-        delete comparison.startedAt;
-      }
-      summary.bookings[same2({ ...old, rev: 1 }, comparison) ? "duplicates" : "conflicts"]++;
-      continue;
-    }
-    if (phones.has(d + "|" + p) || s.patients[p] && s.patients[p].n !== incoming.name) {
-      summary.bookings.conflicts++;
-      continue;
-    }
-    const x = { ...incoming };
-    if (x.s === "exam") {
-      x.s = "wait";
-      delete x.startedAt;
-      summary.examsToWaiting++;
-    }
-    const key = d + "_" + x.b, existing = Object.values(s.bookings[d] || {}).filter((y) => y.b === x.b), max = Math.max(s.sequences[key] || 0, 0, ...existing.map((y) => y.no || 0));
-    if (!x.no || existing.some((y) => y.no === x.no)) {
-      if (x.no) summary.renumbered++;
-      x.no = max + 1;
-    }
-    (s.bookings[d] ||= {})[x.id] = x;
-    s.sequences[key] = Math.max(max, x.no);
-    ids2.set(x.id, x);
-    phones.add(d + "|" + p);
-    summary.bookings.added++;
-    if (!s.patients[p]) addPatient(p, { n: x.name, d });
-  }
-  for (const [p, f] of Object.entries(data.files)) {
-    if (blockedPhones.has(p)) {
-      summary.files.conflicts++;
-      continue;
-    }
-    if (!s.patients[p]) bad2("files", "\u064A\u0648\u062C\u062F \u0645\u0644\u0641 \u0637\u0628\u064A \u0628\u0644\u0627 \u062D\u0627\u0644\u0629 \u0645\u0633\u062C\u0644\u0629 \u0641\u064A \u0627\u0644\u0646\u0633\u062E\u0629 \u0623\u0648 \u0627\u0644\u0639\u064A\u0627\u062F\u0629");
-    if (s.files[p]) {
-      const withoutTime = (x) => Object.fromEntries(Object.entries(x).filter(([k]) => k !== "t"));
-      summary.files[same2(withoutTime(s.files[p]), withoutTime(f)) ? "duplicates" : "conflicts"]++;
-    } else {
-      s.files[p] = { ...f, t: f.t || (/* @__PURE__ */ new Date()).toISOString() };
-      summary.files.added++;
-    }
-  }
-  for (const [p, rows] of Object.entries(data.complaints)) {
-    if (blockedPhones.has(p)) {
-      summary.complaints.conflicts += Object.keys(rows).length;
-      continue;
-    }
-    if (!s.patients[p]) bad2("complaints", "\u062A\u0648\u062C\u062F \u0634\u0643\u0627\u0648\u0649 \u0628\u0644\u0627 \u062D\u0627\u0644\u0629 \u0645\u0633\u062C\u0644\u0629");
-    s.complaints[p] ||= {};
-    for (const [id2, x] of Object.entries(rows)) {
-      if (s.complaints[p][id2]) summary.complaints[same2(s.complaints[p][id2], { ...x, no: x.no || s.complaints[p][id2].no, at: x.at || s.complaints[p][id2].at }) ? "duplicates" : "conflicts"]++;
-      else {
-        s.complaints[p][id2] = { ...x, at: x.at || (/* @__PURE__ */ new Date()).toISOString() };
-        summary.complaints.added++;
-      }
-    }
-  }
-  if (options.importSettings && data.settings) {
-    const previous = s.settings || {};
-    s.settings = { ...previous, ...data.settings, ...data.settings.branches ? { branches: { ...branches(s), ...data.settings.branches } } : {}, ...data.settings.sched ? { sched: { ...previous.sched, ...data.settings.sched } } : {} };
-    summary.settingsChanged = !same2(previous, s.settings);
-  }
-  s.complaintSequences ||= {};
-  for (const [phone3, value] of Object.entries(data.complaintSequences)) {
-    if (!s.patients[phone3]) bad2("complaintSequences", "\u0639\u062F\u0627\u062F \u062F\u0648\u0646 \u062D\u0627\u0644\u0629");
-    s.complaintSequences[phone3] = Math.max(s.complaintSequences[phone3] || 0, value);
-  }
-  summary.totalAdded = ["patients", "bookings", "files", "complaints"].reduce((n, k) => n + summary[k].added, 0);
-  summary.totalConflicts = ["patients", "bookings", "files", "complaints"].reduce((n, k) => n + summary[k].conflicts, 0);
-  const token = createHash2("sha256").update(JSON.stringify(canonical({ uid, day: today(), input, options, bookings: original.bookings, patients: original.patients, files: original.files, complaints: original.complaints, complaintSequences: original.complaintSequences, settings: original.settings, sequences: original.sequences, sessions: original.sessions, deletedBookings: original.deletedBookings }))).digest("hex");
-  numberComplaints(s);
-  rebuild(s);
-  return { state: s, summary, token };
+  return { branch: b, date: d, plannedBranch, plannedBranches: planned.scheduled.map((x) => x.id), followBranch, presence: livePresence, status: livePresence && livePresence !== b ? "absent" : session2?.status || (active ? "running" : "not_started"), current: running && active ? active.no : null, currentEmergency: !!(running && active?.v === "emergency"), next: rows.filter((x) => x.s === "wait").slice(0, 8).map((x) => ({ no: x.no, emergency: x.v === "emergency" })), waiting: rows.filter((x) => x.s === "wait").length };
 }
 
 // supabase/functions/clinic-api/attachments.js
-var MAX_BYTES = 6e5;
+var MAX_BYTES2 = 6e5;
 var MAX_FILES = 20;
 var validId3 = (id2) => typeof id2 === "string" && /^[0-9a-f-]{36}$/.test(id2);
-function authorize(state, uid, phone3, write = false) {
+function authorize2(state, uid, phone3, write = false) {
   const role2 = role(state, uid);
   requirePermission(role2, write ? "attachments.create" : "attachments.read");
   if (!/^01[0125]\d{8}$/.test(phone3) || !state.patients?.[phone3]) fail2("\u0627\u0644\u062D\u0627\u0644\u0629 \u063A\u064A\u0631 \u0645\u0648\u062C\u0648\u062F\u0629", 404);
-  if (!allBranches(role2) && !(role2.r === "nurse" && role2.scope === void 0 && !role2.br) && !Object.values(state.bookings || {}).some((rows) => Object.values(rows).some((x) => x.phone === phone3 && x.b === role2.br))) fail2("\u063A\u064A\u0631 \u0645\u0635\u0631\u062D \u0644\u0647\u0630\u0627 \u0627\u0644\u0641\u0631\u0639", 403);
+  assertAccess(state, role2, phone3);
   return role2;
 }
 function decodeImage(input) {
@@ -2457,14 +3123,14 @@ function decodeImage(input) {
   } catch {
     fail2("\u0628\u064A\u0627\u0646\u0627\u062A \u0627\u0644\u0635\u0648\u0631\u0629 \u063A\u064A\u0631 \u0635\u062D\u064A\u062D\u0629");
   }
-  if (bytes.length < 12 || bytes.length > MAX_BYTES) fail2("\u0627\u0644\u0635\u0648\u0631\u0629 \u064A\u062C\u0628 \u0623\u0644\u0627 \u062A\u062A\u062C\u0627\u0648\u0632 600 \u0643\u064A\u0644\u0648\u0628\u0627\u064A\u062A \u0628\u0639\u062F \u0627\u0644\u062A\u062C\u0647\u064A\u0632");
+  if (bytes.length < 12 || bytes.length > MAX_BYTES2) fail2("\u0627\u0644\u0635\u0648\u0631\u0629 \u064A\u062C\u0628 \u0623\u0644\u0627 \u062A\u062A\u062C\u0627\u0648\u0632 600 \u0643\u064A\u0644\u0648\u0628\u0627\u064A\u062A \u0628\u0639\u062F \u0627\u0644\u062A\u062C\u0647\u064A\u0632");
   const match = input.mime === "image/png" ? [137, 80, 78, 71, 13, 10, 26, 10].every((v, i) => bytes[i] === v) : input.mime === "image/jpeg" ? bytes[0] === 255 && bytes[1] === 216 && bytes[2] === 255 : String.fromCharCode(...bytes.slice(0, 4)) === "RIFF" && String.fromCharCode(...bytes.slice(8, 12)) === "WEBP";
   if (!match) fail2("\u0645\u062D\u062A\u0648\u0649 \u0627\u0644\u0635\u0648\u0631\u0629 \u0644\u0627 \u064A\u0637\u0627\u0628\u0642 \u0646\u0648\u0639 \u0627\u0644\u0645\u0644\u0641");
   return bytes;
 }
 async function handleAttachments(adapter2, input, uid) {
   const phone3 = phone(input.phone), write = input.action === "attachmentUpload";
-  const state = await adapter2.read(), role2 = authorize(state, uid, phone3, write), records = state.attachments?.[phone3] || {};
+  const state = await adapter2.read(), role2 = authorize2(state, uid, phone3, write), records = state.attachments?.[phone3] || {};
   if (input.action === "attachmentList") return Object.values(records).map(({ key, byUid, ...item2 }) => ({ ...item2, canDelete: can(role2, "attachments.delete") || byUid === uid && can(role2, "attachments.own.delete") }));
   if (input.action === "attachmentUpload") {
     if (!adapter2.uploadAttachment) fail2("\u062A\u062E\u0632\u064A\u0646 \u0627\u0644\u062A\u0642\u0627\u0631\u064A\u0631 \u063A\u064A\u0631 \u0645\u0647\u064A\u0623", 503);
@@ -2472,13 +3138,13 @@ async function handleAttachments(adapter2, input, uid) {
     if (input.category !== void 0 && !["report", "lab", "radiology", "other"].includes(input.category)) fail2("\u062A\u0635\u0646\u064A\u0641 \u0627\u0644\u062A\u0642\u0631\u064A\u0631 \u063A\u064A\u0631 \u0635\u062D\u064A\u062D");
     const reportDate = date(input.reportDate || today());
     if (reportDate > today()) fail2("\u062A\u0627\u0631\u064A\u062E \u0627\u0644\u062A\u0642\u0631\u064A\u0631 \u0644\u0627 \u064A\u0643\u0648\u0646 \u0641\u064A \u0627\u0644\u0645\u0633\u062A\u0642\u0628\u0644");
-    let digest;
+    let digest2;
     if (input.restoreSourceId !== void 0) {
       if (!can(role2, "data.restore") || !validId3(input.restoreSourceId)) fail2("\u0627\u0633\u062A\u0639\u0627\u062F\u0629 \u0627\u0644\u0635\u0648\u0631 \u0644\u0645\u062F\u064A\u0631 \u0627\u0644\u0646\u0638\u0627\u0645 \u0641\u0642\u0637", 403);
-      digest = Array.from(new Uint8Array(await crypto.subtle.digest("SHA-256", bytes))).map((x) => x.toString(16).padStart(2, "0")).join("");
+      digest2 = Array.from(new Uint8Array(await crypto.subtle.digest("SHA-256", bytes))).map((x) => x.toString(16).padStart(2, "0")).join("");
       const previous = Object.values(records).find((x) => (x.restoreSourceId || x.id) === input.restoreSourceId);
       if (previous) {
-        let same3 = previous.digest === digest;
+        let same3 = previous.digest === digest2;
         if (!same3 && adapter2.readAttachmentBytes) {
           const original = await adapter2.readAttachmentBytes(previous.key, previous.mime);
           same3 = original.data === input.data;
@@ -2493,11 +3159,11 @@ async function handleAttachments(adapter2, input, uid) {
       }
     }
     if (Object.keys(records).length >= MAX_FILES) fail2("\u0627\u0644\u062D\u062F \u0627\u0644\u0623\u0642\u0635\u0649 20 \u0635\u0648\u0631\u0629 \u0644\u0643\u0644 \u062D\u0627\u0644\u0629");
-    const id2 = crypto.randomUUID(), record2 = { id: id2, key: id2, name: input.name.trim(), mime: input.mime, size: bytes.length, createdAt: (/* @__PURE__ */ new Date()).toISOString(), by: role2.u, byUid: uid, category: input.category || "report", reportDate, ...input.restoreSourceId ? { restoreSourceId: input.restoreSourceId, digest } : {} };
+    const id2 = crypto.randomUUID(), record2 = { id: id2, key: id2, name: input.name.trim(), mime: input.mime, size: bytes.length, createdAt: (/* @__PURE__ */ new Date()).toISOString(), by: role2.u, byUid: uid, category: input.category || "report", reportDate, ...input.restoreSourceId ? { restoreSourceId: input.restoreSourceId, digest: digest2 } : {} };
     await adapter2.uploadAttachment(id2, bytes, input.mime);
     try {
       await adapter2.mutate((original) => {
-        authorize(original, uid, phone3, true);
+        authorize2(original, uid, phone3, true);
         const s = structuredClone(original);
         s.attachments ||= {};
         const items = s.attachments[phone3] ||= {};
@@ -2525,7 +3191,7 @@ async function handleAttachments(adapter2, input, uid) {
   if (input.action === "attachmentDelete") {
     if (!can(role2, "attachments.delete") && !(item.byUid === uid && can(role2, "attachments.own.delete"))) fail2("\u064A\u0645\u0643\u0646 \u0644\u0644\u0645\u0645\u0631\u0636\u0629 \u062D\u0630\u0641 \u0627\u0644\u0635\u0648\u0631 \u0627\u0644\u062A\u064A \u0631\u0641\u0639\u062A\u0647\u0627 \u0641\u0642\u0637", 403);
     await adapter2.mutate((original) => {
-      const currentRole = authorize(original, uid, phone3);
+      const currentRole = authorize2(original, uid, phone3);
       const s = structuredClone(original);
       const current = s.attachments?.[phone3]?.[input.id];
       if (current) {
@@ -2552,35 +3218,39 @@ async function exportImage(adapter2, input, uid) {
 }
 
 // supabase/functions/clinic-api/schedule-review.js
-function review(state, branch, proposed) {
-  if (!branchIds(state).includes(branch)) fail2("\u0627\u0644\u0641\u0631\u0639 \u063A\u064A\u0631 \u0645\u0648\u062C\u0648\u062F", 404);
-  const schedule3 = schedule2(proposed), registry = branches(state), schedules = { ...state.settings?.sched, [branch]: schedule3 }, affected = [];
-  for (const [date2, rows] of Object.entries(state.bookings || {})) if (date2 >= today() && !availability(registry, schedules, date2).scheduled.some((x) => x.id === branch) && !availability(registry, schedules, date2).flexible.includes(branch)) {
-    for (const row of Object.values(rows)) if (row.b === branch && !["cx", "done", "no"].includes(row.s)) affected.push({ id: row.id, date: date2, no: row.no, name: row.name });
+function review(state, branch2, proposed) {
+  if (!branchIds(state).includes(branch2)) fail2("\u0627\u0644\u0641\u0631\u0639 \u063A\u064A\u0631 \u0645\u0648\u062C\u0648\u062F", 404);
+  const schedule3 = schedule2(proposed), registry = branches(state), schedules = { ...state.settings?.sched, [branch2]: schedule3 }, affected = [];
+  for (const [date2, rows] of Object.entries(state.bookings || {})) if (date2 >= today() && !availability(registry, schedules, date2).scheduled.some((x) => x.id === branch2) && !availability(registry, schedules, date2).flexible.includes(branch2)) {
+    for (const row of Object.values(rows)) if (row.b === branch2 && !["cx", "done", "no"].includes(row.s)) affected.push({ id: row.id, date: date2, no: row.no, name: row.name });
   }
   const conflicts = [];
   for (let offset = 0; offset < 7; offset++) {
     const date2 = /* @__PURE__ */ new Date(today() + "T12:00:00Z");
     date2.setUTCDate(date2.getUTCDate() + offset);
-    const day = date2.toISOString().slice(0, 10), available = availability(registry, schedules, day).scheduled, candidate = available.find((x) => x.id === branch);
+    const day = date2.toISOString().slice(0, 10), available2 = availability(registry, schedules, day).scheduled, candidate = available2.find((x) => x.id === branch2);
     if (!candidate) continue;
-    for (const other of available.filter((x) => x.id !== branch)) if (candidate.dayOnly || other.dayOnly || candidate.slots.some((a) => other.slots.some((b) => a.f < b.t && b.f < a.t))) conflicts.push({ date: day, day: date2.getUTCDay(), branch: other.id, name: registry[other.id].name });
+    for (const other of available2.filter((x) => x.id !== branch2)) if (candidate.dayOnly || other.dayOnly || candidate.slots.some((a) => other.slots.some((b) => a.f < b.t && b.f < a.t))) conflicts.push({ date: day, day: date2.getUTCDay(), branch: other.id, name: registry[other.id].name });
   }
   return { affectedCount: affected.length, affected: affected.slice(0, 20), conflicts };
 }
 
 // supabase/functions/clinic-api/service.js
 function createService(baseAdapter) {
-  return async function handle2(input, uid, client = "local") {
+  return async function handle6(input, uid, client = "local") {
     const { action } = input || {};
     const adapter2 = { ...baseAdapter, mutate: (fn) => baseAdapter.mutate((original) => {
       const before = structuredClone(original);
       return record(before, reconcile(before, fn(original)), input, uid);
     }) };
+    if (["backupRehearsal", "backupRehearsalStatus"].includes(action)) return handle(adapter2, input, uid);
+    if (actions.includes(action)) return handle2(adapter2, input, uid);
+    if (actions2.includes(action)) return handle3(adapter2, input, uid, client);
+    if (["importStageStart", "importStagePart", "importStagePreview", "importStageApply", "importStageCancel"].includes(action)) return handle4(adapter2, input, uid);
     if (action === "normalizeDemoNames") {
       let summary;
       await adapter2.mutate((s) => {
-        const result = normalize2(s, uid);
+        const result = normalize4(s, uid);
         summary = result.summary;
         return result.state;
       });
@@ -2613,7 +3283,7 @@ function createService(baseAdapter) {
         try {
           const current = await adapter2.read();
           if (JSON.stringify(current.roles[item.uid]) !== JSON.stringify(item.before)) fail2("\u062A\u063A\u064A\u0631 \u0627\u0644\u062D\u0633\u0627\u0628 \u0623\u062B\u0646\u0627\u0621 \u0627\u0644\u062A\u0646\u0641\u064A\u0630", 409);
-          await handle2({ action: "userSave", uid: item.uid, role: item.role }, uid, client);
+          await handle6({ action: "userSave", uid: item.uid, role: item.role }, uid, client);
           results.push({ username: item.role.u, ok: true });
         } catch (e) {
           results.push({ username: item.role.u, ok: false, error: e.status ? e.message : "\u062A\u0639\u0630\u0631 \u062A\u062D\u062F\u064A\u062B \u0627\u0644\u062D\u0633\u0627\u0628" });
@@ -2635,16 +3305,16 @@ function createService(baseAdapter) {
           if (role(current, uid).r !== "admin") fail2("\u0627\u0646\u062A\u0647\u062A \u0635\u0644\u0627\u062D\u064A\u0629 \u0627\u0644\u0623\u062F\u0645\u0646", 403);
           if (item.uid && JSON.stringify(current.roles[item.uid]) !== JSON.stringify(item.before)) fail2("\u062A\u063A\u064A\u0631 \u0627\u0644\u062D\u0633\u0627\u0628 \u0623\u062B\u0646\u0627\u0621 \u0627\u0644\u062A\u0646\u0641\u064A\u0630", 409);
           if (item.create) {
-            await handle2({ action: "userCreate", u: item.username, p: input.password, role: item.role }, uid, client);
+            await handle6({ action: "userCreate", u: item.username, p: input.password, role: item.role }, uid, client);
           } else {
             if (item.role.r === "sec") {
-              const result = await handle2({ action: "userCredentials", uid: item.uid, username: item.username, password: input.password }, uid, client);
+              const result = await handle6({ action: "userCredentials", uid: item.uid, username: item.username, password: input.password }, uid, client);
               credentialsSaved = true;
               if (result.warning) results.push({ username: item.username, warning: result.warning });
             }
             const latest = await adapter2.read(), expected = credentialsSaved ? { ...item.before, u: item.username } : item.before;
             if (JSON.stringify(latest.roles[item.uid]) !== JSON.stringify(expected)) fail2("\u062A\u063A\u064A\u0631\u062A \u0627\u0644\u0635\u0644\u0627\u062D\u064A\u0627\u062A \u0623\u062B\u0646\u0627\u0621 \u0627\u0644\u062A\u0646\u0641\u064A\u0630\u061B \u0623\u0639\u062F \u0627\u0644\u0645\u0639\u0627\u064A\u0646\u0629", 409);
-            await handle2({ action: "userSave", uid: item.uid, role: item.role }, uid, client);
+            await handle6({ action: "userSave", uid: item.uid, role: item.role }, uid, client);
           }
           results.push({ username: item.username, ok: true });
         } catch (e) {
@@ -2768,7 +3438,7 @@ function createService(baseAdapter) {
     }
     if (action === "publicQueue") {
       const d = date(input.date || today());
-      if (!validId(input.branch)) fail2("\u0627\u062E\u062A\u0631 \u0627\u0644\u0641\u0631\u0639");
+      if (!validId2(input.branch)) fail2("\u0627\u062E\u062A\u0631 \u0627\u0644\u0641\u0631\u0639");
       await adapter2.limit?.(client, "display:" + input.branch);
       return publicQueue(await (adapter2.readDay ? adapter2.readDay(d) : adapter2.read()), input.branch, d);
     }
@@ -2782,7 +3452,8 @@ function createService(baseAdapter) {
       requirePermission(role(s, uid), "data.export");
       if (action === "systemHealth") {
         const health = adapter2.systemHealth ? await adapter2.systemHealth() : { lastBackup: null, retentionDays: 14, errors: [] };
-        return { ...health, cleanupPending: Object.keys((await adapter2.read()).attachmentGarbage || {}).length };
+        const current = await adapter2.read();
+        return { ...health, restoreRehearsal: current.backupRehearsal || null, cleanupPending: Object.keys(current.attachmentGarbage || {}).length };
       }
       const backup = await adapter2.latestBackup?.();
       if (!backup) fail2("\u0644\u0627 \u062A\u0648\u062C\u062F \u0646\u0633\u062E\u0629 \u0622\u0644\u064A\u0629 \u0628\u0639\u062F", 404);
@@ -2944,7 +3615,7 @@ function createService(baseAdapter) {
       const state = await adapter2.read(), old = state.roles?.[input.uid];
       mutate(state, uid, { ...input, role: { ...input.role, u: old?.u } }, core_exports);
       const next = validateRole(input.role, fail2, branchIds(state));
-      if (next.u !== old.u) await handle2({ action: "userCredentials", uid: input.uid, username: next.u }, uid, client);
+      if (next.u !== old.u) await handle6({ action: "userCredentials", uid: input.uid, username: next.u }, uid, client);
       await adapter2.mutate((s) => mutate(s, uid, { ...input, role: next }, core_exports));
       return { ok: true, username: next.u };
     }
@@ -3053,7 +3724,9 @@ function createService(baseAdapter) {
     }
     if (action === "userCreate") {
       requirePermission(role(await adapter2.read(), uid), "users.manage");
-      if (!/^[a-z0-9._-]{3,64}$/.test(input.u || "") || typeof input.p !== "string" || input.p.length < 6 || input.p.length > 128 || !input.role && ![...branchIds(await adapter2.read()), "nurse"].includes(input.br)) fail2("\u0628\u064A\u0627\u0646\u0627\u062A \u0627\u0644\u062D\u0633\u0627\u0628 \u063A\u064A\u0631 \u0635\u062D\u064A\u062D\u0629");
+      if (!/^[a-z0-9._-]{3,64}$/.test(input.u || "")) fail2("\u0627\u0633\u0645 \u0627\u0644\u062F\u062E\u0648\u0644 \u0645\u0646 3 \u0625\u0644\u0649 64 \u062D\u0631\u0641\u064B\u0627: \u062D\u0631\u0648\u0641 \u0625\u0646\u062C\u0644\u064A\u0632\u064A\u0629 \u0635\u063A\u064A\u0631\u0629 \u0648\u0623\u0631\u0642\u0627\u0645 \u0648\u0646\u0642\u0637\u0629 \u0648\u0634\u0631\u0637\u0629 \u0648\u0634\u0631\u0637\u0629 \u0633\u0641\u0644\u064A\u0629 \u0641\u0642\u0637");
+      if (typeof input.p !== "string" || input.p.length < 6 || input.p.length > 128) fail2("\u0643\u0644\u0645\u0629 \u0627\u0644\u0633\u0631 \u0645\u0646 6 \u0625\u0644\u0649 128 \u062D\u0631\u0641\u064B\u0627");
+      if (!input.role && ![...branchIds(await adapter2.read()), "nurse"].includes(input.br)) fail2("\u0627\u062E\u062A\u0631 \u0641\u0631\u0639\u064B\u0627 \u0635\u062D\u064A\u062D\u064B\u0627 \u0644\u0644\u062D\u0633\u0627\u0628");
       const assigned = validateRole(input.role ? { ...input.role, u: input.u } : input.br === "nurse" ? { r: "nurse", u: input.u } : { r: "sec", u: input.u, br: input.br }, fail2, branchIds(await adapter2.read()));
       const user = await adapter2.createUser(input.u, input.p);
       try {
@@ -3075,7 +3748,7 @@ function createService(baseAdapter) {
 
 // supabase/functions/clinic-api/index.js
 var adapter = supabaseAdapter(Deno.env.get("SUPABASE_URL"), Deno.env.get("SUPABASE_SERVICE_ROLE_KEY"));
-var handle = createService(adapter);
+var handle5 = createService(adapter);
 var headers = { "Access-Control-Allow-Origin": "*", "Access-Control-Allow-Headers": "authorization,apikey,content-type,x-client-info,x-request-id", "Access-Control-Expose-Headers": "x-request-id", "Access-Control-Allow-Methods": "POST,OPTIONS", "Content-Type": "application/json; charset=utf-8", "Cache-Control": "no-store" };
 Deno.serve((req) => {
   const requestId = crypto.randomUUID();
@@ -3087,11 +3760,11 @@ Deno.serve((req) => {
     try {
       if (!String(req.headers.get("content-type")).startsWith("application/json")) return new Response(JSON.stringify({ error: "JSON required" }), { headers, status: 415 });
       if (Number(req.headers.get("content-length") || 0) > 9e5) return new Response(JSON.stringify({ error: "Payload too large" }), { headers, status: 413 });
-      const text2 = await req.text();
-      if (new TextEncoder().encode(text2).length > 9e5) return new Response(JSON.stringify({ error: "Payload too large" }), { headers, status: 413 });
-      const input = JSON.parse(text2);
+      const text3 = await req.text();
+      if (new TextEncoder().encode(text3).length > 9e5) return new Response(JSON.stringify({ error: "Payload too large" }), { headers, status: 413 });
+      const input = JSON.parse(text3);
       action = /^[A-Za-z]{1,40}$/.test(input.action) ? input.action : "unknown";
-      const isPublic = input.action === "lookupHistory" || input.action === "lookup" || input.action === "publicQueue" || input.action === "get" && input.path === "settings";
+      const isPublic = ["bookingAvailability", "appointmentRequest", "appointmentChangeRequest"].includes(input.action) || input.action === "lookupHistory" || input.action === "lookup" || input.action === "publicQueue" || input.action === "get" && input.path === "settings";
       let uid = null;
       if (!isPublic) {
         const token = (req.headers.get("Authorization") || "").match(/^Bearer (.+)$/)?.[1];
@@ -3099,7 +3772,7 @@ Deno.serve((req) => {
         uid = await adapter.verify(token);
       }
       const client = req.headers.get("x-forwarded-for")?.split(",")[0].trim() || "unknown";
-      const data = await handle(input, uid, client);
+      const data = await handle5(input, uid, client);
       console.info(JSON.stringify({ event: "clinic_request", requestId, action, status: 200, durationMs: Date.now() - started }));
       return new Response(JSON.stringify({ data }), { headers: responseHeaders });
     } catch (e) {
