@@ -214,7 +214,7 @@ var keys = ["bookings.read", "bookings.create", "bookings.edit", "bookings.statu
 keys.push("patients.print", "display.manage", "data.import", "data.restore", "audit.details", "attachments.read", "attachments.create", "attachments.delete", "attachments.own.delete", "sessions.manage", "queue.configure", "reports.export", "audit.read");
 keys.push("tasks.read", "tasks.manage", "requests.read", "requests.manage", "waitinglist.manage", "day.close", "patients.merge");
 var administrative = ["patients.merge", "display.manage", "data.import", "data.restore", "audit.details", "attachments.own.delete", "users.manage", "clinic.manage", "site.manage", "data.export", "data.delete", "audit.read", "patients.delete"];
-var defaults = { doctor: keys.filter((k) => !administrative.includes(k)), sec: ["tasks.read", "tasks.manage", "requests.read", "requests.manage", "waitinglist.manage", "day.close", "patients.print", "bookings.read", "bookings.create", "bookings.status"], nurse: ["tasks.read", "tasks.manage", "day.close", "bookings.read", "bookings.create", "bookings.status", "patients.print", "patients.read", "complaints.read", "complaints.create", "attachments.read", "attachments.create", "attachments.own.delete"], staff: ["patients.print"] };
+var defaults = { doctor: keys.filter((k) => !administrative.includes(k)), sec: ["tasks.read", "tasks.manage", "requests.read", "requests.manage", "waitinglist.manage", "day.close", "patients.print", "bookings.read", "bookings.create", "bookings.status"], nurse: ["requests.read", "tasks.read", "tasks.manage", "day.close", "bookings.read", "bookings.create", "bookings.status", "patients.print", "patients.read", "complaints.read", "complaints.create", "attachments.read", "attachments.create", "attachments.own.delete"], staff: ["patients.print"] };
 function can(r, key) {
   if (!keys.includes(key)) return false;
   if (r.r === "admin") return keys.includes(key);
@@ -772,13 +772,6 @@ function lookup(state, p, now = today(), clock = Date.now()) {
 }
 var coreExports = { allowed, publicSettings, branchIds, presence, canExamine, assertExamine, phone, today, date, role, booking, commit, read: read2, patch: patch2, lookup, rebuild, fail: fail2, schedule: schedule2, queueOrder, queueTrack };
 
-// supabase/functions/clinic-api/data-import.js
-import { Buffer as Buffer3 } from "node:buffer";
-import { createHash as createHash2 } from "node:crypto";
-
-// supabase/functions/clinic-api/management.js
-import { Buffer as Buffer2 } from "node:buffer";
-
 // supabase/functions/clinic-api/display-options.js
 var numbers = [["currentShare", 71, 60, 85], ["currentScale", 72, 60, 85], ["nextScale", 24, 12, 28], ["radius", 22, 0, 40], ["gap", 18, 8, 40], ["pollSeconds", 5, 5, 30], ["musicVolume", 18, 0, 100], ["callVolume", 85, 0, 100], ["musicTrack", 0, 0, 113]];
 var noticeNumbers = [["noticeFontSize", 18, 12, 48], ["noticeMaxWidth", 620, 160, 1e3], ["noticeBorderWidth", 2, 0, 8], ["noticeRadius", 12, 0, 48], ["noticePadding", 10, 4, 48], ["noticeNeonSize", 18, 0, 40]];
@@ -786,7 +779,7 @@ var noticeColors = { noticeTextColor: "#ad362e", noticeBackground: "#fcecea", no
 var flags = { showNext: true, showWaiting: true, showClock: true, showDate: true, showSchedule: true, showFooter: true, showConnection: true, showControls: true, showGuide: true, customColors: false, managedAudio: false };
 var texts = { currentLabel: "\u0631\u0642\u0645 \u0627\u0644\u062D\u0627\u0644\u0629 \u0627\u0644\u062D\u0627\u0644\u064A\u0629", nextLabel: "\u0627\u0644\u062F\u0648\u0631 \u0627\u0644\u062A\u0627\u0644\u064A", guideText: "\u064A\u0631\u062C\u0649 \u0627\u0644\u0627\u0646\u062A\u0638\u0627\u0631 \u062D\u062A\u0649 \u0638\u0647\u0648\u0631 \u0631\u0642\u0645\u0643 \u0639\u0644\u0649 \u0627\u0644\u0634\u0627\u0634\u0629", emptyText: "\u0644\u0627 \u062A\u0648\u062C\u062F \u062D\u0627\u0644\u0627\u062A \u0641\u064A \u0627\u0644\u0627\u0646\u062A\u0638\u0627\u0631", footerText: "\u0627\u0644\u0637\u0648\u0627\u0631\u0626 \u0644\u0647\u0627 \u0623\u0648\u0644\u0648\u064A\u0629 \u0628\u0639\u062F \u0627\u0644\u062D\u0627\u0644\u0629 \u0627\u0644\u062D\u0627\u0644\u064A\u0629", runningText: "\u062C\u0627\u0631\u064A \u0627\u0644\u0643\u0634\u0641 \u2014 \u062A\u0641\u0636\u0644 \u0628\u0627\u0644\u062F\u062E\u0648\u0644", pausedText: "\u0627\u0644\u0643\u0634\u0641 \u0645\u062A\u0648\u0642\u0641 \u0645\u0624\u0642\u062A\u064B\u0627", endedText: "\u0627\u0646\u062A\u0647\u062A \u062C\u0644\u0633\u0629 \u0627\u0644\u0643\u0634\u0641", idleText: "\u0627\u0644\u0637\u0628\u064A\u0628 \u0644\u0645 \u064A\u0628\u062F\u0623 \u0627\u0644\u0643\u0634\u0641 \u0628\u0639\u062F" };
 var colorKeys = ["background", "currentBackground", "currentText", "nextBackground", "nextText", "accent"];
-var colors = { light: { background: "#eef2f6", currentBackground: "#25406b", currentText: "#ffffff", nextBackground: "#ffffff", nextText: "#25406b", accent: "#c9a24f" }, dark: { background: "#0e1424", currentBackground: "#e2bc73", currentText: "#14203c", nextBackground: "#171f35", nextText: "#eef1f6", accent: "#e2bc73" } };
+var colors = { light: { background: "#f2f5f6", currentBackground: "#315468", currentText: "#ffffff", nextBackground: "#ffffff", nextText: "#243543", accent: "#976471" }, dark: { background: "#151c24", currentBackground: "#263846", currentText: "#e1e8ed", nextBackground: "#202b35", nextText: "#d1dce5", accent: "#b89ca5" } };
 function bad(message) {
   const e = Error(message);
   e.status = 400;
@@ -849,6 +842,38 @@ function normalize2(input = {}, branches2 = []) {
   }
   return out;
 }
+
+// supabase/functions/clinic-api/color-refresh.js
+var light = { background: "#f2f5f6", card: "#ffffff", text: "#243543", primary: "#315468", accent: "#976471", muted: "#536779", line: "#bdcbd4", headerBackground: "#315468", headerText: "#ffffff" };
+var dark = { background: "#151c24", card: "#202b35", text: "#e1e8ed", primary: "#b7c9d4", accent: "#b89ca5", muted: "#adbac5", line: "#50606e", headerBackground: "#202e3a", headerText: "#e1e8ed" };
+async function handle(adapter2, input, uid) {
+  let changed = false;
+  await adapter2.mutate((original) => {
+    const r = role(original, uid);
+    if (r.r !== "admin") fail2("\u062A\u062D\u062F\u064A\u062B \u0623\u0644\u0648\u0627\u0646 \u0627\u0644\u0639\u064A\u0627\u062F\u0629 \u0645\u062A\u0627\u062D \u0644\u0644\u0623\u062F\u0645\u0646 \u0641\u0642\u0637", 403);
+    if (original.settings?.colorSystemVersion === 1) return original;
+    const s = structuredClone(original);
+    s.settings ||= {};
+    const old = s.settings.site?.design || {};
+    s.settings.previousDesign = structuredClone(old);
+    s.settings.site = { ...s.settings.site, design: { ...old, themePreset: 0, palettes: { light: { ...light }, dark: { ...dark } }, primary: light.primary, background: light.background, text: light.text, accent: light.accent, card: light.card, headerColors: { light: { background: light.headerBackground, text: light.headerText }, dark: { background: dark.headerBackground, text: dark.headerText } }, aboutTextColor: light.text, aboutBackground: light.card, aboutBorderColor: light.line, aboutNeonColor: light.accent } };
+    const queue = normalize2(s.settings.display || {}, branchIds(s, true));
+    s.settings.previousQueueColors = { colors: queue.colors, customColors: queue.customColors };
+    s.settings.display = { ...queue, colors: structuredClone(colors), customColors: true, noticeTextColor: "#9b474f", noticeBackground: "#f8eaec", noticeBorderColor: "#b77c86", noticeNeonColor: "#a57080" };
+    s.settings.displayRev = (s.settings.displayRev || 0) + 1;
+    s.settings.colorSystemVersion = 1;
+    changed = true;
+    return s;
+  });
+  return { ok: true, changed, colorSystemVersion: 1 };
+}
+
+// supabase/functions/clinic-api/data-import.js
+import { Buffer as Buffer3 } from "node:buffer";
+import { createHash as createHash2 } from "node:crypto";
+
+// supabase/functions/clinic-api/management.js
+import { Buffer as Buffer2 } from "node:buffer";
 
 // supabase/functions/clinic-api/site-content.js
 var SECTION_KEYS = ["header", "contacts", "about", "branches", "lookup", "footer"];
@@ -1461,7 +1486,7 @@ function rehearse(payload, uid) {
   if (plan2.summary.totalConflicts) fail2("\u062A\u0648\u062C\u062F \u062A\u0639\u0627\u0631\u0636\u0627\u062A \u062A\u0645\u0646\u0639 \u062A\u062C\u0631\u0628\u0629 \u0627\u0644\u0627\u0633\u062A\u0639\u0627\u062F\u0629", 409);
   return { at: (/* @__PURE__ */ new Date()).toISOString(), status: "passed", scope: "clinical-json", counts: Object.fromEntries(["patients", "bookings", "files", "complaints"].map((k) => [k, plan2.summary[k].added])), imagesVerified: false, warning: "\u062A\u062C\u0631\u0628\u0629 \u0645\u0639\u0632\u0648\u0644\u0629 \u0644\u0644\u0628\u064A\u0627\u0646\u0627\u062A \u0627\u0644\u0637\u0628\u064A\u0629 \u0641\u0642\u0637\u061B \u0644\u0627 \u062A\u062A\u062D\u0642\u0642 \u0645\u0646 \u0648\u062C\u0648\u062F \u0645\u0644\u0641\u0627\u062A \u0627\u0644\u0635\u0648\u0631 \u0648\u0644\u0627 \u062A\u0633\u062A\u0628\u062F\u0644 \u0623\u064A \u0633\u062C\u0644 \u0641\u0639\u0644\u064A." };
 }
-async function handle(adapter2, input, uid) {
+async function handle2(adapter2, input, uid) {
   const s = await adapter2.read();
   requirePermission(role(s, uid), "data.export");
   if (input.action === "backupRehearsalStatus") return s.backupRehearsal || null;
@@ -1706,8 +1731,22 @@ function draftAccess(s, r, x) {
   if (x.branch) branch(s, r, x.branch);
   if (["complaint", "medical"].includes(x.kind)) access(s, r, phone(x.entity));
 }
-async function handle2(adapter2, input, uid) {
+async function handle3(adapter2, input, uid) {
   const action = input.action;
+  if (action === "nurseRequestAccessUpgrade") {
+    let changed = false;
+    await adapter2.mutate((original) => {
+      if (role(original, uid).r !== "admin") fail2("\u062A\u062D\u062F\u064A\u062B \u0635\u0644\u0627\u062D\u064A\u0627\u062A \u0627\u0644\u0645\u0645\u0631\u0636\u0629 \u0645\u062A\u0627\u062D \u0644\u0644\u0623\u062F\u0645\u0646 \u0641\u0642\u0637", 403);
+      if (original.settings?.nurseRequestAccessVersion === 1) return original;
+      const s = structuredClone(original);
+      for (const r of Object.values(s.roles || {})) if (r.r === "nurse" && r.enabled !== false && !r.archivedAt && !r.deletePending) r.permissions = { ...r.permissions, "requests.read": true };
+      s.settings ||= {};
+      s.settings.nurseRequestAccessVersion = 1;
+      changed = true;
+      return s;
+    });
+    return { ok: true, changed };
+  }
   if (action === "preferencesGet") {
     const s = await adapter2.read();
     role(s, uid);
@@ -1968,7 +2007,7 @@ async function handle2(adapter2, input, uid) {
   }
   fail2("\u0639\u0645\u0644\u064A\u0629 \u063A\u064A\u0631 \u0645\u0633\u0645\u0648\u062D\u0629", 403);
 }
-var actions = ["preferencesGet", "preferencesSave", "timeline", "workflowList", "checkinSet", "taskSave", "draftSave", "draftGet", "draftDelete", "editingPresence", "daySummary", "dayClose", "similarPatients", "patientMergePreview", "patientMergeApply", "patientMergeList", "patientMergeUndo"];
+var actions = ["nurseRequestAccessUpgrade", "preferencesGet", "preferencesSave", "timeline", "workflowList", "checkinSet", "taskSave", "draftSave", "draftGet", "draftDelete", "editingPresence", "daySummary", "dayClose", "similarPatients", "patientMergePreview", "patientMergeApply", "patientMergeList", "patientMergeUndo"];
 
 // supabase/functions/clinic-api/patient-requests.js
 import { randomUUID as randomUUID2 } from "node:crypto";
@@ -2017,7 +2056,7 @@ function choose(registry, schedules, date2, time2) {
 var time = () => (/* @__PURE__ */ new Date()).toISOString();
 function settings(s) {
   const x = s.settings?.bookingRequests || {};
-  return { enabled: x.enabled !== false, leadDays: Number.isInteger(x.leadDays) ? Math.max(1, Math.min(90, x.leadDays)) : 30, changeCutoffHours: Number.isInteger(x.changeCutoffHours) ? Math.max(0, Math.min(168, x.changeCutoffHours)) : 12, slotMinutes: Number.isInteger(x.slotMinutes) ? Math.max(5, Math.min(120, x.slotMinutes)) : 15 };
+  return { showPatientRequests: x.showPatientRequests !== false, enabled: x.enabled !== false, changesEnabled: x.changesEnabled !== false, leadDays: Number.isInteger(x.leadDays) ? Math.max(1, Math.min(90, x.leadDays)) : 30, changeCutoffHours: Number.isInteger(x.changeCutoffHours) ? Math.max(0, Math.min(168, x.changeCutoffHours)) : 12, slotMinutes: Number.isInteger(x.slotMinutes) ? Math.max(5, Math.min(120, x.slotMinutes)) : 15 };
 }
 function available(s, d) {
   const conf = settings(s), registry = branches(s), a = availability(registry, s.settings?.sched || {}, d);
@@ -2058,7 +2097,7 @@ function cutoff(s, booking2) {
   }
   return target - Date.now() >= settings(s).changeCutoffHours * 36e5;
 }
-async function handle3(adapter2, input, uid, client) {
+async function handle4(adapter2, input, uid, client) {
   const action = input.action;
   if (action === "bookingAvailability") {
     const s = await adapter2.read(), d = validateDate(s, input.date || today());
@@ -2071,7 +2110,7 @@ async function handle3(adapter2, input, uid, client) {
     await adapter2.limit?.(client, p);
     await adapter2.mutate((original) => {
       const s = structuredClone(original);
-      if (!settings(s).enabled) fail2("\u0637\u0644\u0628\u0627\u062A \u0627\u0644\u062D\u062C\u0632 \u0627\u0644\u0625\u0644\u0643\u062A\u0631\u0648\u0646\u064A \u0645\u062A\u0648\u0642\u0641\u0629\u061B \u062A\u0648\u0627\u0635\u0644 \u0645\u0639 \u0627\u0644\u0639\u064A\u0627\u062F\u0629", 409);
+      if (!settings(s).showPatientRequests || !settings(s).enabled) fail2("\u0637\u0644\u0628\u0627\u062A \u0627\u0644\u062D\u062C\u0632 \u0627\u0644\u0625\u0644\u0643\u062A\u0631\u0648\u0646\u064A \u0645\u062A\u0648\u0642\u0641\u0629\u061B \u062A\u0648\u0627\u0635\u0644 \u0645\u0639 \u0627\u0644\u0639\u064A\u0627\u062F\u0629", 409);
       const d = validateDate(s, input.date), b = input.branch, choice = available(s, d).find((x) => x.id === b);
       if (!choice || choice.full || !choice.scheduled && !choice.flexible) fail2("\u0627\u062E\u062A\u0631 \u0641\u0631\u0639\u064B\u0627 \u0645\u062A\u0627\u062D\u064B\u0627 \u0641\u064A \u0627\u0644\u064A\u0648\u0645 \u0627\u0644\u0645\u062D\u062F\u062F", 409);
       const name = String(input.name || "").trim();
@@ -2093,6 +2132,7 @@ async function handle3(adapter2, input, uid, client) {
     if (!["cancel", "reschedule"].includes(input.kind)) fail2("\u0646\u0648\u0639 \u0627\u0644\u0637\u0644\u0628 \u063A\u064A\u0631 \u0635\u062D\u064A\u062D");
     const date2 = date(input.originalDate);
     await adapter2.mutate((original) => {
+      if (!settings(original).showPatientRequests || !settings(original).changesEnabled) fail2("\u0637\u0644\u0628\u0627\u062A \u062A\u063A\u064A\u064A\u0631 \u0648\u0625\u0644\u063A\u0627\u0621 \u0627\u0644\u0645\u0648\u0627\u0639\u064A\u062F \u0645\u062A\u0648\u0642\u0641\u0629\u061B \u062A\u0648\u0627\u0635\u0644 \u0645\u0639 \u0627\u0644\u0639\u064A\u0627\u062F\u0629", 409);
       const s = structuredClone(original), booking2 = Object.values(s.bookings?.[date2] || {}).find((x) => x.phone === p);
       if (!booking2 || ["cx", "done"].includes(booking2.s) || date2 < today()) return s;
       if (!cutoff(s, booking2)) fail2("\u0627\u0644\u0645\u0648\u0639\u062F \u0642\u0631\u064A\u0628\u061B \u062A\u0648\u0627\u0635\u0644 \u0645\u0639 \u0627\u0644\u0633\u0643\u0631\u062A\u0627\u0631\u064A\u0629 \u0645\u0628\u0627\u0634\u0631\u0629", 409);
@@ -2198,10 +2238,10 @@ async function handle3(adapter2, input, uid, client) {
       const r = role(original, uid);
       requirePermission(r, "clinic.manage");
       const x = input.config;
-      if (!x || typeof x.enabled !== "boolean" || !Number.isInteger(x.leadDays) || x.leadDays < 1 || x.leadDays > 90 || !Number.isInteger(x.changeCutoffHours) || x.changeCutoffHours < 0 || x.changeCutoffHours > 168 || !Number.isInteger(x.slotMinutes) || x.slotMinutes < 5 || x.slotMinutes > 120) fail2("\u0625\u0639\u062F\u0627\u062F\u0627\u062A \u0627\u0644\u062D\u062C\u0632 \u063A\u064A\u0631 \u0635\u062D\u064A\u062D\u0629");
+      if (!x || typeof x.enabled !== "boolean" || x.showPatientRequests !== void 0 && typeof x.showPatientRequests !== "boolean" || x.changesEnabled !== void 0 && typeof x.changesEnabled !== "boolean" || !Number.isInteger(x.leadDays) || x.leadDays < 1 || x.leadDays > 90 || !Number.isInteger(x.changeCutoffHours) || x.changeCutoffHours < 0 || x.changeCutoffHours > 168 || !Number.isInteger(x.slotMinutes) || x.slotMinutes < 5 || x.slotMinutes > 120) fail2("\u0625\u0639\u062F\u0627\u062F\u0627\u062A \u0627\u0644\u062D\u062C\u0632 \u063A\u064A\u0631 \u0635\u062D\u064A\u062D\u0629");
       const s = structuredClone(original);
       s.settings ||= {};
-      s.settings.bookingRequests = { enabled: x.enabled, leadDays: x.leadDays, changeCutoffHours: x.changeCutoffHours, slotMinutes: x.slotMinutes };
+      s.settings.bookingRequests = { showPatientRequests: x.showPatientRequests ?? settings(original).showPatientRequests, enabled: x.enabled, changesEnabled: x.changesEnabled ?? settings(original).changesEnabled, leadDays: x.leadDays, changeCutoffHours: x.changeCutoffHours, slotMinutes: x.slotMinutes };
       return s;
     });
     return { ok: true };
@@ -2235,7 +2275,7 @@ function assemble(x) {
     fail2("\u0627\u0644\u0646\u0633\u062E\u0629 \u063A\u064A\u0631 \u0645\u0643\u062A\u0645\u0644\u0629 \u0623\u0648 JSON \u063A\u064A\u0631 \u0635\u062D\u064A\u062D");
   }
 }
-async function handle4(adapter2, input, uid) {
+async function handle5(adapter2, input, uid) {
   if (input.action === "importStageStart") {
     let id2;
     await adapter2.mutate((original) => {
@@ -2904,7 +2944,7 @@ function organize(original, uid) {
 
 // supabase/functions/clinic-api/staff-access.js
 var queueGrants = ["bookings.read", "bookings.create", "bookings.status", "patients.print", "patients.read", "patients.edit"];
-var nurseGrants = [...queueGrants, "patients.read", "complaints.read", "complaints.create", "attachments.read", "attachments.create", "attachments.own.delete"];
+var nurseGrants = [...queueGrants, "requests.read", "patients.read", "complaints.read", "complaints.create", "attachments.read", "attachments.create", "attachments.own.delete"];
 function plan(state, uid, core) {
   if (core.role(state, uid).r !== "admin") core.fail("\u0636\u0628\u0637 \u062D\u0633\u0627\u0628\u0627\u062A \u0627\u0644\u0641\u0631\u0648\u0639 \u0645\u062A\u0627\u062D \u0644\u0644\u0623\u062F\u0645\u0646 \u0641\u0642\u0637", 403);
   const registry = branches(state), roles = Object.entries(state.roles || {}), staff = [];
@@ -3237,16 +3277,17 @@ function review(state, branch2, proposed) {
 
 // supabase/functions/clinic-api/service.js
 function createService(baseAdapter) {
-  return async function handle6(input, uid, client = "local") {
+  return async function handle7(input, uid, client = "local") {
     const { action } = input || {};
     const adapter2 = { ...baseAdapter, mutate: (fn) => baseAdapter.mutate((original) => {
       const before = structuredClone(original);
       return record(before, reconcile(before, fn(original)), input, uid);
     }) };
-    if (["backupRehearsal", "backupRehearsalStatus"].includes(action)) return handle(adapter2, input, uid);
-    if (actions.includes(action)) return handle2(adapter2, input, uid);
-    if (actions2.includes(action)) return handle3(adapter2, input, uid, client);
-    if (["importStageStart", "importStagePart", "importStagePreview", "importStageApply", "importStageCancel"].includes(action)) return handle4(adapter2, input, uid);
+    if (["backupRehearsal", "backupRehearsalStatus"].includes(action)) return handle2(adapter2, input, uid);
+    if (action === "refreshClinicColors") return handle(adapter2, input, uid);
+    if (actions.includes(action)) return handle3(adapter2, input, uid);
+    if (actions2.includes(action)) return handle4(adapter2, input, uid, client);
+    if (["importStageStart", "importStagePart", "importStagePreview", "importStageApply", "importStageCancel"].includes(action)) return handle5(adapter2, input, uid);
     if (action === "normalizeDemoNames") {
       let summary;
       await adapter2.mutate((s) => {
@@ -3283,7 +3324,7 @@ function createService(baseAdapter) {
         try {
           const current = await adapter2.read();
           if (JSON.stringify(current.roles[item.uid]) !== JSON.stringify(item.before)) fail2("\u062A\u063A\u064A\u0631 \u0627\u0644\u062D\u0633\u0627\u0628 \u0623\u062B\u0646\u0627\u0621 \u0627\u0644\u062A\u0646\u0641\u064A\u0630", 409);
-          await handle6({ action: "userSave", uid: item.uid, role: item.role }, uid, client);
+          await handle7({ action: "userSave", uid: item.uid, role: item.role }, uid, client);
           results.push({ username: item.role.u, ok: true });
         } catch (e) {
           results.push({ username: item.role.u, ok: false, error: e.status ? e.message : "\u062A\u0639\u0630\u0631 \u062A\u062D\u062F\u064A\u062B \u0627\u0644\u062D\u0633\u0627\u0628" });
@@ -3305,16 +3346,16 @@ function createService(baseAdapter) {
           if (role(current, uid).r !== "admin") fail2("\u0627\u0646\u062A\u0647\u062A \u0635\u0644\u0627\u062D\u064A\u0629 \u0627\u0644\u0623\u062F\u0645\u0646", 403);
           if (item.uid && JSON.stringify(current.roles[item.uid]) !== JSON.stringify(item.before)) fail2("\u062A\u063A\u064A\u0631 \u0627\u0644\u062D\u0633\u0627\u0628 \u0623\u062B\u0646\u0627\u0621 \u0627\u0644\u062A\u0646\u0641\u064A\u0630", 409);
           if (item.create) {
-            await handle6({ action: "userCreate", u: item.username, p: input.password, role: item.role }, uid, client);
+            await handle7({ action: "userCreate", u: item.username, p: input.password, role: item.role }, uid, client);
           } else {
             if (item.role.r === "sec") {
-              const result = await handle6({ action: "userCredentials", uid: item.uid, username: item.username, password: input.password }, uid, client);
+              const result = await handle7({ action: "userCredentials", uid: item.uid, username: item.username, password: input.password }, uid, client);
               credentialsSaved = true;
               if (result.warning) results.push({ username: item.username, warning: result.warning });
             }
             const latest = await adapter2.read(), expected = credentialsSaved ? { ...item.before, u: item.username } : item.before;
             if (JSON.stringify(latest.roles[item.uid]) !== JSON.stringify(expected)) fail2("\u062A\u063A\u064A\u0631\u062A \u0627\u0644\u0635\u0644\u0627\u062D\u064A\u0627\u062A \u0623\u062B\u0646\u0627\u0621 \u0627\u0644\u062A\u0646\u0641\u064A\u0630\u061B \u0623\u0639\u062F \u0627\u0644\u0645\u0639\u0627\u064A\u0646\u0629", 409);
-            await handle6({ action: "userSave", uid: item.uid, role: item.role }, uid, client);
+            await handle7({ action: "userSave", uid: item.uid, role: item.role }, uid, client);
           }
           results.push({ username: item.username, ok: true });
         } catch (e) {
@@ -3615,7 +3656,7 @@ function createService(baseAdapter) {
       const state = await adapter2.read(), old = state.roles?.[input.uid];
       mutate(state, uid, { ...input, role: { ...input.role, u: old?.u } }, core_exports);
       const next = validateRole(input.role, fail2, branchIds(state));
-      if (next.u !== old.u) await handle6({ action: "userCredentials", uid: input.uid, username: next.u }, uid, client);
+      if (next.u !== old.u) await handle7({ action: "userCredentials", uid: input.uid, username: next.u }, uid, client);
       await adapter2.mutate((s) => mutate(s, uid, { ...input, role: next }, core_exports));
       return { ok: true, username: next.u };
     }
@@ -3748,7 +3789,7 @@ function createService(baseAdapter) {
 
 // supabase/functions/clinic-api/index.js
 var adapter = supabaseAdapter(Deno.env.get("SUPABASE_URL"), Deno.env.get("SUPABASE_SERVICE_ROLE_KEY"));
-var handle5 = createService(adapter);
+var handle6 = createService(adapter);
 var headers = { "Access-Control-Allow-Origin": "*", "Access-Control-Allow-Headers": "authorization,apikey,content-type,x-client-info,x-request-id", "Access-Control-Expose-Headers": "x-request-id", "Access-Control-Allow-Methods": "POST,OPTIONS", "Content-Type": "application/json; charset=utf-8", "Cache-Control": "no-store" };
 Deno.serve((req) => {
   const requestId = crypto.randomUUID();
@@ -3772,7 +3813,7 @@ Deno.serve((req) => {
         uid = await adapter.verify(token);
       }
       const client = req.headers.get("x-forwarded-for")?.split(",")[0].trim() || "unknown";
-      const data = await handle5(input, uid, client);
+      const data = await handle6(input, uid, client);
       console.info(JSON.stringify({ event: "clinic_request", requestId, action, status: 200, durationMs: Date.now() - started }));
       return new Response(JSON.stringify({ data }), { headers: responseHeaders });
     } catch (e) {

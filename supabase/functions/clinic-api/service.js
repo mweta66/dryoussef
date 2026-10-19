@@ -1,3 +1,4 @@
+import * as colorRefresh from './color-refresh.js';
 import * as backupRehearsal from './backup-rehearsal.js';
 import * as workflow from './workflow.js';
 import * as patientRequests from './patient-requests.js';
@@ -26,6 +27,7 @@ function createService(baseAdapter) {
    const before=structuredClone(original);return history.record(before,scheduleTransfers.reconcile(before,fn(original)),input,uid);
   })};
   if(['backupRehearsal','backupRehearsalStatus'].includes(action))return backupRehearsal.handle(adapter,input,uid);
+  if(action==='refreshClinicColors')return colorRefresh.handle(adapter,input,uid);
   if(workflow.actions.includes(action))return workflow.handle(adapter,input,uid);
   if(patientRequests.actions.includes(action))return patientRequests.handle(adapter,input,uid,client);
   if(['importStageStart','importStagePart','importStagePreview','importStageApply','importStageCancel'].includes(action))return importStaging.handle(adapter,input,uid);

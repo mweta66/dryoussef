@@ -1,3 +1,11 @@
+/* Apply the owner's requested color/access changes once, on login or session restore. */
+var clinicReleaseUpdateFlight=null;
+async function ensureClinicReleaseUpdates(){
+ if(!AUTH||me?.role!=='admin')return;
+ const owner=AUTH;if(clinicReleaseUpdateFlight?.owner===owner)return clinicReleaseUpdateFlight.promise;
+ const job={owner};job.promise=(async()=>{let refreshed=false;for(const [action,key]of [['refreshClinicColors','colorSystemVersion'],['nurseRequestAccessUpgrade','nurseRequestAccessVersion']]){if(AUTH!==owner||me?.role!=='admin')return;if(settingsCache?.[key]===1)continue;try{await gateway(action,{},true);refreshed=true}catch(e){notify('تعذر تطبيق تحديث الألوان وصلاحية الطلبات. انشر أحدث خدمة للعيادة ثم أعد المحاولة.')}}if(refreshed&&AUTH===owner){try{await refreshWorkspaceData()}catch(e){notify('تم حفظ تحديث العيادة، لكن تعذر تحميله الآن. أعد تحميل الصفحة عند عودة الاتصال.')}}})().finally(()=>{if(clinicReleaseUpdateFlight===job)clinicReleaseUpdateFlight=null});clinicReleaseUpdateFlight=job;return job.promise;
+}
+var clinicReleaseLogin=login;login=async function(){await clinicReleaseLogin();if(AUTH&&me?.role==='admin'&&adminPage()){const owner=AUTH;await ensureClinicReleaseUpdates();if(AUTH===owner){draw();applySite(SITE)}}};
 /* Fetch fresh account/settings/view in one consolidated request on staff reload. */
 window.addEventListener('DOMContentLoaded',async()=>{
  if(!window.ClinicBoot)return;
@@ -23,6 +31,7 @@ window.addEventListener('DOMContentLoaded',async()=>{
     catch(e){notify('تعذر تحديث بيانات الحالات القديمة. تأكد من نشر خدمة العيادة الحديثة ثم أعد المحاولة من الإعدادات.');}
    }
   }else{await loadSettings();ClinicBoot.ready('settings');}
+  await ensureClinicReleaseUpdates();
   draw();applySite(SITE);ClinicBoot.ready('view');
  }catch(e){ClinicBoot.fail('تعذر تحميل أحدث بيانات العيادة. تحقق من الاتصال ثم أعد المحاولة.');}
 });

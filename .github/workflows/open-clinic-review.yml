@@ -1,0 +1,33 @@
+name: Open clinic review pull request
+on:
+  push:
+    branches:
+      - codex/patient-requests-and-calm-theme
+  workflow_dispatch:
+permissions:
+  contents: read
+  pull-requests: write
+concurrency:
+  group: open-clinic-review-${{ github.ref }}
+  cancel-in-progress: false
+jobs:
+  open-review:
+    if: github.repository == 'mweta66/dryoussef' && github.ref == 'refs/heads/codex/patient-requests-and-calm-theme'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Create the review without merging or deploying
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          PR_BRANCH: ${{ github.ref_name }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          number=$(gh pr list --base main --head "$PR_BRANCH" --state open --json number --jq '.[0].number // empty')
+          if [[ -n "$number" ]]; then
+            url=$(gh pr view "$number" --json url --jq .url)
+          else
+            url=$(gh pr create --base main --head "$PR_BRANCH" --title 'طلبات المرضى للممرضة وإخفاء القسم وتنسيق الألوان والوضع الداكن' --body-file docs/PR-patient-requests-and-colors.md)
+          fi
+          echo "Pull request: $url" >> "$GITHUB_STEP_SUMMARY"
