@@ -282,3 +282,29 @@ input:focus,select:focus,textarea:focus{outline:3px solid var(--pri);outline-off
 .clinic-theme-choice[aria-pressed=true]{border-color:var(--pri);outline:2px solid var(--pri);outline-offset:2px}.clinic-theme-choice:focus-visible{outline:3px solid var(--pri);outline-offset:3px}
 .clinic-theme-choice>strong{display:block;margin-bottom:8px;font-size:16px}.clinic-theme-pair{display:grid;grid-template-columns:1fr 1fr;gap:8px}
 .clinic-theme-sample{display:block;padding:7px;border:1px solid;border-radius:10px;overflow:hidden;font-size:12px}.clinic-theme-sample-header{display:block;text-align:center;border-radius:6px;padding:4px}.clinic-theme-sample-card{display:block;margin-top:7px;padding:7px;border-radius:6px}.clinic-theme-sample-card>span{display:block;text-align:center;border-radius:5px;padding:3px;margin-top:6px}
+/* Patient request notification center: shared site palette, RTL and mobile. */
+.request-bell{display:inline-flex;align-items:center;justify-content:center;gap:7px;min-height:42px;white-space:nowrap}
+.request-unread-count{display:inline-grid;place-items:center;min-width:25px;min-height:25px;padding:1px 6px;border-radius:999px;background:var(--bg);color:var(--ink);font-weight:800;line-height:1.2}
+.request-bell.has-unread .request-unread-count{background:var(--pri);color:var(--btnink)}
+.request-notification-center{font:inherit;direction:rtl;color:var(--ink);background:var(--card,var(--bg));border:1px solid var(--border,var(--line,#8796a6));border-radius:18px;width:min(640px,calc(100vw - 24px));max-height:calc(100dvh - 24px);padding:20px;box-shadow:0 16px 70px #0005;overflow:auto;overscroll-behavior:contain}
+.request-notification-center::backdrop{background:#071622a8}
+.request-center-heading{display:flex;align-items:center;justify-content:space-between;gap:14px}
+.request-center-heading h2{font-size:21px;margin:0;line-height:1.6}
+.request-center-summary{font-weight:700;margin:12px 0;line-height:1.8}
+.request-center-filters{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.request-center-filters label{font-size:14px;line-height:1.8;margin:0}
+.request-center-filters select{width:100%;margin:4px 0 0}
+.request-unread-filter{grid-column:1/-1;display:flex;align-items:center;gap:8px}
+.request-unread-filter input{width:20px;height:20px;margin:0;accent-color:var(--pri)}
+.request-center-actions,.request-center-pages{display:flex;flex-wrap:wrap;align-items:center;gap:8px;margin:14px 0}
+.request-center-pages{justify-content:space-between}
+.request-center-error{padding:10px;border:1px solid currentColor;border-radius:8px;color:var(--bad);line-height:1.8}
+.request-notification-item{position:relative;border:1px solid var(--border,var(--line,#8796a6));border-radius:12px;padding:14px;margin-top:12px;overflow-wrap:anywhere;background:var(--bg)}
+.request-notification-item.is-unread{border-inline-start:5px solid var(--pri)}
+.request-notification-item h3{font-size:17px;line-height:1.7;margin:0 0 4px}
+.request-notification-item time,.request-notification-read-state{font-size:13px;line-height:1.8;display:block;color:var(--mut)}
+.request-notification-item p{font-size:15px;line-height:1.8;margin:8px 0}
+.request-notification-item .acts{gap:8px}
+.request-notification-empty{padding:22px 8px;text-align:center;line-height:1.9}
+.request-notification-target{outline:3px solid var(--pri);outline-offset:4px}
+@media(max-width:480px){.request-notification-center{padding:14px}.request-center-heading h2{font-size:18px}.request-center-actions .btn{flex:1 1 125px}.request-notification-item .acts .btn{flex:1 1 125px}}

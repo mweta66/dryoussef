@@ -1,4 +1,5 @@
 import release from './release.js';
+import * as requestNotifications from './request-notifications.js';
 import * as colorRefresh from './color-refresh.js';
 import * as backupRehearsal from './backup-rehearsal.js';
 import * as workflow from './workflow.js';
@@ -24,6 +25,7 @@ import * as scheduleReview from './schedule-review.js';
 function createService(baseAdapter) {
  return async function handle(input,uid,client='local') {
   const {action}=input||{};
+  if(requestNotifications.actions.includes(action))return requestNotifications.handle(baseAdapter,input,uid);
   const adapter={...baseAdapter,mutate:fn=>baseAdapter.mutate(original=>{
    const before=structuredClone(original);return history.record(before,scheduleTransfers.reconcile(before,fn(original)),input,uid);
   })};

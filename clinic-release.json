@@ -1,11 +1,12 @@
 {
-  "version": "2026.10.19.7",
+  "version": "2026.10.19.8",
   "apiContract": 1,
   "capabilities": [
     "pdfReports",
     "splitBackup",
     "phoneChangeLookup",
     "patientRequestAlerts",
-    "globalThemePresets"
+    "globalThemePresets",
+    "patientNotificationCenter"
   ]
 }

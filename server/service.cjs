@@ -1,4 +1,5 @@
 const release=require('./release.cjs');
+const requestNotifications=require('./request-notifications.cjs');
 const colorRefresh=require('./color-refresh.cjs');
 const backupRehearsal=require('./backup-rehearsal.cjs');
 const workflow=require('./workflow.cjs');
@@ -19,6 +20,7 @@ const attachments=require('./attachments.cjs'),cleanup=require('./storage-cleanu
 function createService(baseAdapter) {
  return async function handle(input,uid,client='local') {
   const {action}=input||{};
+  if(requestNotifications.actions.includes(action))return requestNotifications.handle(baseAdapter,input,uid);
   const adapter={...baseAdapter,mutate:fn=>baseAdapter.mutate(original=>{
    const before=structuredClone(original);return history.record(before,scheduleTransfers.reconcile(before,fn(original)),input,uid);
   })};
