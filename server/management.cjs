@@ -24,6 +24,7 @@ function site(value,fail){
 }
 function mutate(original,uid,input,core){
  const s=structuredClone(original),r=core.role(s,uid);
+ if(['watermarkSave','aboutSave','headerSave'].includes(input.action)&&s.settings)delete s.settings.previousThemeDisplay;
  if(input.action==='displaySave'){perms.requirePermission(r,'display.manage');if(input.revision!==(s.settings?.displayRev||0))core.fail('تغيرت إعدادات الشاشة من جلسة أخرى؛ أعد التحميل أولًا',409);s.settings||={};const normalized=displayOptions.normalize(input.config,core.branchIds(s,true)),previous=displayOptions.normalize(s.settings.display||{},core.branchIds(s,true));if(r.r!=='admin'&&Object.keys(normalized).some(key=>(key==='footerText'||key.startsWith('notice'))&&JSON.stringify(normalized[key])!==JSON.stringify(previous[key])))core.fail('تعديل تصميم رسالة الطوارئ متاح للأدمن فقط',403);s.settings.display=normalized;s.settings.displayRev=(s.settings.displayRev||0)+1;return s;}
  if(input.action==='siteContentSave'){perms.requirePermission(r,'site.manage');if(input.revision!==(s.settings?.contentRev||0))core.fail('تم تعديل المحتوى من جلسة أخرى؛ أعد التحميل قبل الحفظ',409);const content=siteContent.validate(input.sections,input.layout,core.fail);s.settings||={};s.settings.site={...s.settings.site,...content};s.settings.contentRev=(s.settings.contentRev||0)+1;return s;}
  if(input.action==='watermarkSave'){
@@ -40,7 +41,21 @@ function mutate(original,uid,input,core){
   if(incoming.design.palettes){design.palettes=structuredClone(current.design?.palettes||{});for(const mode of ['light','dark'])if(incoming.design.palettes?.[mode]){const colors=incoming.design.palettes[mode];design.palettes[mode]={...colors,...design.palettes[mode]};for(const key of ['headerBackground','headerText'])if(colors[key]!==undefined)design.palettes[mode][key]=colors[key];}}
   if(JSON.stringify(current.design)!==JSON.stringify(design))s.settings.previousDesign=structuredClone(current.design||{});next.design=design;s.settings.site=next;s.settings.headerRev=(s.settings.headerRev||0)+1;return s;
  }
- if(input.action==='siteSave'){perms.requirePermission(r,'site.manage');s.settings||={};const nextSite=site(input.site,core.fail);nextSite.sections=s.settings.site?.sections||{};nextSite.layout=s.settings.site?.layout||{};if(JSON.stringify(s.settings.site?.design)!==JSON.stringify(nextSite.design))s.settings.previousDesign=structuredClone(s.settings.site?.design||{});s.settings.site=nextSite;if(s.settings.branches)for(const [b,x]of Object.entries(s.settings.site.branches)){if(s.settings.branches[b])s.settings.branches[b]={...s.settings.branches[b],...x};}return s;}
+ if(input.action==='siteThemeSave'){
+  if(r.r!=='admin')core.fail('تطبيق ثيم الموقع بالكامل متاح للأدمن فقط',403);
+  if(input.revision!==(s.settings?.displayRev||0))core.fail('تغيرت إعدادات شاشة الدور؛ أعد تحميل التصميم قبل تطبيق الثيم',409);
+  const checked=site({design:input.site?.design},core.fail),next=structuredClone(s);next.settings||={};next.settings.site={...s.settings?.site,design:checked.design};const design=next.settings.site.design,palettes=design.palettes;
+  for(const mode of ['light','dark'])for(const key of ['background','card','text','primary','accent','muted','line','headerBackground','headerText'])if(!palettes?.[mode]?.[key])core.fail('اختر ثيمًا كاملًا للنهار والليل قبل الحفظ');
+  const previous=displayOptions.normalize(s.settings?.display||{},core.branchIds(s,true)),light=palettes.light;
+  next.settings.previousDesign=structuredClone(s.settings?.site?.design||{});
+  next.settings.previousThemeDisplay=Object.fromEntries(Object.entries(previous).filter(([key])=>key==='colors'||key==='customColors'||key.startsWith('notice')&&key.endsWith('Color')||key==='noticeBackground'));
+  Object.assign(design,{primary:light.primary,background:light.background,text:light.text,accent:light.accent,card:light.card,aboutTextColor:light.text,aboutBackground:light.card,aboutBorderColor:light.primary,aboutNeonColor:light.accent,headerColors:Object.fromEntries(['light','dark'].map(mode=>[mode,{background:palettes[mode].headerBackground,text:palettes[mode].headerText}]))});
+  const colors=Object.fromEntries(['light','dark'].map(mode=>{const p=palettes[mode];return [mode,{background:p.background,currentBackground:p.headerBackground,currentText:p.headerText,nextBackground:p.card,nextText:p.text,accent:p.accent}];}));
+  next.settings.display={...previous,colors,customColors:true,noticeTextColor:light.primary,noticeBackground:light.card,noticeBorderColor:light.primary,noticeNeonColor:light.accent};
+  for(const key of ['displayRev','headerRev','aboutRev'])next.settings[key]=(s.settings?.[key]||0)+1;
+  return next;
+ }
+ if(input.action==='siteSave'){perms.requirePermission(r,'site.manage');s.settings||={};const nextSite=site(input.site,core.fail);nextSite.sections=s.settings.site?.sections||{};nextSite.layout=s.settings.site?.layout||{};if(JSON.stringify(s.settings.site?.design)!==JSON.stringify(nextSite.design)){s.settings.previousDesign=structuredClone(s.settings.site?.design||{});delete s.settings.previousThemeDisplay;}s.settings.site=nextSite;if(s.settings.branches)for(const [b,x]of Object.entries(s.settings.site.branches)){if(s.settings.branches[b])s.settings.branches[b]={...s.settings.branches[b],...x};}return s;}
  if(input.action==='userSave'){
   perms.requirePermission(r,'users.manage');if(!s.roles[input.uid])core.fail('المستخدم غير موجود',404);
   if(s.roles[input.uid].deletePending)core.fail('حذف الحساب معلق؛ استكمل الحذف أولًا',409);
