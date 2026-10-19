@@ -2,7 +2,7 @@ import * as core from './core.js';
 import * as perms from './permissions.js';
 import * as cleanup from './storage-cleanup.js';
 import * as cases from './cases.js';
-const MAX_BYTES=600000,MAX_FILES=20,validId=id=>typeof id==='string'&&/^[0-9a-f-]{36}$/.test(id);
+const MAX_BYTES=600000,MAX_PDF_BYTES=5000000,MAX_FILES=20,validId=id=>typeof id==='string'&&/^[0-9a-f-]{36}$/.test(id);
 function authorize(state,uid,phone,write=false){
  const role=core.role(state,uid);
  perms.requirePermission(role,write?'attachments.create':'attachments.read');
@@ -12,9 +12,11 @@ function authorize(state,uid,phone,write=false){
 }
 function decodeImage(input){
  if(typeof input.name!=='string'||!input.name.trim()||input.name.length>120)core.fail('اسم التقرير مطلوب وحتى 120 حرفًا');
- if(!['image/jpeg','image/png','image/webp'].includes(input.mime)||typeof input.data!=='string'||!input.data.length||input.data.length>800000||input.data.length%4||!/^[A-Za-z0-9+/]+={0,2}$/.test(input.data))core.fail('ارفع صورة JPG أو PNG أو WebP بالحجم المسموح');
+ const pdf=input.mime==='application/pdf',maximum=pdf?MAX_PDF_BYTES:MAX_BYTES;
+ if(!['image/jpeg','image/png','image/webp','application/pdf'].includes(input.mime)||typeof input.data!=='string'||!input.data.length||input.data.length>Math.ceil(maximum/3)*4||input.data.length%4||!/^[A-Za-z0-9+/]+={0,2}$/.test(input.data))core.fail('ارفع صورة JPG أو PNG أو WebP أو PDF بالحجم المسموح');
  let bytes;try{bytes=Uint8Array.from(atob(input.data),c=>c.charCodeAt(0))}catch{core.fail('بيانات الصورة غير صحيحة')}
- if(bytes.length<12||bytes.length>MAX_BYTES)core.fail('الصورة يجب ألا تتجاوز 600 كيلوبايت بعد التجهيز');
+ if(bytes.length<12||bytes.length>maximum)core.fail(pdf?'ملف PDF يجب ألا يتجاوز 5 ميجابايت':'الصورة يجب ألا تتجاوز 600 كيلوبايت بعد التجهيز');
+ if(pdf){const header=new TextDecoder().decode(bytes.slice(0,12)),tail=new TextDecoder().decode(bytes.slice(-1024));if(!/^%PDF-(?:1\.[0-7]|2\.0)/.test(header)||!/%%EOF\s*$/.test(tail))core.fail('محتوى الملف ليس PDF سليمًا');return bytes;}
  const match=input.mime==='image/png'?[137,80,78,71,13,10,26,10].every((v,i)=>bytes[i]===v):input.mime==='image/jpeg'?bytes[0]===255&&bytes[1]===216&&bytes[2]===255:String.fromCharCode(...bytes.slice(0,4))==='RIFF'&&String.fromCharCode(...bytes.slice(8,12))==='WEBP';
  if(!match)core.fail('محتوى الصورة لا يطابق نوع الملف');return bytes;
 }
@@ -38,6 +40,8 @@ async function handleAttachments(adapter,input,uid){
  const item=records[input.id];if(!validId(item.key))core.fail('معرف المرفق غير صحيح',400);
  if(input.action==='attachmentRead'){
   if(!adapter.readAttachment)core.fail('تخزين التقارير غير مهيأ',503);
+  // Download PDFs as authenticated bytes, never embed active documents or expose a permanent URL.
+  if(item.mime==='application/pdf')return {...await (adapter.readAttachmentBytes||adapter.readAttachment)(item.key,item.mime),name:item.name,mime:item.mime,downloadOnly:true};
   return {...await adapter.readAttachment(item.key,item.mime),name:item.name,mime:item.mime};
  }
  if(input.action==='attachmentDelete'){

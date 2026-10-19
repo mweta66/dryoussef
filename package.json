@@ -10,7 +10,8 @@
     "check": "node scripts/check.cjs",
     "demo:seed": "node scripts/seed.cjs",
     "demo:reset": "node scripts/reset.cjs",
-    "demo": "node scripts/demo-server.cjs"
+    "demo": "node scripts/demo-server.cjs",
+    "build": "node scripts/sync-release.cjs && node scripts/build-branches.cjs"
   },
   "dependencies": {
     "read-excel-file": "9.3.12"

@@ -34,5 +34,12 @@
         }
       ]
     }
-  ]
+  ],
+  "rewrites": [
+    {
+      "source": "/branches/:branch",
+      "destination": "/api/branch?branch=:branch"
+    }
+  ],
+  "buildCommand": "npm run build"
 }

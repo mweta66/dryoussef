@@ -7,8 +7,11 @@ async function ensureClinicReleaseUpdates(){
 }
 var clinicReleaseLogin=login;login=async function(){await clinicReleaseLogin();if(AUTH&&me?.role==='admin'&&adminPage()){const owner=AUTH;await ensureClinicReleaseUpdates();if(AUTH===owner){draw();applySite(SITE)}}};
 /* Fetch fresh account/settings/view in one consolidated request on staff reload. */
-window.addEventListener('DOMContentLoaded',async()=>{
- if(!window.ClinicBoot)return;
+var clinicBootFlight=null,clinicBootRetry=null;
+function bootClinicPage(){
+ if(!window.ClinicBoot||!ClinicBoot.loading||clinicBootFlight)return clinicBootFlight;
+ clearTimeout(clinicBootRetry);ClinicBoot.pending('settings');ClinicBoot.pending('view');
+ const run=(async()=>{
  try{
   if(location.protocol==='file:'){await restoreSession();ClinicBoot.ready('settings');ClinicBoot.ready('view');return;}
   if(AUTH){
@@ -33,5 +36,7 @@ window.addEventListener('DOMContentLoaded',async()=>{
   }else{await loadSettings();ClinicBoot.ready('settings');}
   await ensureClinicReleaseUpdates();
   draw();applySite(SITE);ClinicBoot.ready('view');
- }catch(e){ClinicBoot.fail('تعذر تحميل أحدث بيانات العيادة. تحقق من الاتصال ثم أعد المحاولة.');}
-});
+ }catch(e){ClinicBoot.fail('تعذر تحميل أحدث بيانات العيادة. نعيد المحاولة عند تحسن الاتصال؛ يمكنك إعادة المحاولة الآن.');clinicBootRetry=setTimeout(()=>{if(navigator.onLine!==false)bootClinicPage();},5000);}
+ })();clinicBootFlight=run.finally(()=>{clinicBootFlight=null;});return clinicBootFlight;
+}
+window.addEventListener('DOMContentLoaded',bootClinicPage);window.addEventListener('online',()=>{if(ClinicBoot?.loading)bootClinicPage();});

@@ -69,6 +69,7 @@ function supabaseAdapter(url, secret, fetcher = fetch) {
   };
   return {
     readAttachmentBytes: async (id2, mime) => {
+      const maximum = mime === "application/pdf" ? 5e6 : 6e5;
       let response;
       try {
         response = await fetcher(base + "/storage/v1/object/authenticated/clinic-patient-reports/" + encodeURIComponent(id2), { headers: { apikey: secret, Authorization: "Bearer " + secret }, signal: AbortSignal.timeout(15e3) });
@@ -77,14 +78,14 @@ function supabaseAdapter(url, secret, fetcher = fetch) {
         e.status = 503;
         throw e;
       }
-      if (!response.ok || Number(response.headers.get("content-length") || 0) > 6e5) {
+      if (!response.ok || Number(response.headers.get("content-length") || 0) > maximum) {
         await response.body?.cancel();
         const e = Error("\u062A\u0639\u0630\u0631 \u062A\u0646\u0632\u064A\u0644 \u0627\u0644\u0635\u0648\u0631\u0629 \u0644\u0644\u0646\u0633\u062E\u0629 \u0627\u0644\u0627\u062D\u062A\u064A\u0627\u0637\u064A\u0629");
         e.status = 503;
         throw e;
       }
       const bytes = new Uint8Array(await response.arrayBuffer());
-      if (bytes.length > 6e5) {
+      if (bytes.length > maximum) {
         const e = Error("\u0635\u0648\u0631\u0629 \u0623\u0643\u0628\u0631 \u0645\u0646 \u0627\u0644\u062D\u062F \u0627\u0644\u0645\u0633\u0645\u0648\u062D");
         e.status = 413;
         throw e;
@@ -174,6 +175,9 @@ function supabaseAdapter(url, secret, fetcher = fetch) {
     }
   };
 }
+
+// supabase/functions/clinic-api/release.js
+var release_default = { "version": "2026.10.19.6", "apiContract": 1, "capabilities": ["pdfReports", "splitBackup", "phoneChangeLookup", "patientRequestAlerts"] };
 
 // supabase/functions/clinic-api/core.js
 var core_exports = {};
@@ -1017,13 +1021,13 @@ async function drain(adapter2) {
 function site(value, fail4) {
   if (!value || typeof value !== "object" || Array.isArray(value)) fail4("\u0628\u064A\u0627\u0646\u0627\u062A \u0627\u0644\u0645\u0648\u0642\u0639 \u063A\u064A\u0631 \u0635\u062D\u064A\u062D\u0629");
   const result = {};
-  for (const k of ["doctorName", "specialty", "clinicName", "bookingPhone", "emergencyPhone", "about", "footer", "headerTitle", "headerSubtitle", "headerText"]) {
+  for (const k of ["doctorName", "specialty", "clinicName", "bookingPhone", "emergencyPhone", "whatsappPhone", "about", "footer", "headerTitle", "headerSubtitle", "headerText"]) {
     if (value[k] !== void 0) {
       if (typeof value[k] !== "string" || value[k].length > (["about", "footer", "headerTitle", "headerSubtitle", "headerText"].includes(k) ? 2e3 : 160)) fail4("\u0627\u0644\u0646\u0635 \u0637\u0648\u064A\u0644 \u0623\u0648 \u063A\u064A\u0631 \u0635\u062D\u064A\u062D");
       result[k] = value[k];
     }
   }
-  for (const k of ["bookingPhone", "emergencyPhone"]) if (result[k] && !/^\+?[0-9]{7,15}$/.test(result[k])) fail4("\u0631\u0642\u0645 \u0627\u0644\u0647\u0627\u062A\u0641 \u063A\u064A\u0631 \u0635\u062D\u064A\u062D");
+  for (const k of ["bookingPhone", "emergencyPhone", "whatsappPhone"]) if (result[k] && !/^\+?[0-9]{7,15}$/.test(result[k])) fail4("\u0631\u0642\u0645 \u0627\u0644\u0647\u0627\u062A\u0641 \u063A\u064A\u0631 \u0635\u062D\u064A\u062D");
   result.branches = {};
   for (const b of Object.keys(value.branches || {})) {
     if (!validId2(b)) fail4("\u0631\u0645\u0632 \u0641\u0631\u0639 \u063A\u064A\u0631 \u0635\u062D\u064A\u062D");
@@ -2046,7 +2050,7 @@ function choose(registry, schedules, date2, time2) {
 var time = () => (/* @__PURE__ */ new Date()).toISOString();
 function settings(s) {
   const x = s.settings?.bookingRequests || {};
-  return { showPatientRequests: x.showPatientRequests !== false, enabled: x.enabled !== false, changesEnabled: x.changesEnabled !== false, leadDays: Number.isInteger(x.leadDays) ? Math.max(1, Math.min(90, x.leadDays)) : 30, changeCutoffHours: Number.isInteger(x.changeCutoffHours) ? Math.max(0, Math.min(168, x.changeCutoffHours)) : 12, slotMinutes: Number.isInteger(x.slotMinutes) ? Math.max(5, Math.min(120, x.slotMinutes)) : 15 };
+  return { requestOverdueMinutes: Number.isInteger(x.requestOverdueMinutes) ? Math.max(5, Math.min(1440, x.requestOverdueMinutes)) : 60, showPatientRequests: x.showPatientRequests !== false, enabled: x.enabled !== false, changesEnabled: x.changesEnabled !== false, leadDays: Number.isInteger(x.leadDays) ? Math.max(1, Math.min(90, x.leadDays)) : 30, changeCutoffHours: Number.isInteger(x.changeCutoffHours) ? Math.max(0, Math.min(168, x.changeCutoffHours)) : 12, slotMinutes: Number.isInteger(x.slotMinutes) ? Math.max(5, Math.min(120, x.slotMinutes)) : 15 };
 }
 function available(s, d) {
   const conf = settings(s), registry = branches(s), a = availability(registry, s.settings?.sched || {}, d);
@@ -2089,6 +2093,21 @@ function cutoff(s, booking2) {
 }
 async function handle4(adapter2, input, uid, client) {
   const action = input.action;
+  if (action === "requestSummary") {
+    const s = await adapter2.read(), r = role(s, uid);
+    requirePermission(r, "requests.read");
+    const rows = Object.values(s.appointmentRequests || {}).filter((x) => x.status === "pending" && ["new", "reschedule", "cancel"].includes(x.kind) && (allBranches(r) || x.branch === r.br));
+    const thresholdMinutes = settings(s).requestOverdueMinutes, overdue = rows.filter((x) => Number.isFinite(Date.parse(x.createdAt)) && Date.now() - Date.parse(x.createdAt) >= thresholdMinutes * 6e4).length;
+    return { pending: rows.length, reschedule: rows.filter((x) => x.kind === "reschedule").length, newBookings: rows.filter((x) => x.kind === "new").length, cancellations: rows.filter((x) => x.kind === "cancel").length, overdue, thresholdMinutes, latestAt: rows.map((x) => x.createdAt).filter(Boolean).sort().at(-1) || null, serverAt: time() };
+  }
+  if (action === "appointmentChangeOptions") {
+    const p = phone(input.phone);
+    if (!/^01[0125]\d{8}$/.test(p)) return [];
+    await adapter2.limit?.(client, p);
+    const s = await adapter2.read();
+    if (!settings(s).showPatientRequests || !settings(s).changesEnabled) fail2("\u0637\u0644\u0628\u0627\u062A \u062A\u063A\u064A\u064A\u0631 \u0627\u0644\u0645\u0648\u0627\u0639\u064A\u062F \u0645\u062A\u0648\u0642\u0641\u0629\u061B \u062A\u0648\u0627\u0635\u0644 \u0645\u0639 \u0627\u0644\u0633\u0643\u0631\u062A\u0627\u0631\u064A\u0629", 409);
+    return Object.entries(s.bookings || {}).filter(([d]) => d >= today()).flatMap(([d, rows]) => Object.values(rows).filter((x) => phone(x.phone) === p && x.s === "wait" && branchIds(s, true).includes(x.b)).map((x) => ({ date: d, b: x.b, no: x.no, canChange: cutoff(s, x) }))).sort((a, b) => a.date.localeCompare(b.date));
+  }
   if (action === "bookingAvailability") {
     const s = await adapter2.read(), d = validateDate(s, input.date || today());
     await adapter2.limit?.(client, "availability");
@@ -2228,18 +2247,18 @@ async function handle4(adapter2, input, uid, client) {
       const r = role(original, uid);
       requirePermission(r, "clinic.manage");
       const x = input.config;
-      if (!x || typeof x.enabled !== "boolean" || x.showPatientRequests !== void 0 && typeof x.showPatientRequests !== "boolean" || x.changesEnabled !== void 0 && typeof x.changesEnabled !== "boolean" || !Number.isInteger(x.leadDays) || x.leadDays < 1 || x.leadDays > 90 || !Number.isInteger(x.changeCutoffHours) || x.changeCutoffHours < 0 || x.changeCutoffHours > 168 || !Number.isInteger(x.slotMinutes) || x.slotMinutes < 5 || x.slotMinutes > 120) fail2("\u0625\u0639\u062F\u0627\u062F\u0627\u062A \u0627\u0644\u062D\u062C\u0632 \u063A\u064A\u0631 \u0635\u062D\u064A\u062D\u0629");
+      if (!x || x.requestOverdueMinutes !== void 0 && (!Number.isInteger(x.requestOverdueMinutes) || x.requestOverdueMinutes < 5 || x.requestOverdueMinutes > 1440) || typeof x.enabled !== "boolean" || x.showPatientRequests !== void 0 && typeof x.showPatientRequests !== "boolean" || x.changesEnabled !== void 0 && typeof x.changesEnabled !== "boolean" || !Number.isInteger(x.leadDays) || x.leadDays < 1 || x.leadDays > 90 || !Number.isInteger(x.changeCutoffHours) || x.changeCutoffHours < 0 || x.changeCutoffHours > 168 || !Number.isInteger(x.slotMinutes) || x.slotMinutes < 5 || x.slotMinutes > 120) fail2("\u0625\u0639\u062F\u0627\u062F\u0627\u062A \u0627\u0644\u062D\u062C\u0632 \u063A\u064A\u0631 \u0635\u062D\u064A\u062D\u0629");
       const s = structuredClone(original);
       s.settings ||= {};
-      s.settings.bookingRequests = { showPatientRequests: x.showPatientRequests ?? settings(original).showPatientRequests, enabled: x.enabled, changesEnabled: x.changesEnabled ?? settings(original).changesEnabled, leadDays: x.leadDays, changeCutoffHours: x.changeCutoffHours, slotMinutes: x.slotMinutes };
+      s.settings.bookingRequests = { showPatientRequests: x.showPatientRequests ?? settings(original).showPatientRequests, enabled: x.enabled, changesEnabled: x.changesEnabled ?? settings(original).changesEnabled, leadDays: x.leadDays, changeCutoffHours: x.changeCutoffHours, slotMinutes: x.slotMinutes, requestOverdueMinutes: x.requestOverdueMinutes ?? settings(original).requestOverdueMinutes };
       return s;
     });
     return { ok: true };
   }
   fail2("\u0639\u0645\u0644\u064A\u0629 \u063A\u064A\u0631 \u0645\u0633\u0645\u0648\u062D\u0629", 403);
 }
-var publicActions = ["bookingAvailability", "appointmentRequest", "appointmentChangeRequest"];
-var actions2 = [...publicActions, "requestDecide", "waitingListSave", "waitingListMatches", "bookingRequestSettings"];
+var publicActions = ["bookingAvailability", "appointmentRequest", "appointmentChangeRequest", "appointmentChangeOptions"];
+var actions2 = [...publicActions, "requestSummary", "requestDecide", "waitingListSave", "waitingListMatches", "bookingRequestSettings"];
 
 // supabase/functions/clinic-api/import-staging.js
 import { Buffer as Buffer5 } from "node:buffer";
@@ -3135,6 +3154,7 @@ function publicQueue(s, b, d = today()) {
 
 // supabase/functions/clinic-api/attachments.js
 var MAX_BYTES2 = 6e5;
+var MAX_PDF_BYTES = 5e6;
 var MAX_FILES = 20;
 var validId3 = (id2) => typeof id2 === "string" && /^[0-9a-f-]{36}$/.test(id2);
 function authorize2(state, uid, phone3, write = false) {
@@ -3146,14 +3166,20 @@ function authorize2(state, uid, phone3, write = false) {
 }
 function decodeImage(input) {
   if (typeof input.name !== "string" || !input.name.trim() || input.name.length > 120) fail2("\u0627\u0633\u0645 \u0627\u0644\u062A\u0642\u0631\u064A\u0631 \u0645\u0637\u0644\u0648\u0628 \u0648\u062D\u062A\u0649 120 \u062D\u0631\u0641\u064B\u0627");
-  if (!["image/jpeg", "image/png", "image/webp"].includes(input.mime) || typeof input.data !== "string" || !input.data.length || input.data.length > 8e5 || input.data.length % 4 || !/^[A-Za-z0-9+/]+={0,2}$/.test(input.data)) fail2("\u0627\u0631\u0641\u0639 \u0635\u0648\u0631\u0629 JPG \u0623\u0648 PNG \u0623\u0648 WebP \u0628\u0627\u0644\u062D\u062C\u0645 \u0627\u0644\u0645\u0633\u0645\u0648\u062D");
+  const pdf = input.mime === "application/pdf", maximum = pdf ? MAX_PDF_BYTES : MAX_BYTES2;
+  if (!["image/jpeg", "image/png", "image/webp", "application/pdf"].includes(input.mime) || typeof input.data !== "string" || !input.data.length || input.data.length > Math.ceil(maximum / 3) * 4 || input.data.length % 4 || !/^[A-Za-z0-9+/]+={0,2}$/.test(input.data)) fail2("\u0627\u0631\u0641\u0639 \u0635\u0648\u0631\u0629 JPG \u0623\u0648 PNG \u0623\u0648 WebP \u0623\u0648 PDF \u0628\u0627\u0644\u062D\u062C\u0645 \u0627\u0644\u0645\u0633\u0645\u0648\u062D");
   let bytes;
   try {
     bytes = Uint8Array.from(atob(input.data), (c) => c.charCodeAt(0));
   } catch {
     fail2("\u0628\u064A\u0627\u0646\u0627\u062A \u0627\u0644\u0635\u0648\u0631\u0629 \u063A\u064A\u0631 \u0635\u062D\u064A\u062D\u0629");
   }
-  if (bytes.length < 12 || bytes.length > MAX_BYTES2) fail2("\u0627\u0644\u0635\u0648\u0631\u0629 \u064A\u062C\u0628 \u0623\u0644\u0627 \u062A\u062A\u062C\u0627\u0648\u0632 600 \u0643\u064A\u0644\u0648\u0628\u0627\u064A\u062A \u0628\u0639\u062F \u0627\u0644\u062A\u062C\u0647\u064A\u0632");
+  if (bytes.length < 12 || bytes.length > maximum) fail2(pdf ? "\u0645\u0644\u0641 PDF \u064A\u062C\u0628 \u0623\u0644\u0627 \u064A\u062A\u062C\u0627\u0648\u0632 5 \u0645\u064A\u062C\u0627\u0628\u0627\u064A\u062A" : "\u0627\u0644\u0635\u0648\u0631\u0629 \u064A\u062C\u0628 \u0623\u0644\u0627 \u062A\u062A\u062C\u0627\u0648\u0632 600 \u0643\u064A\u0644\u0648\u0628\u0627\u064A\u062A \u0628\u0639\u062F \u0627\u0644\u062A\u062C\u0647\u064A\u0632");
+  if (pdf) {
+    const header = new TextDecoder().decode(bytes.slice(0, 12)), tail = new TextDecoder().decode(bytes.slice(-1024));
+    if (!/^%PDF-(?:1\.[0-7]|2\.0)/.test(header) || !/%%EOF\s*$/.test(tail)) fail2("\u0645\u062D\u062A\u0648\u0649 \u0627\u0644\u0645\u0644\u0641 \u0644\u064A\u0633 PDF \u0633\u0644\u064A\u0645\u064B\u0627");
+    return bytes;
+  }
   const match = input.mime === "image/png" ? [137, 80, 78, 71, 13, 10, 26, 10].every((v, i) => bytes[i] === v) : input.mime === "image/jpeg" ? bytes[0] === 255 && bytes[1] === 216 && bytes[2] === 255 : String.fromCharCode(...bytes.slice(0, 4)) === "RIFF" && String.fromCharCode(...bytes.slice(8, 12)) === "WEBP";
   if (!match) fail2("\u0645\u062D\u062A\u0648\u0649 \u0627\u0644\u0635\u0648\u0631\u0629 \u0644\u0627 \u064A\u0637\u0627\u0628\u0642 \u0646\u0648\u0639 \u0627\u0644\u0645\u0644\u0641");
   return bytes;
@@ -3216,6 +3242,7 @@ async function handleAttachments(adapter2, input, uid) {
   if (!validId3(item.key)) fail2("\u0645\u0639\u0631\u0641 \u0627\u0644\u0645\u0631\u0641\u0642 \u063A\u064A\u0631 \u0635\u062D\u064A\u062D", 400);
   if (input.action === "attachmentRead") {
     if (!adapter2.readAttachment) fail2("\u062A\u062E\u0632\u064A\u0646 \u0627\u0644\u062A\u0642\u0627\u0631\u064A\u0631 \u063A\u064A\u0631 \u0645\u0647\u064A\u0623", 503);
+    if (item.mime === "application/pdf") return { ...await (adapter2.readAttachmentBytes || adapter2.readAttachment)(item.key, item.mime), name: item.name, mime: item.mime, downloadOnly: true };
     return { ...await adapter2.readAttachment(item.key, item.mime), name: item.name, mime: item.mime };
   }
   if (input.action === "attachmentDelete") {
@@ -3274,6 +3301,11 @@ function createService(baseAdapter) {
       return record(before, reconcile(before, fn(original)), input, uid);
     }) };
     if (["backupRehearsal", "backupRehearsalStatus"].includes(action)) return handle2(adapter2, input, uid);
+    if (action === "systemVersion") {
+      const s = await adapter2.read();
+      if (role(s, uid).r !== "admin") fail2("\u0639\u0631\u0636 \u0625\u0635\u062F\u0627\u0631 \u0627\u0644\u0646\u0638\u0627\u0645 \u0645\u062A\u0627\u062D \u0644\u0644\u0623\u062F\u0645\u0646 \u0641\u0642\u0637", 403);
+      return release_default;
+    }
     if (action === "refreshClinicColors") return handle(adapter2, input, uid);
     if (actions.includes(action)) return handle3(adapter2, input, uid);
     if (actions2.includes(action)) return handle4(adapter2, input, uid, client);
@@ -3790,12 +3822,13 @@ Deno.serve((req) => {
     if (req.method !== "POST") return new Response(JSON.stringify({ error: "POST required" }), { headers, status: 405 });
     try {
       if (!String(req.headers.get("content-type")).startsWith("application/json")) return new Response(JSON.stringify({ error: "JSON required" }), { headers, status: 415 });
-      if (Number(req.headers.get("content-length") || 0) > 9e5) return new Response(JSON.stringify({ error: "Payload too large" }), { headers, status: 413 });
+      if (Number(req.headers.get("content-length") || 0) > 7e6) return new Response(JSON.stringify({ error: "Payload too large" }), { headers, status: 413 });
       const text3 = await req.text();
-      if (new TextEncoder().encode(text3).length > 9e5) return new Response(JSON.stringify({ error: "Payload too large" }), { headers, status: 413 });
+      if (new TextEncoder().encode(text3).length > 7e6) return new Response(JSON.stringify({ error: "Payload too large" }), { headers, status: 413 });
       const input = JSON.parse(text3);
+      if (input.action !== "attachmentUpload" && new TextEncoder().encode(text3).length > 9e5) return new Response(JSON.stringify({ error: "Payload too large" }), { headers, status: 413 });
       action = /^[A-Za-z]{1,40}$/.test(input.action) ? input.action : "unknown";
-      const isPublic = ["bookingAvailability", "appointmentRequest", "appointmentChangeRequest"].includes(input.action) || input.action === "lookupHistory" || input.action === "lookup" || input.action === "publicQueue" || input.action === "get" && input.path === "settings";
+      const isPublic = ["bookingAvailability", "appointmentRequest", "appointmentChangeRequest", "appointmentChangeOptions"].includes(input.action) || input.action === "lookupHistory" || input.action === "lookup" || input.action === "publicQueue" || input.action === "get" && input.path === "settings";
       let uid = null;
       if (!isPublic) {
         const token = (req.headers.get("Authorization") || "").match(/^Bearer (.+)$/)?.[1];

@@ -3,4 +3,5 @@ Allow: /
 Disallow: /admin.html
 Disallow: /staff.html
 Disallow: /display.html
+Disallow: /api/
 Sitemap: https://dryoussef.vercel.app/sitemap.xml

@@ -5,10 +5,10 @@ const branchConfig=require('./branches.cjs');
 const designOptions=require('./design-options.cjs'),storageCleanup=require('./storage-cleanup.cjs');
 function site(value,fail){
  if(!value||typeof value!=='object'||Array.isArray(value))fail('بيانات الموقع غير صحيحة');
- const result={};for(const k of ['doctorName','specialty','clinicName','bookingPhone','emergencyPhone','about','footer','headerTitle','headerSubtitle','headerText']){
+ const result={};for(const k of ['doctorName','specialty','clinicName','bookingPhone','emergencyPhone','whatsappPhone','about','footer','headerTitle','headerSubtitle','headerText']){
   if(value[k]!==undefined){if(typeof value[k]!=='string'||value[k].length>(['about','footer','headerTitle','headerSubtitle','headerText'].includes(k)?2000:160))fail('النص طويل أو غير صحيح');result[k]=value[k];}
  }
- for(const k of ['bookingPhone','emergencyPhone'])if(result[k]&&!/^\+?[0-9]{7,15}$/.test(result[k]))fail('رقم الهاتف غير صحيح');
+ for(const k of ['bookingPhone','emergencyPhone','whatsappPhone'])if(result[k]&&!/^\+?[0-9]{7,15}$/.test(result[k]))fail('رقم الهاتف غير صحيح');
  result.branches={};for(const b of Object.keys(value.branches||{})){if(!branchConfig.validId(b))fail('رمز فرع غير صحيح');const x=value.branches?.[b];if(!x)continue;result.branches[b]={};for(const k of ['name','address','phone']){if(typeof x[k]!=='string'||x[k].length>300)fail('بيانات الفرع غير صحيحة');result.branches[b][k]=x[k];}if(x.phone&&!/^\+?[0-9]{7,15}$/.test(x.phone))fail('هاتف الفرع غير صحيح');}
  Object.assign(result,siteContent.validate(value.sections,value.layout,fail));
  const d=value.design||{};result.design=designOptions.validate(d);for(const k of ['primary','background','text','accent','card']){if(d[k]!==undefined){if(!/^#[0-9a-f]{6}$/i.test(d[k]))fail('لون غير صحيح');result.design[k]=d[k];}}

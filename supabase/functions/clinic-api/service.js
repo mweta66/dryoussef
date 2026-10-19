@@ -1,3 +1,4 @@
+import release from './release.js';
 import * as colorRefresh from './color-refresh.js';
 import * as backupRehearsal from './backup-rehearsal.js';
 import * as workflow from './workflow.js';
@@ -27,6 +28,7 @@ function createService(baseAdapter) {
    const before=structuredClone(original);return history.record(before,scheduleTransfers.reconcile(before,fn(original)),input,uid);
   })};
   if(['backupRehearsal','backupRehearsalStatus'].includes(action))return backupRehearsal.handle(adapter,input,uid);
+  if(action==='systemVersion'){const s=await adapter.read();if(core.role(s,uid).r!=='admin')core.fail('عرض إصدار النظام متاح للأدمن فقط',403);return release;}
   if(action==='refreshClinicColors')return colorRefresh.handle(adapter,input,uid);
   if(workflow.actions.includes(action))return workflow.handle(adapter,input,uid);
   if(patientRequests.actions.includes(action))return patientRequests.handle(adapter,input,uid,client);

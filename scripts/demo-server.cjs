@@ -34,7 +34,7 @@ const handle=createService({
  deleteUser:async uid=>{const file=path.join(demo,'accounts.json');fs.writeFileSync(file,JSON.stringify(JSON.parse(fs.readFileSync(file,'utf8')).filter(x=>x.uid!==uid)));}
 });
 function json(res,status,data){res.writeHead(status,{'Content-Type':'application/json; charset=utf-8','Cache-Control':'no-store'});res.end(JSON.stringify(data));}
-async function body(req){const parts=[];let size=0;for await(const part of req){size+=part.length;if(size>900000){const e=new Error('Payload too large');e.status=413;throw e;}parts.push(part);}try{return JSON.parse(new TextDecoder('utf-8',{fatal:true}).decode(Buffer.concat(parts)))}catch{const e=Error('JSON غير صحيح');e.status=400;throw e;}}
+async function body(req){const parts=[];let size=0;for await(const part of req){size+=part.length;if(size>7000000){const e=new Error('Payload too large');e.status=413;throw e;}parts.push(part);}try{return JSON.parse(new TextDecoder('utf-8',{fatal:true}).decode(Buffer.concat(parts)))}catch{const e=Error('JSON غير صحيح');e.status=400;throw e;}}
 function session(uid){
  const token=randomBytes(32).toString('hex');sessions.set(token,{uid,exp:Date.now()+3600000});
  return {idToken:token,refreshToken:token,localId:uid,expiresIn:'3600'};
@@ -48,7 +48,7 @@ const server=http.createServer(async(req,res)=>{
    if(req.method!=='POST')return json(res,405,{error:'POST required'});
    if(!String(req.headers['content-type']).startsWith('application/json'))return json(res,415,{error:'JSON required'});
    if(req.headers.origin&&req.headers.origin!=='http://'+req.headers.host)return json(res,403,{error:'Origin rejected'});
-   const input=await body(req),token=String(req.headers.authorization||'').replace(/^Bearer /,''),active=sessions.get(token);
+   const input=await body(req);if(input.action!=='attachmentUpload'&&Buffer.byteLength(JSON.stringify(input))>900000)return json(res,413,{error:'Payload too large'});const token=String(req.headers.authorization||'').replace(/^Bearer /,''),active=sessions.get(token);
    if(url.pathname==='/api/auth'){
     limit('login:'+req.socket.remoteAddress,10);
     if(input.ep==='signInWithPassword'){
@@ -67,16 +67,17 @@ const server=http.createServer(async(req,res)=>{
     }
     return json(res,400,{error:'Unsupported action'});
    }
-   const publicAction=['bookingAvailability','appointmentRequest','appointmentChangeRequest'].includes(input.action)||input.action==='lookupHistory'||input.action==='lookup'||input.action==='publicQueue'||input.action==='get'&&input.path==='settings';
+   const publicAction=['bookingAvailability','appointmentRequest','appointmentChangeRequest','appointmentChangeOptions'].includes(input.action)||input.action==='lookupHistory'||input.action==='lookup'||input.action==='publicQueue'||input.action==='get'&&input.path==='settings';
    if(!publicAction&&(!active||active.exp<Date.now()))return json(res,401,{error:'NOAUTH'});
    return json(res,200,{data:await handle(input,active?.uid,req.socket.remoteAddress)});
   }
+  if(/^\/branches\/[a-z]+$/.test(url.pathname)&&(req.method==='GET'||req.method==='HEAD')){const pages=require('../server/public-branch-page.cjs'),id=url.pathname.split('/').at(-1),state=read(),registry=state.settings?.branches||state.settings?.site?.branches||{},known=Object.hasOwn(pages.names,id),enabled=known&&!!registry[id]&&registry[id].enabled!==false;res.writeHead(enabled?200:404,{'Content-Type':'text/html; charset=utf-8','Cache-Control':'no-store',...(!enabled?{'X-Robots-Tag':'noindex,nofollow'}:{})});return res.end(req.method==='HEAD'?'':pages.renderPage(state.settings||{},known?id:'unknown'));}
   if(req.method!=='GET'&&req.method!=='HEAD')return json(res,405,{error:'GET required'});
   const relative=decodeURIComponent(url.pathname==='/'?'/index.html':url.pathname);
   const file=path.resolve(root,'.'+relative);
   if(!file.startsWith(root+path.sep)||relative.includes('..'))return json(res,403,{error:'Forbidden'});
   const exists=fs.existsSync(file)&&fs.statSync(file).isFile(),target=exists?file:path.join(root,'404.html');
-  const mime={'.html':'text/html; charset=utf-8','.js':'text/javascript; charset=utf-8','.css':'text/css; charset=utf-8','.woff2':'font/woff2','.jpg':'image/jpeg','.png':'image/png','.txt':'text/plain','.xml':'application/xml','.mp3':'audio/mpeg','.wav':'audio/wav'};
+  const mime={'.html':'text/html; charset=utf-8','.js':'text/javascript; charset=utf-8','.css':'text/css; charset=utf-8','.woff2':'font/woff2','.jpg':'image/jpeg','.png':'image/png','.webp':'image/webp','.txt':'text/plain','.xml':'application/xml','.mp3':'audio/mpeg','.wav':'audio/wav'};
   const size=fs.statSync(target).size,range=req.headers.range;
   let start=0,end=size-1,partial=false;
   if(exists&&range){const match=/^bytes=(\d*)-(\d*)$/.exec(range);if(!match||(!match[1]&&!match[2])){res.writeHead(416,{'Content-Range':'bytes */'+size});return res.end()}if(match[1]){start=Number(match[1]);end=match[2]?Math.min(size-1,Number(match[2])):size-1}else start=Math.max(0,size-Number(match[2]));if(start>=size||start>end){res.writeHead(416,{'Content-Range':'bytes */'+size});return res.end()}partial=true;}
