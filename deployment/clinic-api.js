@@ -177,7 +177,7 @@ function supabaseAdapter(url, secret, fetcher = fetch) {
 }
 
 // supabase/functions/clinic-api/release.js
-var release_default = { "version": "2026.10.19.6", "apiContract": 1, "capabilities": ["pdfReports", "splitBackup", "phoneChangeLookup", "patientRequestAlerts"] };
+var release_default = { "version": "2026.10.19.7", "apiContract": 1, "capabilities": ["pdfReports", "splitBackup", "phoneChangeLookup", "patientRequestAlerts", "globalThemePresets"] };
 
 // supabase/functions/clinic-api/core.js
 var core_exports = {};
@@ -1074,6 +1074,7 @@ function site(value, fail4) {
 }
 function mutate(original, uid, input, core) {
   const s = structuredClone(original), r = core.role(s, uid);
+  if (["watermarkSave", "aboutSave", "headerSave"].includes(input.action) && s.settings) delete s.settings.previousThemeDisplay;
   if (input.action === "displaySave") {
     requirePermission(r, "display.manage");
     if (input.revision !== (s.settings?.displayRev || 0)) core.fail("\u062A\u063A\u064A\u0631\u062A \u0625\u0639\u062F\u0627\u062F\u0627\u062A \u0627\u0644\u0634\u0627\u0634\u0629 \u0645\u0646 \u062C\u0644\u0633\u0629 \u0623\u062E\u0631\u0649\u061B \u0623\u0639\u062F \u0627\u0644\u062A\u062D\u0645\u064A\u0644 \u0623\u0648\u0644\u064B\u0627", 409);
@@ -1143,13 +1144,36 @@ function mutate(original, uid, input, core) {
     s.settings.headerRev = (s.settings.headerRev || 0) + 1;
     return s;
   }
+  if (input.action === "siteThemeSave") {
+    if (r.r !== "admin") core.fail("\u062A\u0637\u0628\u064A\u0642 \u062B\u064A\u0645 \u0627\u0644\u0645\u0648\u0642\u0639 \u0628\u0627\u0644\u0643\u0627\u0645\u0644 \u0645\u062A\u0627\u062D \u0644\u0644\u0623\u062F\u0645\u0646 \u0641\u0642\u0637", 403);
+    if (input.revision !== (s.settings?.displayRev || 0)) core.fail("\u062A\u063A\u064A\u0631\u062A \u0625\u0639\u062F\u0627\u062F\u0627\u062A \u0634\u0627\u0634\u0629 \u0627\u0644\u062F\u0648\u0631\u061B \u0623\u0639\u062F \u062A\u062D\u0645\u064A\u0644 \u0627\u0644\u062A\u0635\u0645\u064A\u0645 \u0642\u0628\u0644 \u062A\u0637\u0628\u064A\u0642 \u0627\u0644\u062B\u064A\u0645", 409);
+    const checked = site({ design: input.site?.design }, core.fail), next = structuredClone(s);
+    next.settings ||= {};
+    next.settings.site = { ...s.settings?.site, design: checked.design };
+    const design = next.settings.site.design, palettes = design.palettes;
+    for (const mode of ["light", "dark"]) for (const key of ["background", "card", "text", "primary", "accent", "muted", "line", "headerBackground", "headerText"]) if (!palettes?.[mode]?.[key]) core.fail("\u0627\u062E\u062A\u0631 \u062B\u064A\u0645\u064B\u0627 \u0643\u0627\u0645\u0644\u064B\u0627 \u0644\u0644\u0646\u0647\u0627\u0631 \u0648\u0627\u0644\u0644\u064A\u0644 \u0642\u0628\u0644 \u0627\u0644\u062D\u0641\u0638");
+    const previous = normalize2(s.settings?.display || {}, core.branchIds(s, true)), light2 = palettes.light;
+    next.settings.previousDesign = structuredClone(s.settings?.site?.design || {});
+    next.settings.previousThemeDisplay = Object.fromEntries(Object.entries(previous).filter(([key]) => key === "colors" || key === "customColors" || key.startsWith("notice") && key.endsWith("Color") || key === "noticeBackground"));
+    Object.assign(design, { primary: light2.primary, background: light2.background, text: light2.text, accent: light2.accent, card: light2.card, aboutTextColor: light2.text, aboutBackground: light2.card, aboutBorderColor: light2.primary, aboutNeonColor: light2.accent, headerColors: Object.fromEntries(["light", "dark"].map((mode) => [mode, { background: palettes[mode].headerBackground, text: palettes[mode].headerText }])) });
+    const colors2 = Object.fromEntries(["light", "dark"].map((mode) => {
+      const p = palettes[mode];
+      return [mode, { background: p.background, currentBackground: p.headerBackground, currentText: p.headerText, nextBackground: p.card, nextText: p.text, accent: p.accent }];
+    }));
+    next.settings.display = { ...previous, colors: colors2, customColors: true, noticeTextColor: light2.primary, noticeBackground: light2.card, noticeBorderColor: light2.primary, noticeNeonColor: light2.accent };
+    for (const key of ["displayRev", "headerRev", "aboutRev"]) next.settings[key] = (s.settings?.[key] || 0) + 1;
+    return next;
+  }
   if (input.action === "siteSave") {
     requirePermission(r, "site.manage");
     s.settings ||= {};
     const nextSite = site(input.site, core.fail);
     nextSite.sections = s.settings.site?.sections || {};
     nextSite.layout = s.settings.site?.layout || {};
-    if (JSON.stringify(s.settings.site?.design) !== JSON.stringify(nextSite.design)) s.settings.previousDesign = structuredClone(s.settings.site?.design || {});
+    if (JSON.stringify(s.settings.site?.design) !== JSON.stringify(nextSite.design)) {
+      s.settings.previousDesign = structuredClone(s.settings.site?.design || {});
+      delete s.settings.previousThemeDisplay;
+    }
     s.settings.site = nextSite;
     if (s.settings.branches) for (const [b, x] of Object.entries(s.settings.site.branches)) {
       if (s.settings.branches[b]) s.settings.branches[b] = { ...s.settings.branches[b], ...x };
@@ -3439,6 +3463,14 @@ function createService(baseAdapter) {
         s.settings.site ||= {};
         s.settings.site.design = s.settings.previousDesign;
         s.settings.previousDesign = current;
+        if (s.settings.previousThemeDisplay) {
+          if (role(s, uid).r !== "admin") fail2("\u0627\u0633\u062A\u0639\u0627\u062F\u0629 \u062B\u064A\u0645 \u0627\u0644\u0645\u0648\u0642\u0639 \u0648\u0634\u0627\u0634\u0629 \u0627\u0644\u062F\u0648\u0631 \u0645\u062A\u0627\u062D\u0629 \u0644\u0644\u0623\u062F\u0645\u0646 \u0641\u0642\u0637", 403);
+          const display = s.settings.display || {}, keys2 = Object.keys(s.settings.previousThemeDisplay), previous = Object.fromEntries(keys2.map((key) => [key, structuredClone(display[key])]));
+          s.settings.display = { ...display, ...s.settings.previousThemeDisplay };
+          s.settings.previousThemeDisplay = previous;
+          s.settings.displayRev = (s.settings.displayRev || 0) + 1;
+        }
+        for (const key of ["headerRev", "aboutRev"]) s.settings[key] = (s.settings[key] || 0) + 1;
         return s;
       });
       return { ok: true };
@@ -3682,7 +3714,7 @@ function createService(baseAdapter) {
       await adapter2.mutate((s) => mutate(s, uid, { ...input, role: next }, core_exports));
       return { ok: true, username: next.u };
     }
-    if (["watermarkSave", "aboutSave", "displaySave", "headerSave", "siteContentSave", "siteSave", "patientSave", "patientDelete", "dataClear"].includes(action)) {
+    if (["watermarkSave", "aboutSave", "displaySave", "headerSave", "siteContentSave", "siteSave", "siteThemeSave", "patientSave", "patientDelete", "dataClear"].includes(action)) {
       await adapter2.mutate((s) => mutate(s, uid, input, core_exports));
       return { ok: true, ...["patientDelete", "dataClear"].includes(action) ? { cleanupPending: await drain(adapter2) } : {} };
     }

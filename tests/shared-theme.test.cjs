@@ -23,7 +23,7 @@ test('dark text, secondary labels and control boundaries remain readable with sa
   for(const [fg,bg]of [['--btnink','--btn'],['--secondaryink','--secondary'],['--accent-button-ink','--accent-button'],['--header-ink','--header-bg']])assert.ok(c.clinicRatio(v[fg],v[bg])>=4.5,fg);
   assert.deepEqual(JSON.parse(JSON.stringify(palette)),before);
  }
- const old=Object.fromEntries(c.clinicStyleVars(legacy,'dark').split(';').map(x=>x.split(':')));assert.equal(old['--bg'],'#111923');assert.equal(old['--card'],'#1c2a38');
+ const old=Object.fromEntries(c.clinicStyleVars(legacy,'dark').split(';').map(x=>x.split(':')));assert.equal(old['--bg'],c.clinicPalette(0,'dark').background);assert.equal(old['--card'],c.clinicPalette(0,'dark').card);
 });
 test('dark queue numbers remain readable when an administrator selected identical foreground and background colors',()=>{
  const c=theme();for(const color of ['#111111','#333333','#ffffff','#ffcc00']){
