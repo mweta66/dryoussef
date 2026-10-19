@@ -28,6 +28,16 @@ jobs:
           if [[ -n "$number" ]]; then
             url=$(gh pr view "$number" --json url --jq .url)
           else
-            url=$(gh pr create --base main --head "$PR_BRANCH" --title 'طلبات المرضى للممرضة وإخفاء القسم وتنسيق الألوان والوضع الداكن' --body-file docs/PR-patient-requests-and-colors.md)
+            if ! url=$(gh pr create --base main --head "$PR_BRANCH" --title 'طلبات المرضى للممرضة وإخفاء القسم وتنسيق الألوان والوضع الداكن' --body-file docs/PR-patient-requests-and-colors.md 2> "$RUNNER_TEMP/clinic-pr-error"); then
+              error=$(<"$RUNNER_TEMP/clinic-pr-error")
+              if [[ "$error" == *'is not permitted to create or approve pull requests'* ]]; then
+                echo 'Repository settings block GitHub Actions from creating pull requests. Enable Allow GitHub Actions to create and approve pull requests in Settings > Actions > General, then rerun this workflow.' >> "$GITHUB_STEP_SUMMARY"
+              elif [[ "$error" == *'Resource not accessible by integration'* ]]; then
+                echo 'The repository token cannot create pull requests with the current repository policy.' >> "$GITHUB_STEP_SUMMARY"
+              else
+                echo 'Pull request creation failed. See the failed job logs for the repository policy or API error.' >> "$GITHUB_STEP_SUMMARY"
+              fi
+              exit 1
+            fi
           fi
           echo "Pull request: $url" >> "$GITHUB_STEP_SUMMARY"
