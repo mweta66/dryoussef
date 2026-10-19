@@ -1748,22 +1748,12 @@ async function handle3(adapter2, input, uid) {
     return { ok: true, changed };
   }
   if (action === "preferencesGet") {
-    const s = await adapter2.read();
-    role(s, uid);
-    return s.userPreferences?.[uid] || {};
+    role(await adapter2.read(), uid);
+    return { themePreset: null, customColor: null, mode: "system" };
   }
   if (action === "preferencesSave") {
-    let saved;
-    await adapter2.mutate((original) => {
-      role(original, uid);
-      const p = input.preferences;
-      if (!p || Object.keys(p).some((k) => !["themePreset", "customColor", "mode"].includes(k)) || p.themePreset !== null && (!Number.isInteger(p.themePreset) || p.themePreset < 0 || p.themePreset > 9) || p.customColor !== null && !/^#[0-9a-f]{6}$/i.test(p.customColor || "") || !["system", "light", "dark"].includes(p.mode)) fail2("\u062A\u0641\u0636\u064A\u0644\u0627\u062A \u063A\u064A\u0631 \u0635\u062D\u064A\u062D\u0629");
-      const s = structuredClone(original);
-      s.userPreferences ||= {};
-      saved = s.userPreferences[uid] = { ...p, updatedAt: stamp2() };
-      return s;
-    });
-    return saved;
+    role(await adapter2.read(), uid);
+    fail2("\u062A\u0645 \u0625\u0644\u063A\u0627\u0621 \u0627\u0644\u062B\u064A\u0645\u0627\u062A \u0627\u0644\u0634\u062E\u0635\u064A\u0629\u061B \u0625\u0639\u062F\u0627\u062F\u0627\u062A \u0627\u0644\u0623\u0644\u0648\u0627\u0646 \u0645\u0646 \u0644\u0648\u062D\u0629 \u0627\u0644\u0623\u062F\u0645\u0646", 403);
   }
   if (action === "timeline") {
     const s = await adapter2.read(), r = role(s, uid);

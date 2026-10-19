@@ -15,12 +15,12 @@ test('header controls are validated and round-trip through saved site data',()=>
  assert.deepEqual(management.site({design},core.fail).design,design);
  for(const invalid of [{headerTitleSize:200},{headerPadding:-1},{headerGap:1.5},{headerAlign:'invalid'}])assert.throws(()=>management.site({design:invalid},core.fail));
 });
-test('staff theme is per account and preserves shared header colors and dimensions',()=>{
+test('stored personal themes no longer override the shared clinic design',()=>{
  const values=new Map(),box={me:{role:'doctor',u:'doctor'},AUTH:{uid:'doctor-id'},localStorage:{getItem:k=>values.get(k)??null},window:{},console};
  vm.createContext(box);vm.runInContext(fs.readFileSync('public/clinic-theme.js','utf8'),box);
  const shared={themePreset:0,headerHeight:220,palettes:{light:{headerBackground:'#123456',headerText:'#ffffff'}}};
  values.set('clinic_staff_theme_doctor-id','4');let personal=box.personalClinicDesign(shared);
- assert.equal(personal.themePreset,4);assert.equal(personal.headerHeight,220);assert.equal(personal.palettes.light.headerBackground,'#123456');assert.equal(shared.themePreset,0);
+ assert.equal(personal,shared);assert.equal(personal.themePreset,0);assert.equal(personal.headerHeight,220);assert.equal(personal.palettes.light.headerBackground,'#123456');assert.equal(shared.themePreset,0);
  box.me={role:'sec',u:'secretary'};box.AUTH={uid:'sec-id'};assert.equal(box.personalClinicDesign(shared),shared);
  box.me.role='admin';box.AUTH.uid='doctor-id';assert.equal(box.personalClinicDesign(shared),shared);
 });

@@ -2,7 +2,7 @@ name: Open clinic review pull request
 on:
   push:
     branches:
-      - codex/cairo-font-sitewide
+      - codex/shared-theme-dark-contrast
   workflow_dispatch:
 permissions:
   contents: read
@@ -12,7 +12,7 @@ concurrency:
   cancel-in-progress: false
 jobs:
   open-review:
-    if: github.repository == 'mweta66/dryoussef' && github.ref == 'refs/heads/codex/cairo-font-sitewide'
+    if: github.repository == 'mweta66/dryoussef' && github.ref == 'refs/heads/codex/shared-theme-dark-contrast'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -28,7 +28,7 @@ jobs:
           if [[ -n "$number" ]]; then
             url=$(gh pr view "$number" --json url --jq .url)
           else
-            if ! url=$(gh pr create --base main --head "$PR_BRANCH" --title 'توحيد خط الموقع بالكامل إلى Cairo محليًا' --body-file docs/PR-cairo-font.md 2> "$RUNNER_TEMP/clinic-pr-error"); then
+            if ! url=$(gh pr create --base main --head "$PR_BRANCH" --title 'إلغاء الثيمات الشخصية وتحسين تباين الوضع الداكن' --body-file docs/PR-shared-theme-dark.md 2> "$RUNNER_TEMP/clinic-pr-error"); then
               error=$(<"$RUNNER_TEMP/clinic-pr-error")
               if [[ "$error" == *'is not permitted to create or approve pull requests'* ]]; then
                 echo '::error::Repository settings block GitHub Actions from creating pull requests. Enable Allow GitHub Actions to create and approve pull requests in Settings > Actions > General, then rerun this workflow.'
