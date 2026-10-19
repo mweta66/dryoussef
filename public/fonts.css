@@ -1,0 +1,16 @@
+/* Cairo, self-hosted under the SIL Open Font License: fonts/OFL-Cairo.txt. */
+@font-face {
+  font-family: 'Cairo';
+  src: url('fonts/cairo-variable.woff2') format('woff2');
+  font-style: normal;
+  font-weight: 200 1000;
+  font-display: swap;
+}
+
+html, body {
+  font-family: 'Cairo', Tahoma, Arial, sans-serif;
+}
+
+button, input, optgroup, select, textarea, pre, code, kbd, samp {
+  font-family: inherit;
+}
