@@ -144,3 +144,6 @@ html[data-display-hide-showControls] .display-controls-toggle{display:none!impor
 .queue-display #display-logo{grid-column:2;grid-row:1;justify-self:center;align-self:center}
 .queue-display .display-time{grid-column:3;grid-row:1;max-width:100%;min-width:0}
 .queue-display .display-header::before,.queue-display .card::before{content:none;display:none!important}
+:root[data-theme="dark"] .display-emergency-notice{background:color-mix(in srgb,var(--notice-background,#f8eaec) 10%,var(--card));color:color-mix(in srgb,var(--notice-text,#9b474f) 20%,var(--ink));border-color:color-mix(in srgb,var(--notice-border,#9b474f) 70%,var(--card))}
+@media(prefers-color-scheme:dark){:root:not([data-theme="light"]) .display-emergency-notice{background:color-mix(in srgb,var(--notice-background,#f8eaec) 10%,var(--card));color:color-mix(in srgb,var(--notice-text,#9b474f) 20%,var(--ink));border-color:color-mix(in srgb,var(--notice-border,#9b474f) 70%,var(--card))}}
+#current>span.empty-ticket{font-size:clamp(3rem,12cqh,6rem);font-weight:400;color:var(--mut)}

@@ -1,6 +1,6 @@
 const perms=require('./permissions.cjs'),branches=require('./branches.cjs');
 const queueGrants=['bookings.read','bookings.create','bookings.status','patients.print','patients.read','patients.edit'];
-const nurseGrants=[...queueGrants,'patients.read','complaints.read','complaints.create','attachments.read','attachments.create','attachments.own.delete'];
+const nurseGrants=[...queueGrants,'requests.read','patients.read','complaints.read','complaints.create','attachments.read','attachments.create','attachments.own.delete'];
 function plan(state,uid,core){
  if(core.role(state,uid).r!=='admin')core.fail('ضبط حسابات الفروع متاح للأدمن فقط',403);
  const registry=branches.branches(state),roles=Object.entries(state.roles||{}),staff=[];

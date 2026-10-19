@@ -21,6 +21,7 @@ async function deleteClinicBranch(branch){if(!confirm('حذف الفرع؟ إذ�
 function clinicBookingSuggestions(registry,schedules,date){return ClinicSchedule.availability(registry,schedules,date);}
 var bookingScheduleIsNew=false,bookingAutoBranch=false;
 function syncBookingSchedule(reason){
+ if(!me||!staffView())return;
  const dateInput=document.getElementById('f_date'),select=document.getElementById('f_b');if(!bookingScheduleIsNew||!dateInput||!document.getElementById('f_phone'))return;
  if(reason==='branch')bookingAutoBranch=false;else if(reason==='date')bookingAutoBranch=true;
  const date=dateInput.value,allowed=select?Object.fromEntries(Array.from(select.options).filter(x=>!x.disabled).map(x=>[x.value,BR[x.value]]).filter(([,x])=>x)):{[me.br]:BR[me.br]};
@@ -30,6 +31,7 @@ function syncBookingSchedule(reason){
  bookingBranchWarning();
 }
 function bookingBranchWarning(){
+ if(!me||!staffView())return;
  const modal=document.querySelector('.mod'),dateInput=document.getElementById('f_date');if(!modal||!dateInput||!document.getElementById('f_phone'))return;
  let note=document.getElementById('booking-branch-warning');if(!note){note=document.createElement('div');note.id='booking-branch-warning';note.className='box';note.setAttribute('role','status');modal.prepend(note)}note.replaceChildren();
  const select=document.getElementById('f_b'),b=select?.value||me.br,date=dateInput.value,present=SESSIONS[today()+'_presence']?.branch,suggestions=clinicBookingSuggestions(BR,S.sched,date);
