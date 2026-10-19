@@ -1,0 +1,23 @@
+[
+  {
+    "file": "01-patients.mp4",
+    "duration_seconds": 187.0,
+    "bytes": 1075860,
+    "chapters": 20,
+    "sha256": "79a53a132c9d72dd2c5731c04801dbe54fabe5b1f5962d5a653dd17af501fa97"
+  },
+  {
+    "file": "02-doctor.mp4",
+    "duration_seconds": 427.0,
+    "bytes": 2183376,
+    "chapters": 45,
+    "sha256": "0d9bc5b65997ffc692573a7a27403d131f892c5d84b99f7c62c98fb9379b380f"
+  },
+  {
+    "file": "03-secretary-nurse.mp4",
+    "duration_seconds": 392.0,
+    "bytes": 2126809,
+    "chapters": 41,
+    "sha256": "ed087c5d728ac194a2e7abce43e5aedd8bc86c17bb796eb16c47b7bb63fcf4a4"
+  }
+]
