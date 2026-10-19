@@ -31,6 +31,7 @@ export function supabaseAdapter(url,secret,fetcher=fetch){
   readAttachment:async id=>{const data=await call('/storage/v1/object/sign/clinic-patient-reports/'+encodeURIComponent(id),{method:'POST',body:JSON.stringify({expiresIn:60})});const signed=data?.signedURL;if(typeof signed!=='string'||!signed.startsWith('/object/sign/clinic-patient-reports/')){const e=Error('تعذر تجهيز رابط التقرير');e.status=503;throw e}return {url:base+'/storage/v1'+signed}},
   deleteAttachment:async id=>call('/storage/v1/object/clinic-patient-reports',{method:'DELETE',body:JSON.stringify({prefixes:[id]})}),
   read:async()=> (await snapshot()).payload,
+  readRequestNotifications:async()=>{const selection='roles:payload->roles,settings:payload->settings,appointmentRequests:payload->appointmentRequests,requestNotificationReads:payload->requestNotificationReads';const rows=await call('/rest/v1/clinic_state?id=eq.true&select='+encodeURIComponent(selection));if(!rows?.[0])throw Error('Clinic schema is not initialized');return rows[0]},
   readFields:async(fields,day=null,entity=null)=>rpc('clinic_read_slice',{fields,selected_day:day,entity}),
   readHistory:async p=>rpc('clinic_patient_history',{patient_phone:p}),
   readDay:async day=>rpc('clinic_read_day',{selected_day:day}),

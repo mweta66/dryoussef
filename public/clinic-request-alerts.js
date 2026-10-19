@@ -1,28 +1,66 @@
-/* Patient appointment notifications only; no tasks and no external push service. */
-var REQUEST_ALERT={owner:null,key:'',data:null,flight:null,notified:false};
+/* In-app patient request notifications. No browser push or external service. */
+var REQUEST_ALERT={owner:null,key:'',data:null,flight:null,announced:null,error:'',page:0,kind:'all',status:'all',unread:false};
 function requestAlertKey(){return JSON.stringify([AUTH?.uid,me?.role,me?.br,me?.scope,can('requests.read')]);}
+function requestNotificationQuery(){return {page:REQUEST_ALERT.page,kind:REQUEST_ALERT.kind,status:REQUEST_ALERT.status,unread:REQUEST_ALERT.unread};}
+function requestNotificationSoundEnabled(){try{return localStorage.getItem('clinic_request_sound_'+AUTH.uid)==='1';}catch{return false;}}
+function requestNotificationSound(){if(!requestNotificationSoundEnabled())return;try{unlockAudio();if(!actx||actx.state!=='running')return;const oscillator=actx.createOscillator(),gain=actx.createGain(),at=actx.currentTime;oscillator.frequency.value=740;oscillator.connect(gain);gain.connect(actx.destination);gain.gain.setValueAtTime(.0001,at);gain.gain.exponentialRampToValueAtTime(.09,at+.03);gain.gain.exponentialRampToValueAtTime(.0001,at+.22);oscillator.start(at);oscillator.stop(at+.23);}catch{}}
+function resetRequestNotifications(){document.getElementById('request-notification-center')?.remove();REQUEST_ALERT={owner:AUTH,key:requestAlertKey(),data:null,flight:null,announced:null,error:'',page:0,kind:'all',status:'all',unread:false};}
 function drawRequestAlert(){
- const bar=document.getElementById('topbar');if(!bar)return;let button=document.getElementById('patient-request-alert');
- if(!me||!AUTH||!can('requests.read')){button?.remove();return;}
- if(!button){button=document.createElement('button');button.id='patient-request-alert';button.type='button';button.className='gb';button.onclick=()=>{tab='work';render();loadWorkflow(true);};bar.append(button);}
- const x=REQUEST_ALERT.owner===AUTH&&REQUEST_ALERT.key===requestAlertKey()?REQUEST_ALERT.data:null;
- button.textContent='طلبات المرضى'+(x?' · '+x.pending:'');button.classList.toggle('has-overdue',!!x?.overdue);button.setAttribute('aria-label',x?'طلبات المرضى: '+x.pending+' قيد المراجعة، منها '+x.overdue+' متأخرة':'فتح طلبات المرضى');button.title=x?'طلبات تعديل: '+x.reschedule+' · حجز جديد: '+x.newBookings+' · إلغاء: '+x.cancellations:'';
+ const bar=document.getElementById('topbar');if(!bar)return;
+ if(!me||!AUTH||!staffView()){document.getElementById('patient-request-alert')?.remove();document.getElementById('request-notification-center')?.remove();return;}
+ if(REQUEST_ALERT.owner!==AUTH||REQUEST_ALERT.key!==requestAlertKey())resetRequestNotifications();
+ let button=document.getElementById('patient-request-alert');if(!button){button=document.createElement('button');button.id='patient-request-alert';button.type='button';button.className='gb request-bell';button.onclick=openRequestNotifications;bar.append(button);}
+ const data=REQUEST_ALERT.data;button.innerHTML=ic('bell',18)+'<span>الإشعارات</span><span class="request-unread-count" aria-hidden="true">'+(data?(data.unread>99?'٩٩+':data.unread):'…')+'</span>';
+ button.classList.toggle('has-unread',!!data?.unread);button.classList.toggle('has-overdue',!!data?.overdue);button.setAttribute('aria-haspopup','dialog');button.setAttribute('aria-controls','request-notification-center');button.setAttribute('aria-label',data?'إشعارات طلبات المرضى: '+data.unread+' غير مقروءة، '+data.pending+' طلبات قيد المراجعة':'فتح إشعارات طلبات المرضى');button.title=REQUEST_ALERT.error||'طلبات الحجز وتغيير الموعد والإلغاء';
 }
-async function readRequestSummary(){
- try{return await gateway('requestSummary',{},true);}catch(e){if(![400,403,404].includes(e.status))throw e;const result=await gateway('workflowList',{branch:allBranches()?'all':workflowBranch(),date:today()},true),rows=(result.requests||[]).filter(x=>x.status==='pending'&&['new','reschedule','cancel'].includes(x.kind)),thresholdMinutes=settingsCache?.bookingRequests?.requestOverdueMinutes||60;return {pending:rows.length,reschedule:rows.filter(x=>x.kind==='reschedule').length,newBookings:rows.filter(x=>x.kind==='new').length,cancellations:rows.filter(x=>x.kind==='cancel').length,overdue:rows.filter(x=>Date.now()-Date.parse(x.createdAt)>=thresholdMinutes*60000).length,thresholdMinutes,latestAt:rows.map(x=>x.createdAt).filter(Boolean).sort().at(-1)||null};}
+function notificationDate(value){return new Date(value).toLocaleString('ar-EG',{timeZone:'Africa/Cairo',dateStyle:'medium',timeStyle:'short'});}
+function notificationTextButton(text,action,extra=''){const button=document.createElement('button');button.type='button';button.className='btn sm '+extra;button.textContent=text;button.onclick=action;return button;}
+function openRequestNotifications(){
+ drawRequestAlert();let dialog=document.getElementById('request-notification-center');if(dialog){if(!dialog.open)dialog.showModal();refreshRequestAlerts();return;}
+ dialog=document.createElement('dialog');dialog.id='request-notification-center';dialog.className='request-notification-center';dialog.setAttribute('aria-labelledby','request-notification-title');
+ dialog.innerHTML='<header class="request-center-heading"><h2 id="request-notification-title">إشعارات طلبات المرضى</h2><button type="button" class="btn sm x" data-close aria-label="إغلاق مركز الإشعارات">إغلاق</button></header><p class="hint">حالة القراءة خاصة بحسابك. قراءة الإشعار لا تعتمد الطلب ولا تغيّر الحجز.</p><div class="request-center-summary" role="status"></div><div class="request-center-filters"><label>نوع الطلب<select data-kind><option value="all">كل الأنواع</option><option value="new">حجز جديد</option><option value="reschedule">تغيير موعد</option><option value="cancel">إلغاء موعد</option></select></label><label>حالة الطلب<select data-status><option value="all">كل الحالات</option><option value="pending">قيد المراجعة</option><option value="confirmed">تم الاعتماد</option><option value="rejected">مرفوض</option></select></label><label class="request-unread-filter"><input type="checkbox" data-unread>غير المقروءة فقط</label></div><div class="request-center-actions"></div><p class="request-center-error" role="alert" hidden></p><div class="request-center-list" aria-busy="true"></div><nav class="request-center-pages" aria-label="صفحات الإشعارات"></nav>';
+ document.body.append(dialog);dialog.querySelector('[data-close]').onclick=()=>dialog.close();dialog.addEventListener('click',event=>{if(event.target===dialog){const r=dialog.getBoundingClientRect();if(event.clientX<r.left||event.clientX>r.right||event.clientY<r.top||event.clientY>r.bottom)dialog.close();}});
+ for(const [attribute,key]of [['kind','kind'],['status','status'],['unread','unread']]){const node=dialog.querySelector('[data-'+attribute+']');if(node.type==='checkbox')node.checked=REQUEST_ALERT[key];else node.value=REQUEST_ALERT[key];node.onchange=()=>{REQUEST_ALERT[key]=node.type==='checkbox'?node.checked:node.value;REQUEST_ALERT.page=0;refreshRequestAlerts();};}
+ dialog.showModal();drawRequestNotificationCenter();refreshRequestAlerts();
+}
+function drawRequestNotificationCenter(){
+ const dialog=document.getElementById('request-notification-center');if(!dialog)return;const data=REQUEST_ALERT.data,query=requestNotificationQuery();
+ const list=dialog.querySelector('.request-center-list'),actions=dialog.querySelector('.request-center-actions'),error=dialog.querySelector('.request-center-error'),summary=dialog.querySelector('.request-center-summary');
+ list.setAttribute('aria-busy',String(!!REQUEST_ALERT.flight));error.hidden=!REQUEST_ALERT.error;error.textContent=REQUEST_ALERT.error;
+ summary.textContent=data?data.unread+' غير مقروءة · '+data.pending+' قيد المراجعة'+(data.overdue?' · '+data.overdue+' متأخرة':''):'جارٍ تحميل الإشعارات…';actions.replaceChildren();
+ actions.append(notificationTextButton('تحديث',()=>refreshRequestAlerts(),'x'));
+ const all=notificationTextButton('تحديد الكل كمقروء',()=>updateRequestNotification('requestNotificationsReadAll',{readAllToken:REQUEST_ALERT.data?.readAllToken}),'x');all.disabled=!data?.unread||!!REQUEST_ALERT.flight;actions.append(all);
+ const sound=notificationTextButton('الصوت: '+(requestNotificationSoundEnabled()?'مفعّل':'متوقف'),()=>{try{localStorage.setItem('clinic_request_sound_'+AUTH.uid,requestNotificationSoundEnabled()?'0':'1');}catch{}requestNotificationSound();drawRequestNotificationCenter();},'x');sound.setAttribute('aria-pressed',String(requestNotificationSoundEnabled()));actions.append(sound);
+ if(!data||JSON.stringify(query)!==REQUEST_ALERT.loadedQuery){if(!data)list.textContent=REQUEST_ALERT.error?'تعذر عرض الإشعارات. اضغط تحديث للمحاولة مرة أخرى.':'جارٍ تحميل الإشعارات…';return;}
+ list.replaceChildren();const titles={new:'طلب حجز جديد',reschedule:'طلب تغيير موعد',cancel:'طلب إلغاء موعد'},statuses={pending:'قيد المراجعة',confirmed:'تم الاعتماد',rejected:'مرفوض'};
+ for(const item of data.items){const card=document.createElement('article');card.className='request-notification-item'+(!item.readAt?' is-unread':'');card.dataset.notificationId=item.id;const title=document.createElement('h3');title.textContent=(item.event==='created'?'':item.event==='confirmed'?'تم اعتماد: ':'تم رفض: ')+titles[item.kind];const time=document.createElement('time');time.dateTime=item.at;time.textContent=notificationDate(item.at);const detail=document.createElement('p');detail.textContent=(BR[item.branch]?.name||item.branch)+' · '+item.date+' · '+(statuses[item.status]||item.status);const identity=document.createElement('p');identity.className='request-notification-identity';identity.textContent=[item.name,item.phone].filter(Boolean).join(' · ');const read=document.createElement('span');read.className='request-notification-read-state';read.textContent=item.readAt?'مقروء':'غير مقروء';const buttons=document.createElement('div');buttons.className='acts';buttons.append(notificationTextButton(item.readAt?'تعليم كغير مقروء':'تعليم كمقروء',()=>updateRequestNotification('requestNotificationRead',{id:item.id,read:!item.readAt}),'x'));if(item.canOpen)buttons.append(notificationTextButton('عرض الطلب',()=>openNotifiedRequest(item)));card.append(title,read,time,detail);if(identity.textContent)card.append(identity);if(item.requestedDate&&item.kind==='reschedule'){const next=document.createElement('p');next.textContent='المطلوب: '+item.requestedDate+' · '+(BR[item.requestedBranch]?.name||item.requestedBranch);card.append(next);}card.append(buttons);list.append(card);}
+ if(!data.items.length){const empty=document.createElement('p');empty.className='request-notification-empty';empty.textContent='لا توجد إشعارات مطابقة للاختيار الحالي.';list.append(empty);}
+ const nav=dialog.querySelector('.request-center-pages');nav.replaceChildren();const previous=notificationTextButton('السابق',()=>{REQUEST_ALERT.page--;refreshRequestAlerts();},'x');previous.disabled=!data.page||!!REQUEST_ALERT.flight;const next=notificationTextButton('التالي',()=>{REQUEST_ALERT.page++;refreshRequestAlerts();},'x');next.disabled=(data.page+1)*data.pageSize>=data.total||!!REQUEST_ALERT.flight;const number=document.createElement('span');number.textContent='صفحة '+(data.page+1)+' من '+Math.max(1,Math.ceil(data.total/data.pageSize));nav.append(previous,number,next);
+}
+async function updateRequestNotification(action,payload){
+ const owner=AUTH,key=requestAlertKey();if(REQUEST_ALERT.writing)return;REQUEST_ALERT.writing=true;
+ try{await gateway(action,payload,true);if(AUTH!==owner||key!==requestAlertKey())return;REQUEST_ALERT.error='';await refreshRequestAlerts();}catch(error){if(AUTH===owner&&key===requestAlertKey()){REQUEST_ALERT.error=error.status===409?error.message:'تعذر حفظ حالة القراءة. حاول مرة أخرى.';drawRequestNotificationCenter();if(error.status===409)refreshRequestAlerts();}}finally{if(AUTH===owner&&key===requestAlertKey())REQUEST_ALERT.writing=false;}
+}
+async function openNotifiedRequest(item){
+ if(!can('requests.read'))return;if(typeof saving!=='undefined'&&saving||typeof writing!=='undefined'&&writing)return;
+ const form=document.querySelector('.mod');if(form){if(form.dataset.privateDirty==='true'&&form.dataset.medicalDirty!=='true'&&form.dataset.complaintDirty!=='true'&&!confirm('توجد كتابات غير محفوظة. الانتقال إلى الطلب؟'))return;closeM();if(document.querySelector('.mod'))return;}
+ const owner=AUTH,key=requestAlertKey();await updateRequestNotification('requestNotificationRead',{id:item.id,read:true});if(AUTH!==owner||key!==requestAlertKey())return;
+ document.getElementById('request-notification-center')?.close();tab='work';render();await loadWorkflow(true);if(AUTH!==owner||key!==requestAlertKey())return;
+ const card=Array.from(document.querySelectorAll('[data-request-id]')).find(x=>x.dataset.requestId===item.requestId);if(card){card.classList.add('request-notification-target');card.scrollIntoView({block:'center',behavior:'smooth'});}else notify('الطلب قد يكون تغيّر. راجع أحدث قائمة الطلبات.');
 }
 async function refreshRequestAlerts(){
- if(document.hidden||!me||!AUTH||!can('requests.read')){drawRequestAlert();return;}
- const owner=AUTH,key=requestAlertKey();if(REQUEST_ALERT.owner!==owner||REQUEST_ALERT.key!==key)REQUEST_ALERT={owner,key,data:null,flight:null,notified:false};
- if(REQUEST_ALERT.flight)return REQUEST_ALERT.flight;const current=REQUEST_ALERT,previous=current.data;
- current.flight=readRequestSummary().then(data=>{
-  if(AUTH!==owner||key!==requestAlertKey()||REQUEST_ALERT!==current)return;current.data=data;drawRequestAlert();
-  if(data.pending&&(!current.notified||data.pending>(previous?.pending||0)||data.latestAt>(previous?.latestAt||'')||data.overdue>(previous?.overdue||0))){
-   notify('طلبات مرضى بانتظار المتابعة: '+data.pending+(data.reschedule?'، منها '+data.reschedule+' طلب تغيير موعد':'')+(data.overdue?' — '+data.overdue+' متأخرة عن المراجعة':'')+'. افتح زر طلبات المرضى.');current.notified=true;
-  }
- }).catch(()=>{/* Keep the last count; clinical pages remain usable during a transient failure. */}).finally(()=>{if(REQUEST_ALERT===current)current.flight=null;});return current.flight;
+ if(document.hidden||!me||!AUTH||!staffView()){drawRequestAlert();return;}
+ drawRequestAlert();const current=REQUEST_ALERT;if(current.flight){current.again=true;return current.flight;}
+ const owner=AUTH,key=requestAlertKey(),query=requestNotificationQuery(),serialized=JSON.stringify(query),previous=current.data;
+ current.flight=gateway('requestNotifications',query,true).then(data=>{
+  if(AUTH!==owner||key!==requestAlertKey()||REQUEST_ALERT!==current)return;
+  if(serialized!==JSON.stringify(requestNotificationQuery())){current.again=true;return;}
+  current.data=data;if(Number.isSafeInteger(data.page))current.page=data.page;current.loadedQuery=JSON.stringify(requestNotificationQuery());current.error='';drawRequestAlert();drawRequestNotificationCenter();
+  if(data.unread&&current.announced!==data.latestId&&(!previous||data.unread>previous.unread||data.latestId!==previous.latestId)){notify('إشعارات طلبات المرضى: '+data.unread+' غير مقروءة. افتح جرس الإشعارات للمتابعة.');requestNotificationSound();current.announced=data.latestId;}
+ }).catch(error=>{if(AUTH!==owner||key!==requestAlertKey()||REQUEST_ALERT!==current)return;current.error=[400,403,404].includes(error.status)?'مركز الإشعارات يحتاج تحديث خدمة العيادة.':'تعذر تحديث الإشعارات. تحقق من الاتصال واضغط تحديث.';drawRequestAlert();drawRequestNotificationCenter();}).finally(()=>{if(REQUEST_ALERT!==current)return;current.flight=null;drawRequestNotificationCenter();if(current.again){current.again=false;refreshRequestAlerts();}});drawRequestNotificationCenter();return current.flight;
 }
-var alertTopbar=topbar;topbar=function(){alertTopbar();drawRequestAlert();if(me&&AUTH&&can('requests.read')&&(REQUEST_ALERT.owner!==AUTH||REQUEST_ALERT.key!==requestAlertKey()||!REQUEST_ALERT.data))refreshRequestAlerts();};
-setInterval(refreshRequestAlerts,30000);window.addEventListener('online',refreshRequestAlerts);document.addEventListener('visibilitychange',()=>{if(!document.hidden)refreshRequestAlerts();});
+var alertTopbar=topbar;topbar=function(){alertTopbar();drawRequestAlert();if(me&&AUTH&&staffView()&&!REQUEST_ALERT.data&&!REQUEST_ALERT.flight)refreshRequestAlerts();};
+setInterval(refreshRequestAlerts,15000);window.addEventListener('online',refreshRequestAlerts);window.addEventListener('focus',refreshRequestAlerts);document.addEventListener('visibilitychange',()=>{if(!document.hidden)refreshRequestAlerts();});
 if(typeof ClinicLive!=='undefined'){var requestAlertChanged=ClinicLive.onchange;ClinicLive.onchange=function(){requestAlertChanged?.();refreshRequestAlerts();};}
 var alertGateway=gateway;gateway=async function(action,payload,auth){const result=await alertGateway(action,payload,auth);if(auth&&['requestDecide','bookingRequestSettings'].includes(action))refreshRequestAlerts();return result;};
+var notificationLogout=logout;logout=function(){document.getElementById('request-notification-center')?.remove();notificationLogout();resetRequestNotifications();};
