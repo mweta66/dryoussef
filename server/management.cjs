@@ -24,7 +24,7 @@ function site(value,fail){
 }
 function mutate(original,uid,input,core){
  const s=structuredClone(original),r=core.role(s,uid);
- if(input.action==='displaySave'){perms.requirePermission(r,'display.manage');if(input.revision!==(s.settings?.displayRev||0))core.fail('تغيرت إعدادات الشاشة من جلسة أخرى؛ أعد التحميل أولًا',409);s.settings||={};s.settings.display=displayOptions.normalize(input.config,core.branchIds(s,true));s.settings.displayRev=(s.settings.displayRev||0)+1;return s;}
+ if(input.action==='displaySave'){perms.requirePermission(r,'display.manage');if(input.revision!==(s.settings?.displayRev||0))core.fail('تغيرت إعدادات الشاشة من جلسة أخرى؛ أعد التحميل أولًا',409);s.settings||={};const normalized=displayOptions.normalize(input.config,core.branchIds(s,true)),previous=displayOptions.normalize(s.settings.display||{},core.branchIds(s,true));if(r.r!=='admin'&&Object.keys(normalized).some(key=>(key==='footerText'||key.startsWith('notice'))&&JSON.stringify(normalized[key])!==JSON.stringify(previous[key])))core.fail('تعديل تصميم رسالة الطوارئ متاح للأدمن فقط',403);s.settings.display=normalized;s.settings.displayRev=(s.settings.displayRev||0)+1;return s;}
  if(input.action==='siteContentSave'){perms.requirePermission(r,'site.manage');if(input.revision!==(s.settings?.contentRev||0))core.fail('تم تعديل المحتوى من جلسة أخرى؛ أعد التحميل قبل الحفظ',409);const content=siteContent.validate(input.sections,input.layout,core.fail);s.settings||={};s.settings.site={...s.settings.site,...content};s.settings.contentRev=(s.settings.contentRev||0)+1;return s;}
  if(input.action==='watermarkSave'){
   perms.requirePermission(r,'site.manage');if(input.revision!==(s.settings?.watermarkRev||0))core.fail('تم تعديل اللوجو الخلفية من جلسة أخرى؛ أعد تحميل الإعدادات أولًا',409);const incoming=site({design:input.design},core.fail);s.settings||={};const current=s.settings.site||{},design={...current.design};for(const key of Object.keys(design))if(key.startsWith('watermark'))delete design[key];for(const [key,value]of Object.entries(incoming.design))if(key.startsWith('watermark'))design[key]=value;s.settings.previousDesign=structuredClone(current.design||{});s.settings.site={...current,design};s.settings.watermarkRev=(s.settings.watermarkRev||0)+1;return s;
@@ -61,7 +61,7 @@ function mutate(original,uid,input,core){
   for(const n of Object.values(s.inbox||{}))if(n.p===p){n.p=to;n.n=name;}core.rebuild(s);return s;
  }
  if(input.action==='patientDelete'){
-  perms.requirePermission(r,'patients.delete');const p=core.phone(input.phone);if(!/^01[0125]\d{8}$/.test(p))core.fail('هاتف غير صحيح');
+  perms.requirePermission(r,'patients.delete');const p=core.phone(input.phone);if(!/^01[0125]\d{8}$/.test(p))core.fail('هاتف غير صحيح');cases.assertAccess(s,r,p);
   storageCleanup.enqueue(s,s.attachments?.[p]);delete s.complaintSequences?.[p];
   for(const rows of Object.values(s.bookings||{}))for(const [id,x] of Object.entries(rows))if(x.phone===p)delete rows[id];
   for(const [id,x] of Object.entries(s.deletedBookings||{}))if(x.booking.phone===p)delete s.deletedBookings[id];

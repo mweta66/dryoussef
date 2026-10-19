@@ -135,7 +135,7 @@ html[data-display-hide-showControls] .display-controls-toggle{display:none!impor
 .display-emergency-notice[data-notice-neon]{box-shadow:0 0 var(--notice-neon-size,18px) var(--notice-neon-color,#ef4444),inset 0 0 calc(var(--notice-neon-size,18px)/2) var(--notice-neon-color,#ef4444)}
 .notice-preview-area{padding:20px;display:flex;justify-content:center;overflow:hidden}
 .notice-preview-area .display-emergency-notice{max-height:none}
-@media(max-width:600px){.display-emergency-notice{font-size:min(var(--notice-font-size,18px),24px)}}
+
 
 /* Queue screens use the header logo only; shared watermarks remain on other pages. */
 .queue-display .display-header{direction:rtl;display:grid;grid-template-columns:minmax(0,1fr) auto minmax(0,1fr);align-items:center}

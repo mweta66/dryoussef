@@ -1,12 +1,13 @@
 import * as core from './core.js';
 import * as perms from './permissions.js';
 import * as cleanup from './storage-cleanup.js';
+import * as cases from './cases.js';
 const MAX_BYTES=600000,MAX_FILES=20,validId=id=>typeof id==='string'&&/^[0-9a-f-]{36}$/.test(id);
 function authorize(state,uid,phone,write=false){
  const role=core.role(state,uid);
  perms.requirePermission(role,write?'attachments.create':'attachments.read');
  if(!/^01[0125]\d{8}$/.test(phone)||!state.patients?.[phone])core.fail('الحالة غير موجودة',404);
- if(!perms.allBranches(role)&&!(role.r==='nurse'&&role.scope===undefined&&!role.br)&&!Object.values(state.bookings||{}).some(rows=>Object.values(rows).some(x=>x.phone===phone&&x.b===role.br)))core.fail('غير مصرح لهذا الفرع',403);
+ cases.assertAccess(state,role,phone);
  return role;
 }
 function decodeImage(input){

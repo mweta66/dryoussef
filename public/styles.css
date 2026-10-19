@@ -1,4 +1,4 @@
-:root{--bg:var(--custom-background,#eef2f6);--card:var(--custom-card,#ffffff);--ink:var(--custom-text,#1d2a44);--mut:#53647b;--line:#ccd5e1;--bar:#f3f6f9;--pri:var(--custom-primary,#25406b);--pri2:#0f1b38;--acc:var(--custom-accent,#c9a24f);--soft:#e9eff6;--btn:var(--custom-primary,#25406b);--btnink:var(--custom-button-ink,#fff);--ok:#21734c;--okbg:#e4f4ec;--bad:#ad362e;--badbg:#fcecea;--amb:#79520b;--ambbg:#fff5dc;--ambbd:#d7b563;--statusink:#fff;--secondary:#53647b;--wm:.10;--wmk:url("brand-current.webp");color-scheme:light}
+:root{--bg:var(--custom-background,#eef2f6);--card:var(--custom-card,#ffffff);--ink:var(--custom-text,#1d2a44);--mut:#53647b;--line:#ccd5e1;--bar:#f3f6f9;--pri:var(--custom-primary,#25406b);--pri2:#0f1b38;--acc:var(--custom-accent,#c9a24f);--soft:#e9eff6;--btn:var(--custom-primary,#25406b);--btnink:var(--custom-button-ink,#fff);--ok:#21734c;--okbg:#e4f4ec;--bad:#ad362e;--badbg:#fcecea;--amb:#79520b;--ambbg:#fff5dc;--ambbd:#d7b563;--statusink:#fff;--secondary:#53647b;--wm:.10;--wmk:url("brand-current.webp?v=20261018-18");color-scheme:light}
 @media(prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#0e1424;--card:#171f35;--ink:#eef1f6;--mut:#b1bed1;--line:#43506a;--bar:#202b44;--pri:#e2bc73;--pri2:#0f1b38;--acc:#e2bc73;--soft:#26334e;--btn:#e2bc73;--btnink:#14203c;--ok:#79d6a8;--okbg:#17342a;--bad:#ffa196;--badbg:#3a2220;--amb:#edcb7f;--ambbg:#352d17;--ambbd:#887036;--statusink:#14203c;--secondary:#b1bed1;--wm:.06;color-scheme:dark}}
 :root[data-theme="dark"]{--bg:#0e1424;--card:#171f35;--ink:#eef1f6;--mut:#b1bed1;--line:#43506a;--bar:#202b44;--pri:#e2bc73;--pri2:#0f1b38;--acc:#e2bc73;--soft:#26334e;--btn:#e2bc73;--btnink:#14203c;--ok:#79d6a8;--okbg:#17342a;--bad:#ffa196;--badbg:#3a2220;--amb:#edcb7f;--ambbg:#352d17;--ambbd:#887036;--statusink:#14203c;--secondary:#b1bed1;--wm:.06;color-scheme:dark}
 
@@ -159,7 +159,7 @@ html[data-about-neon] #clinic-about,.about-editor-preview[data-about-neon]{box-s
 
 /* Background marks sit below text, with no hit area or layout dimensions. */
 .card,#app,.hero,.display-header{position:relative;isolation:isolate}
-.card::before,#app::before,.hero::before,.display-header::before{content:"";position:absolute;inset:0;z-index:-1;pointer-events:none;border-radius:inherit;background-image:var(--site-watermark-image,url("brand-current.webp"));background-size:min(var(--site-watermark-size,560px),90vw) auto;background-position:var(--site-watermark-position,center center);background-repeat:no-repeat;background-attachment:fixed;opacity:var(--site-watermark-opacity,.06)}
+.card::before,#app::before,.hero::before,.display-header::before{content:"";position:absolute;inset:0;z-index:-1;pointer-events:none;border-radius:inherit;background-image:var(--site-watermark-image,url("brand-current.webp?v=20261018-18"));background-size:min(var(--site-watermark-size,560px),90vw) auto;background-position:var(--site-watermark-position,center center);background-repeat:no-repeat;background-attachment:fixed;opacity:var(--site-watermark-opacity,.06)}
 html[data-watermark-hidden] .card::before,html[data-watermark-hidden] #app::before,html[data-watermark-hidden] .hero::before,html[data-watermark-hidden] .display-header::before{display:none}
 .site-watermark-preview{position:relative;isolation:isolate;min-height:260px;display:grid;place-items:center;border:1px solid var(--line);border-radius:14px;padding:24px;background:var(--card);text-align:center}
 .site-watermark-preview::before{content:"";position:absolute;inset:0;z-index:-1;pointer-events:none;background:var(--site-watermark-image) var(--site-watermark-position,center center)/min(var(--site-watermark-size,560px),90%) auto no-repeat;opacity:var(--site-watermark-opacity,.06)}
@@ -210,3 +210,23 @@ html[data-watermark-hidden] .card::before,html[data-watermark-hidden] #app::befo
  .complaints-table td:last-child{border-bottom:0!important}
  .complaints-table td::before{content:attr(data-label);font-weight:700;color:var(--mut);font-size:12px}
 }
+
+/* Keep the complaint caption full-width in the stacked mobile table. */
+@media(max-width:600px){.complaints-table caption{display:block;width:100%;max-width:none;white-space:normal;overflow-wrap:normal;text-align:right;line-height:1.7;padding:10px 0}}
+.workflow-booking{margin-block:10px;padding:8px;border:1px solid var(--line);border-radius:14px}.workflow-booking.patient-arrived{border-inline-start:5px solid #17834a}.workflow-arrival{flex-wrap:wrap;margin:6px 0}.workflow-booking .arrival-label{font-size:.88rem;margin:6px}.item .acts{flex-wrap:wrap;max-width:100%}#workflow-panel .m{min-width:0}#workflow-panel small{overflow-wrap:anywhere}#topbar{flex-wrap:wrap;gap:6px}#workflow-panel h3{margin-top:24px}@media(max-width:600px){#workflow-panel .item{flex-wrap:wrap}.workflow-arrival .btn{font-size:.8rem;padding:8px}.stats>div{min-width:0;overflow-wrap:anywhere}.stats>div b{font-size:clamp(18px,5vw,25px)}}
+@media(max-width:600px) and (max-height:650px){html[data-clinic-public] .patient-lookup>.sub{margin-block:6px}html[data-clinic-public] .contacts{padding-block:8px}}
+/* Shared action and status colors remain readable in every staff/patient theme. */
+.btn.g,.btn.r,.cbtn.em .ci{color:var(--statusink)}
+.btn:disabled{color:var(--mut);opacity:.8}
+label b{color:var(--bad)}
+input::placeholder,textarea::placeholder{color:var(--mut);opacity:1}
+a{color:var(--pri)}
+.btn.a{color:var(--accentink)}
+.btn.x{background:var(--secondary);color:var(--secondaryink)}
+.cbtn.em{border-color:color-mix(in srgb,var(--bad) 35%,var(--line))}
+.workflow-booking.patient-arrived{border-inline-start-color:var(--ok)}
+#notice[data-kind="success"]{border-color:var(--ok)}
+input[type="checkbox"],input[type="radio"],input[type="range"]{accent-color:var(--pri)}
+::selection{background:var(--pri);color:var(--btnink)}
+.tab.on{background:var(--btn);color:var(--btnink)}
+.hero .gb{background:color-mix(in srgb,var(--header-bg,#25406b) 82%,var(--header-ink,#ffffff));color:var(--header-ink,#ffffff)}

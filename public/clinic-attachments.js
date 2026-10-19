@@ -26,7 +26,7 @@ async function loadPatientReports(phone,panel){
 }
 async function preparePatientImage(file){
  if(!['image/jpeg','image/png','image/webp'].includes(file.type)||file.size>10000000)throw Error('اختر صورة JPG أو PNG أو WebP لا تزيد عن 10 ميجابايت');
- const bitmap=await createImageBitmap(file);try{
+ let bitmap;try{bitmap=await createImageBitmap(file)}catch{throw Error('تعذر قراءة الصورة؛ قد يكون الملف تالفًا. اختر الصورة الأصلية السليمة.')}try{
   if(bitmap.width*bitmap.height>40000000)throw Error('أبعاد الصورة كبيرة جدًا');
   const ratio=Math.min(1,2000/Math.max(bitmap.width,bitmap.height)),canvas=document.createElement('canvas');canvas.width=Math.max(1,Math.round(bitmap.width*ratio));canvas.height=Math.max(1,Math.round(bitmap.height*ratio));const context=canvas.getContext('2d');context.fillStyle='#ffffff';context.fillRect(0,0,canvas.width,canvas.height);context.drawImage(bitmap,0,0,canvas.width,canvas.height);
   for(const quality of [.9,.8,.7]){const blob=await new Promise(resolve=>canvas.toBlob(resolve,'image/jpeg',quality));if(blob&&blob.size<=600000)return {data:await new Promise((resolve,reject)=>{const reader=new FileReader();reader.onload=()=>resolve(String(reader.result).split(',')[1]);reader.onerror=()=>reject(Error('تعذر قراءة الصورة'));reader.readAsDataURL(blob)}),mime:'image/jpeg'};}

@@ -35,7 +35,7 @@ export function supabaseAdapter(url,secret,fetcher=fetch){
   readHistory:async p=>rpc('clinic_patient_history',{patient_phone:p}),
   readDay:async day=>rpc('clinic_read_day',{selected_day:day}),
   readLookup:async(p,day)=>rpc('clinic_read_day',{selected_day:day,patient_phone:p}),
-  systemHealth:async()=>rpc('clinic_health_metadata',{}),
+  systemHealth:async()=>{const health=await rpc('clinic_health_metadata',{});try{health.backupCheck=await rpc('clinic_backup_check_status',{})}catch{}return health},
   latestBackup:async()=>{const rows=await call('/rest/v1/clinic_backups?select=created_at,version,payload,checksum&order=created_at.desc&limit=1');return rows?.[0]||null},
   recordError:async x=>call('/rest/v1/clinic_diagnostics',{method:'POST',body:JSON.stringify(x)}),
   mutate:async fn=>{for(let attempt=0;attempt<8;attempt++){const current=await snapshot(),next=fn(structuredClone(current.payload));if(await rpc('clinic_compare_and_swap',{expected_version:current.version,next_payload:next}))return;await new Promise(r=>setTimeout(r,20*(attempt+1)))}const e=new Error('تحديث متزامن. أعد المحاولة.');e.status=409;throw e},

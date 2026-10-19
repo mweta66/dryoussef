@@ -1,0 +1,18 @@
+const {Buffer}=require('node:buffer');
+const {randomUUID}=require('node:crypto');
+const core=require('./core.cjs');
+const perms=require('./permissions.cjs');
+const imports=require('./data-import.cjs');
+const MAX_BYTES=8000000,TTL=60*60*1000;
+function authorize(s,uid){perms.requirePermission(core.role(s,uid),'data.import');}
+function session(s,uid,id){authorize(s,uid);const x=s.importSessions?.[uid];if(!x||x.id!==id||Date.now()-x.createdAt>TTL)core.fail('انتهت جلسة تجهيز الملف؛ أعد اختيار الملف',409);return x;}
+function assemble(x){if(x.parts.filter(v=>typeof v==='string').length!==x.total)core.fail('لم تكتمل أجزاء الملف',409);const text=x.parts.join('');if(Buffer.byteLength(text)>MAX_BYTES)core.fail('البيانات الطبية أكبر من 8 ميجابايت',413);try{return JSON.parse(text)}catch{core.fail('النسخة غير مكتملة أو JSON غير صحيح');}}
+async function handle(adapter,input,uid){
+ if(input.action==='importStageStart'){let id;await adapter.mutate(original=>{authorize(original,uid);if(!Number.isInteger(input.total)||input.total<1||input.total>48)core.fail('عدد أجزاء غير صحيح');if(input.options&&Object.keys(input.options).some(k=>k!=='importSettings')||input.options?.importSettings!==undefined&&typeof input.options.importSettings!=='boolean')core.fail('خيارات غير صحيحة');const s=structuredClone(original);s.importSessions||={};for(const [key,x]of Object.entries(s.importSessions))if(Date.now()-x.createdAt>TTL)delete s.importSessions[key];const others=Object.entries(s.importSessions).filter(([key])=>key!==uid).reduce((n,[,x])=>n+(x.bytes||0),0);if(others>16000000)core.fail('توجد ملفات قيد التجهيز؛ حاول لاحقًا',429);id=randomUUID();s.importSessions[uid]={id,total:input.total,parts:Array(input.total).fill(null),bytes:0,createdAt:Date.now(),options:input.options||{}};return s});return {id};}
+ if(input.action==='importStagePart'){await adapter.mutate(original=>{const x=session(original,uid,input.id);if(!Number.isInteger(input.index)||input.index<0||input.index>=x.total||typeof input.text!=='string'||input.text.length>180000)core.fail('جزء غير صحيح');if(x.parts[input.index]!==null&&x.parts[input.index]!==input.text)core.fail('تعارض في جزء الملف؛ أعد الاختيار',409);const size=x.bytes-Buffer.byteLength(x.parts[input.index]||'')+Buffer.byteLength(input.text);if(size>MAX_BYTES)core.fail('البيانات الطبية أكبر من 8 ميجابايت',413);const others=Object.entries(original.importSessions||{}).filter(([key,x])=>key!==uid&&Date.now()-x.createdAt<=TTL).reduce((n,[,x])=>n+(x.bytes||0),0);if(others+size>16000000)core.fail('توجد ملفات قيد التجهيز؛ حاول لاحقًا',429);const s=structuredClone(original);s.importSessions[uid].parts[input.index]=input.text;s.importSessions[uid].bytes=size;return s});return {ok:true};}
+ if(input.action==='importStagePreview'){const s=await adapter.read(),x=session(s,uid,input.id),plan=imports.prepare(s,uid,assemble(x),x.options,MAX_BYTES);return {summary:plan.summary,token:plan.token};}
+ if(input.action==='importStageApply'){if(input.confirmation!=='IMPORT_CLINIC_DATA'||typeof input.previewToken!=='string')core.fail('راجع المعاينة وأكد الاستيراد');let summary;await adapter.mutate(s=>{const x=session(s,uid,input.id),plan=imports.prepare(s,uid,assemble(x),x.options,MAX_BYTES);if(plan.token!==input.previewToken)core.fail('تغيرت البيانات منذ المعاينة؛ أعد المعاينة أولًا',409);summary=plan.summary;delete plan.state.importSessions[uid];return plan.state});return {ok:true,summary};}
+ if(input.action==='importStageCancel'){await adapter.mutate(original=>{authorize(original,uid);const s=structuredClone(original);if(s.importSessions?.[uid]?.id===input.id)delete s.importSessions[uid];return s});return {ok:true};}
+ core.fail('عملية استيراد غير مسموحة',403);
+}
+module.exports={handle,MAX_BYTES};
