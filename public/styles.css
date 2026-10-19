@@ -260,3 +260,16 @@ input:focus,select:focus,textarea:focus{outline:3px solid var(--pri);outline-off
 .btn:disabled{opacity:1;color:var(--mut);border-color:var(--line)}
 .item:hover,.complaints-table tbody tr:hover{background:var(--soft)}
 .hero .gb{border:1px solid color-mix(in srgb,var(--header-ink,#fff) 45%,var(--header-bg,#315468))}
+
+/* Appointment notifications and independent color-readability feedback. */
+.hero .gb.has-overdue{background:var(--ambbg);color:var(--amb);border-color:var(--ambbd)}
+.contrast-warning,.contrast-pass,.release-status{padding:14px;border:1px solid var(--line);border-radius:12px;margin-block:14px;line-height:1.9;overflow-wrap:anywhere}
+.contrast-warning{color:var(--amb);background:var(--ambbg);border-color:var(--ambbd)}
+.contrast-pass{color:var(--ok);background:var(--okbg);border-color:var(--ok)}
+#account-private-drafts{margin-top:28px}#account-private-drafts .item{align-items:flex-start}
+.patient-whatsapp{position:fixed;inset:auto auto calc(18px + env(safe-area-inset-bottom,0px)) 16px;z-index:8;display:inline-flex;align-items:center;justify-content:center;gap:8px;padding:12px 16px;border:2px solid #e7f6ed;border-radius:999px;background:#176c43;color:#fff;text-decoration:none;font-size:16px;font-weight:700;box-shadow:0 4px 16px #0003}
+.patient-whatsapp[hidden],body.modal-open .patient-whatsapp{display:none!important}
+.patient-whatsapp:focus-visible{outline:3px solid var(--pri);outline-offset:4px}
+.branch-details-link{display:inline-block;margin-block:12px 0;text-decoration:underline}
+#clinic-import-partial-wrap[hidden]{display:none!important}
+@media(max-width:380px){.patient-whatsapp{padding:10px;inset-inline-end:auto;gap:5px}.patient-whatsapp span{font-size:14px}}

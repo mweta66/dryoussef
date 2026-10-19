@@ -1,0 +1,10 @@
+var RELEASE_STATUS={owner:null,data:null,error:'',flight:null};
+function releaseStatusMarkup(){const local=window.ClinicRelease;return '<section class="release-status" id="clinic-release-status"><h3>إصدار النظام</h3><p>الواجهة: '+esc(local?.version||'غير معروف')+'</p><p id="clinic-api-version">جارٍ التحقق من إصدار الخدمة…</p><button type="button" class="btn sm x" onclick="loadReleaseStatus(true)">التحقق من التوافق</button></section>';}
+var versionHealthPage=healthPage;healthPage=function(){const html=versionHealthPage();if(me?.role!=='admin')return html;setTimeout(loadReleaseStatus,0);return releaseStatusMarkup()+html;};
+async function loadReleaseStatus(force=false){
+ const node=document.getElementById('clinic-api-version');if(!node||me?.role!=='admin'||!AUTH)return;const owner=AUTH;
+ if(RELEASE_STATUS.owner!==owner)RELEASE_STATUS={owner,data:null,error:'',flight:null};if(RELEASE_STATUS.flight)return RELEASE_STATUS.flight;
+ function show(){if(AUTH!==owner||!node.isConnected)return;const remote=RELEASE_STATUS.data,local=window.ClinicRelease;if(!remote){node.className='contrast-warning';node.textContent=RELEASE_STATUS.error||'تعذر التحقق من الخدمة';return;}const missing=(local.capabilities||[]).filter(x=>!remote.capabilities?.includes(x)),compatible=local.apiContract===remote.apiContract&&!missing.length;node.className=compatible?'contrast-pass':'contrast-warning';node.textContent='الخدمة: '+remote.version+' — '+(compatible?(local.version===remote.version?'الواجهة والخدمة متوافقتان':'متوافقتان، لكن إصدار النشر مختلف'):'تحتاج الخدمة إلى تحديث لتفعيل المميزات الجديدة')+(missing.length?' ('+missing.join('، ')+')':'');}
+ if(!force&&RELEASE_STATUS.data){show();return;}
+ RELEASE_STATUS.flight=gateway('systemVersion',{},true).then(data=>{if(AUTH!==owner)return;RELEASE_STATUS.data=data;RELEASE_STATUS.error='';show();}).catch(()=>{if(AUTH!==owner)return;RELEASE_STATUS.error='تعذر قراءة إصدار الخدمة؛ قد تحتاج لنشر clinic-api الحديثة. تحقق من الاتصال والصلاحيات ثم أعد المحاولة.';RELEASE_STATUS.data=null;show();}).finally(()=>{if(RELEASE_STATUS.owner===owner)RELEASE_STATUS.flight=null;});return RELEASE_STATUS.flight;
+}

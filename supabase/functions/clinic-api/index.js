@@ -9,9 +9,9 @@ Deno.serve(req=>{const requestId=crypto.randomUUID();return withRequestContext(r
  if(req.method!=='POST')return new Response(JSON.stringify({error:'POST required'}),{headers,status:405});
  try{
   if(!String(req.headers.get('content-type')).startsWith('application/json'))return new Response(JSON.stringify({error:'JSON required'}),{headers,status:415});
-  if(Number(req.headers.get('content-length')||0)>900000)return new Response(JSON.stringify({error:'Payload too large'}),{headers,status:413});
-  const text=await req.text();if(new TextEncoder().encode(text).length>900000)return new Response(JSON.stringify({error:'Payload too large'}),{headers,status:413});
-  const input=JSON.parse(text);action=/^[A-Za-z]{1,40}$/.test(input.action)?input.action:'unknown';const isPublic=['bookingAvailability','appointmentRequest','appointmentChangeRequest'].includes(input.action)||input.action==='lookupHistory'||input.action==='lookup'||input.action==='publicQueue'||input.action==='get'&&input.path==='settings';
+  if(Number(req.headers.get('content-length')||0)>7000000)return new Response(JSON.stringify({error:'Payload too large'}),{headers,status:413});
+  const text=await req.text();if(new TextEncoder().encode(text).length>7000000)return new Response(JSON.stringify({error:'Payload too large'}),{headers,status:413});
+  const input=JSON.parse(text);if(input.action!=='attachmentUpload'&&new TextEncoder().encode(text).length>900000)return new Response(JSON.stringify({error:'Payload too large'}),{headers,status:413});action=/^[A-Za-z]{1,40}$/.test(input.action)?input.action:'unknown';const isPublic=['bookingAvailability','appointmentRequest','appointmentChangeRequest','appointmentChangeOptions'].includes(input.action)||input.action==='lookupHistory'||input.action==='lookup'||input.action==='publicQueue'||input.action==='get'&&input.path==='settings';
   let uid=null;if(!isPublic){const token=(req.headers.get('Authorization')||'').match(/^Bearer (.+)$/)?.[1];if(!token)return new Response(JSON.stringify({error:'NOAUTH'}),{headers,status:401});uid=await adapter.verify(token)}
   const client=req.headers.get('x-forwarded-for')?.split(',')[0].trim()||'unknown';
   const data=await handle(input,uid,client);console.info(JSON.stringify({event:'clinic_request',requestId,action,status:200,durationMs:Date.now()-started}));return new Response(JSON.stringify({data}),{headers:responseHeaders});
