@@ -7,4 +7,6 @@ node_modules
 supabase
 tests
 server
-scripts
+scripts/*
+!scripts/sync-release.cjs
+!scripts/build-branches.cjs

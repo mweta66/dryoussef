@@ -1,0 +1,7 @@
+Vercel reported an Error deployment for PR #30. The upload configuration excluded scripts/ and server/ while npm run build required scripts/sync-release.cjs and scripts/build-branches.cjs, and the branch API imported a server/ wrapper. A local upload filtered by .vercelignore reproduced MODULE_NOT_FOUND before the fix.
+
+Include only the two required build scripts, add a public-only release generator, and use npm run build:site for Vercel. Both the branch generator and API now import the public renderer directly. Private server, Supabase, training data and credentials remain excluded from the upload; there are no patient-data or Supabase schema changes.
+
+Added npm run check:vercel to CI on Node 22/24. It builds a copy filtered by the real .vercelignore, checks that the patient page includes both static WhatsApp links and its scripts/styles, and loads the branch API without server/ or supabase/ source. It fails if either excluded directory is required or accidentally generated into the upload.
+
+This fixes a reproducible packaging defect. Direct inspection of the live site and Vercel build logs was blocked by the environment network policy; the Vercel error was confirmed through the bot on PR #30. After merge, verify that Vercel Production is Ready on the new commit. WhatsApp appearance itself requires only the frontend deployment; global theme saving still needs the updated clinic-api described in the prior PR.

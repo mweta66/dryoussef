@@ -1,4 +1,4 @@
-const {renderPage,names}=require('../server/public-branch-page.cjs');
+const {renderPage,names}=require('../public/clinic-branch-pages.js');
 const config=require('../public/clinic-public-config.json');
 async function handler(req,res){
  const id=String(req.query?.branch||'');res.setHeader('Content-Type','text/html; charset=utf-8');res.setHeader('Cache-Control','no-store');res.setHeader('X-Content-Type-Options','nosniff');
