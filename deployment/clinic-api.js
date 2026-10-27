@@ -383,7 +383,7 @@ function patch(state, r, updates, core) {
       if (value.reason !== void 0 && (typeof value.reason !== "string" || value.reason.length > 2e3)) fail("\u0633\u0628\u0628 \u0627\u0644\u0634\u0643\u0648\u0649 \u062D\u062A\u0649 2000 \u062D\u0631\u0641");
       const no = old?.no || (state.complaintSequences[ph] || 0) + 1;
       state.complaintSequences[ph] = Math.max(state.complaintSequences[ph] || 0, no);
-      rows[key] = { id: key, no, date: value.date, reason: typeof value.reason === "string" ? value.reason.trim() : old?.reason || "", text: value.text.trim(), tx: value.tx, by: old?.by || r.u, at: old?.at || (/* @__PURE__ */ new Date()).toISOString(), ...old ? { editedAt: (/* @__PURE__ */ new Date()).toISOString(), editedBy: r.u } : {} };
+      rows[key] = { id: key, no, date: value.date, reason: typeof value.reason === "string" ? value.reason.trim() : old?.reason || "", text: value.text.trim(), tx: value.tx, by: old?.by || r.u, at: old?.at || (/* @__PURE__ */ new Date()).toISOString(), ...old ? { editedAt: (/* @__PURE__ */ new Date()).toISOString(), editedBy: r.u } : {}, ...old?.trainingBatch ? { trainingBatch: old.trainingBatch } : {} };
       if (!old) {
         const note = rows[key];
         state.inbox[key] = { p: ph, n: state.patients[ph].n, by: note.by, at: note.at, d: note.date };
@@ -654,6 +654,7 @@ function commit(state, uid, puts, dels, now = today()) {
     n.updatedBy = r.u;
     n.rev = (old?.rev || 0) + 1;
     if (old?.scheduleMove) n.scheduleMove = old.scheduleMove;
+    if (old?.trainingBatch) n.trainingBatch = old.trainingBatch;
     if (Object.hasOwn(p, "patient")) {
       if (!p.patient || typeof p.patient !== "object" || Array.isArray(p.patient) || Object.keys(p.patient).some((k) => !["spouseName", "spouseJob", "spousePhone"].includes(k))) fail2("\u0631\u0627\u062C\u0639 \u0628\u064A\u0627\u0646\u0627\u062A \u0627\u0644\u0632\u0648\u062C");
       const existing = state.patients?.[n.phone], family = {};
@@ -1177,7 +1178,7 @@ async function handle2(adapter2, input, uid) {
 }
 
 // supabase/functions/clinic-api/release.js
-var release_default = { "version": "2026.10.27.2", "apiContract": 1, "capabilities": ["pdfReports", "splitBackup", "phoneChangeLookup", "patientRequestAlerts", "globalThemePresets", "patientNotificationCenter", "yearEndTrainingData", "novemberManualDataProtection"] };
+var release_default = { "version": "2026.10.27.3", "apiContract": 1, "capabilities": ["pdfReports", "splitBackup", "phoneChangeLookup", "patientRequestAlerts", "globalThemePresets", "patientNotificationCenter", "yearEndTrainingData", "novemberManualDataProtection", "sessionReadback", "emptySessionRecovery"] };
 
 // supabase/functions/clinic-api/request-notifications.js
 import { createHash as createHash2 } from "node:crypto";
@@ -3881,7 +3882,7 @@ function createService(baseAdapter) {
           assertExamine(s, d, b);
           s.sessions[d + "_presence"] = { branch: b, selectedAt: (/* @__PURE__ */ new Date()).toISOString() };
         }
-        if (old.status === input.status) return s;
+        if (old.status === input.status && !(input.status === "running" && !active && rows.some((x) => x.s === "wait"))) return s;
         if (input.status === "running") {
           if (active && !Number.isFinite(Date.parse(active.startedAt))) {
             active.startedAt = now;

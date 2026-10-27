@@ -1,0 +1,34 @@
+{
+  "date_cairo": "2026-10-27",
+  "release": "2026.10.27.3",
+  "scope": "Isolated local clone only; generated accounts and neutral test data",
+  "browser": "System Chromium driven by Playwright 1.62.1",
+  "unit_tests": {
+    "passed": 316,
+    "failed": 0
+  },
+  "screen_checks": 89,
+  "control_activation_checks": 75,
+  "end_to_end_action_checks": 18,
+  "resilience_and_report_checks": 10,
+  "palette_checks": 20,
+  "horizontal_page_overflows": 0,
+  "load": {
+    "scope": "LOCAL ONLY; file-backed isolated fixture; not production capacity",
+    "requests": 100,
+    "concurrency": 10,
+    "http200": 100,
+    "totalMs": 193.41254099999998,
+    "p50": 13.449912999999981,
+    "p95": 33.288501999999994,
+    "maximumMs": 37.36928899999998
+  },
+  "live_verification": "BLOCKED: outbound proxy denies Vercel and Supabase with tunnel 403; no live DB or provider logs inspected",
+  "not_claimed": [
+    "all possible control/value combinations",
+    "actual production account login tests",
+    "native Safari, Firefox, Edge or physical devices",
+    "production maximum capacity or real-user Core Web Vitals",
+    "resolution of the production upstream 503 or verification of live patient population"
+  ]
+}

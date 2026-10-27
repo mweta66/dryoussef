@@ -114,7 +114,7 @@ function createService(baseAdapter) {
     if(d!==core.today()||!core.branchIds(s,true).includes(b)||!['running','paused','ended'].includes(input.status))core.fail('راجع تاريخ وفرع وحالة جلسة الكشف');if(!perms.allBranches(r)&&r.br!==b)core.fail('غير مصرح',403);
     s.sessions||={};const key=d+'_'+b,old=s.sessions[key]||{},now=new Date().toISOString(),rows=Object.values(s.bookings?.[d]||{}).filter(x=>x.b===b),active=rows.find(x=>x.s==='exam');
     if(input.status==='running'){core.assertExamine(s,d,b);s.sessions[d+'_presence']={branch:b,selectedAt:new Date().toISOString()};}
-    if(old.status===input.status)return s;
+    if(old.status===input.status&&!(input.status==='running'&&!active&&rows.some(x=>x.s==='wait')))return s;
     if(input.status==='running'){
      if(active&&!Number.isFinite(Date.parse(active.startedAt))){active.startedAt=now;active.rev=(active.rev||0)+1;}
      else if(old.status==='paused'&&active&&Number.isFinite(Date.parse(old.pausedAt))){const pause=Math.max(0,Date.now()-Date.parse(old.pausedAt));active.startedAt=new Date(Date.parse(active.startedAt)+pause).toISOString();active.rev=(active.rev||0)+1;}

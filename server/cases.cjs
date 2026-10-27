@@ -56,7 +56,7 @@ function patch(state,r,updates,core){
    core.date(value?.date);if(value.date>core.today()||typeof value.text!=='string'||!value.text.trim()||value.text.length>2000||typeof value.tx!=='string'||value.tx.length>1000)fail('راجع الشكوى والتاريخ والعلاج');
    if(value.reason!==undefined&&(typeof value.reason!=='string'||value.reason.length>2000))fail('سبب الشكوى حتى 2000 حرف');
    const no=old?.no||((state.complaintSequences[ph]||0)+1);state.complaintSequences[ph]=Math.max(state.complaintSequences[ph]||0,no);
-   rows[key]={id:key,no,date:value.date,reason:typeof value.reason==='string'?value.reason.trim():old?.reason||'',text:value.text.trim(),tx:value.tx,by:old?.by||r.u,at:old?.at||new Date().toISOString(),...(old?{editedAt:new Date().toISOString(),editedBy:r.u}:{})};
+   rows[key]={id:key,no,date:value.date,reason:typeof value.reason==='string'?value.reason.trim():old?.reason||'',text:value.text.trim(),tx:value.tx,by:old?.by||r.u,at:old?.at||new Date().toISOString(),...(old?{editedAt:new Date().toISOString(),editedBy:r.u}:{}),...(old?.trainingBatch?{trainingBatch:old.trainingBatch}:{})};
    if(!old){const note=rows[key];state.inbox[key]={p:ph,n:state.patients[ph].n,by:note.by,at:note.at,d:note.date};}continue;
   }
   fail('مسار كتابة غير مسموح',403);

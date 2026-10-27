@@ -118,7 +118,7 @@ async function refreshData(){if(!me)return;if(me.role==="nurse"){await loadPatie
 }
 async function ensureDate(d){if(LOADED.all||LOADED.dates[d])return;var o=(await jget("bookings/"+d,true))||{};for(var i in o)S.bk.push(o[i]);LOADED.dates[d]=1}
 async function commit(puts,dels){if(writing)throw new Error("عملية حفظ قيد التنفيذ. انتظر لحظة.");writing=true;try{return await commitData(puts,dels)}finally{writing=false}}
-async function commitData(puts,dels){await gateway("commit",{puts:puts,dels:dels},true);if(puts.some(p=>!p.o||p.n.phone!==p.o.phone||Object.keys(p.patient||{}).length)){PT=null;PTt=0;}await refreshData();notify("تم حفظ الحجز بنجاح")}
+async function commitData(puts,dels){await gateway("commit",{puts:puts,dels:dels},true);if(puts.some(p=>!p.o||p.n.phone!==p.o.phone||Object.keys(p.patient||{}).length)){PT=null;PTt=0;}try{await refreshData()}catch(e){var message="تم حفظ الحجز على الخادم، لكن تعذر تحديث العرض. لا تعِد إدخاله؛ حدّث الصفحة عند عودة الاتصال.";notify(message);return {successMessage:message}}notify("تم حفظ الحجز بنجاح");return {successMessage:"تم حفظ الحجز بنجاح"}}
 function modalOpen(){return !!document.getElementById("modal").innerHTML}
 function staff(){if(me)return me.role==="doctor"?doctor():me.role==="nurse"?nurse():secretary();
  return '<h2>'+ic("lock",20)+'دخول الطاقم</h2><label for="u">اسم المستخدم</label><input id="u" autocomplete="username" autocapitalize="none"><label for="pw">كلمة السر</label><input id="pw" type="password" autocomplete="current-password" onkeydown="if(event.key===\'Enter\')login()"><button class="btn" id="lb" onclick="login()">دخول</button><div class="err" id="le" role="alert"></div><p style="text-align:center"><a href="#" style="color:var(--pri)">العودة لواجهة المرضى</a></p>'}
@@ -156,8 +156,8 @@ function bkSave(x){return async function(o){var doc=can("bookings.edit")||(can("
  var family=bookingFamilyData(o);if(Object.keys(family).length){if(family.spousePhone&&!validPhone(family.spousePhone))return "رقم موبايل الزوج غير صحيح";try{var capability=await gateway("bookingCapabilities",{},true);if(capability.familyMetadata!==1)throw Error("old service")}catch(e){return "لم يتم حفظ الحجز: خدمة العيادة تحتاج تحديثًا لحفظ بيانات الزوج. بيانات النموذج ما زالت موجودة.";}}
  await refreshData();if(can("bookings.read"))await ensureDate(d);
  if(can("bookings.read")&&dup(o.phone,d,x.id))return"هذا الرقم لديه حجز بالفعل في هذا اليوم، ولا يُسمح بحجزين في نفس اليوم";
- if(x.id){var n=Object.assign({},x,{name:o.name,phone:norm(o.phone),v:o.v,nt:o.nt,b:b,date:d});if(o.s)n.s=o.s;if(x.b!==b||x.date!==d)n.no=nextNo(b,d);await commit([{n:n,o:x,patient:family}],[])}
- else await commit([{n:{id:newId(),no:nextNo(b,d),name:o.name,phone:norm(o.phone),v:o.v,nt:o.nt,s:o.v==="emergency"?"exam":"wait",b:b,date:d},o:null,patient:family}],[])}}
+ if(x.id){var n=Object.assign({},x,{name:o.name,phone:norm(o.phone),v:o.v,nt:o.nt,b:b,date:d});if(o.s)n.s=o.s;if(x.b!==b||x.date!==d)n.no=nextNo(b,d);return await commit([{n:n,o:x,patient:family}],[])}
+ else return await commit([{n:{id:newId(),no:nextNo(b,d),name:o.name,phone:norm(o.phone),v:o.v,nt:o.nt,s:o.v==="emergency"?"exam":"wait",b:b,date:d},o:null,patient:family}],[])}}
 async function delBk(id){if(!confirm("حذف هذا الحجز؟ يمكنك استرجاعه من تبويب الحجوزات المحذوفة."))return;var x=S.bk.filter(function(y){return y.id===id})[0];if(!x)return;try{await commit([],[x])}catch(e){alert("تعذر الحذف")}render()}
 async function setS(id,s){var x=S.bk.filter(function(y){return y.id===id})[0];if(!x)return;try{await commit([{n:Object.assign({},x,{s:s}),o:x}],[])}catch(e){notify(e.message||"تعذر تحديث الحالة")}render()}
 async function purge(m){if(!confirm(m===1?"حذف كل حجوزات الأيام السابقة؟":"حذف كل الحجوزات نهائياً؟"))return;var d=today();

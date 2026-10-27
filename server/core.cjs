@@ -106,7 +106,7 @@ function commit(state, uid, puts, dels, now=today()) {
   const max=Math.max(state.sequences[seqKey]||0,0,...Object.values(rows).filter(x=>x.b===n.b).map(x=>Number(x.no)||0));
   n.no=moved?max+1:old.no;
   state.sequences[seqKey]=Math.max(max,n.no);
-  n.createdAt=old?.createdAt||new Date().toISOString();n.createdBy=old?.createdBy||r.u;n.updatedAt=new Date().toISOString();n.updatedBy=r.u;n.rev=(old?.rev||0)+1;if(old?.scheduleMove)n.scheduleMove=old.scheduleMove;
+  n.createdAt=old?.createdAt||new Date().toISOString();n.createdBy=old?.createdBy||r.u;n.updatedAt=new Date().toISOString();n.updatedBy=r.u;n.rev=(old?.rev||0)+1;if(old?.scheduleMove)n.scheduleMove=old.scheduleMove;if(old?.trainingBatch)n.trainingBatch=old.trainingBatch;
   if(Object.hasOwn(p,'patient')){
    if(!p.patient||typeof p.patient!=='object'||Array.isArray(p.patient)||Object.keys(p.patient).some(k=>!['spouseName','spouseJob','spousePhone'].includes(k)))fail('راجع بيانات الزوج');
    const existing=state.patients?.[n.phone],family={};

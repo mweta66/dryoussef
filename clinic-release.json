@@ -1,5 +1,5 @@
 {
-  "version": "2026.10.27.2",
+  "version": "2026.10.27.3",
   "apiContract": 1,
   "capabilities": [
     "pdfReports",
@@ -9,6 +9,8 @@
     "globalThemePresets",
     "patientNotificationCenter",
     "yearEndTrainingData",
-    "novemberManualDataProtection"
+    "novemberManualDataProtection",
+    "sessionReadback",
+    "emptySessionRecovery"
   ]
 }
