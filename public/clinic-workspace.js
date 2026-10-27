@@ -30,3 +30,5 @@ var clinicalCloseModal=closeM;closeM=function(){if(!confirmMedicalTransition())r
 window.addEventListener('beforeunload',e=>{const box=document.querySelector('.mod');if(box?.dataset.medicalDirty==='true'||box?.dataset.complaintDirty==='true'){e.preventDefault();e.returnValue=''}});
 
 if(typeof ACTION_NAMES!=='undefined')Object.assign(ACTION_NAMES,{trainingYearSeed:'إضافة بيانات التدريب حتى نهاية العام',trainingYearPurge:'حذف دفعة تدريب نهاية العام'});
+
+if(typeof ACTION_NAMES!=='undefined')Object.assign(ACTION_NAMES,{trainingCleanupApply:'حذف البيانات القديمة والافتراضية مع حماية الإدخالات اليدوية من نوفمبر'});

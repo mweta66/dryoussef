@@ -1,3 +1,4 @@
+import * as entryProvenance from './entry-provenance.js';
 import * as core from './core.js';
 import * as perms from './permissions.js';
 const ROOTS=['patients','files','complaints','attachments','bookings','inbox','followups','deletedBookings','sessions','complaintSequences','settings','roles','tasks','checkins','appointmentRequests','waitingList','slotOpenings','dayClosures','patientMerges','userPreferences'];
@@ -28,6 +29,7 @@ function context(before,next,changes,input={}){
 function record(before,next,input,uid){
  const changes=[];for(const root of ROOTS)diff(before[root]||{},next[root]||{},[root],changes);
  const id=crypto.randomUUID(),at=new Date().toISOString(),branches=[...new Set((input.puts||[]).map(x=>x.n?.b).concat((input.dels||[]).map(x=>x.b)).filter(Boolean))];
+ entryProvenance.stamp(before,next,input,uid,at);
  const phones=new Set();for(const change of changes){const [root,a,b]=change.path;if(['patients','files','complaints','attachments'].includes(root))phones.add(a);if(root==='bookings'&&b){for(const state of [before,next]){const booking=state.bookings?.[a]?.[b];if(booking?.b)branches.push(booking.b);if(booking?.phone)phones.add(booking.phone);}}if(root==='settings'&&['sched','branches'].includes(a)&&b)branches.push(b);}
  for(const state of [before,next])for(const rows of Object.values(state.bookings||{}))for(const booking of Object.values(rows))if(phones.has(booking.phone))branches.push(booking.b);
  branches.splice(0,branches.length,...new Set(branches.filter(Boolean)));

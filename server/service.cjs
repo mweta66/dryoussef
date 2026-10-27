@@ -1,3 +1,4 @@
+const novemberCleanup=require('./november-cleanup.cjs');
 const yearEndTraining=require('./year-end-training.cjs');
 const release=require('./release.cjs');
 const requestNotifications=require('./request-notifications.cjs');
@@ -25,6 +26,7 @@ function createService(baseAdapter) {
   const adapter={...baseAdapter,mutate:fn=>baseAdapter.mutate(original=>{
    const before=structuredClone(original);return history.record(before,scheduleTransfers.reconcile(before,fn(original)),input,uid);
   })};
+  if(['trainingCleanupPreview','trainingCleanupApply'].includes(action))return novemberCleanup.handle(adapter,input,uid);
   if(['trainingYearPreview','trainingYearSeed','trainingYearPurge'].includes(action))return yearEndTraining.handle(adapter,input,uid);
   if(['backupRehearsal','backupRehearsalStatus'].includes(action))return backupRehearsal.handle(adapter,input,uid);
   if(action==='systemVersion'){const s=await adapter.read();if(core.role(s,uid).r!=='admin')core.fail('عرض إصدار النظام متاح للأدمن فقط',403);return release;}

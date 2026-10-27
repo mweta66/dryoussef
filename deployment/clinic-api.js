@@ -322,14 +322,14 @@ function patch(state, r, updates, core) {
   state.files ||= {};
   state.inbox ||= {};
   numberComplaints(state);
-  const entries = Object.entries(updates);
-  if (!entries.length || entries.length > 200) fail("\u062A\u062D\u062F\u064A\u062B \u063A\u064A\u0631 \u0635\u062D\u064A\u062D");
-  for (const [path, value] of entries) {
+  const entries2 = Object.entries(updates);
+  if (!entries2.length || entries2.length > 200) fail("\u062A\u062D\u062F\u064A\u062B \u063A\u064A\u0631 \u0635\u062D\u064A\u062D");
+  for (const [path, value] of entries2) {
     const [kind, ph, key, extra] = path.split("/");
     if (kind === "inbox") {
       if (!validId(ph) || key) fail("\u0645\u0633\u0627\u0631 \u063A\u064A\u0631 \u0635\u062D\u064A\u062D");
       if (value !== null) {
-        if (!entries.some(([p, v]) => p.startsWith("complaints/") && p.endsWith("/" + ph) && v)) fail("\u0625\u0634\u0639\u0627\u0631 \u063A\u064A\u0631 \u0635\u062D\u064A\u062D");
+        if (!entries2.some(([p, v]) => p.startsWith("complaints/") && p.endsWith("/" + ph) && v)) fail("\u0625\u0634\u0639\u0627\u0631 \u063A\u064A\u0631 \u0635\u062D\u064A\u062D");
         continue;
       }
       requirePermission(r, "notifications.read");
@@ -779,6 +779,111 @@ function lookup(state, p, now = today(), clock = Date.now()) {
 }
 var coreExports = { allowed, publicSettings, branchIds, presence, canExamine, assertExamine, phone, today, date, role, booking, commit, read: read2, patch: patch2, lookup, rebuild, fail: fail2, schedule: schedule2, queueOrder, queueTrack };
 
+// supabase/functions/clinic-api/entry-provenance.js
+var ROOTS = ["patients", "files", "complaints", "attachments", "bookings", "inbox", "followups", "deletedBookings", "tasks", "checkins", "appointmentRequests", "waitingList", "slotOpenings", "dayClosures", "patientMerges"];
+var NESTED = /* @__PURE__ */ new Set(["complaints", "attachments", "bookings"]);
+var MANUAL = /* @__PURE__ */ new Set(["commit", "patch", "patientSave", "attachmentUpload", "checkinSet", "taskSave", "appointmentRequest", "appointmentChangeRequest", "requestDecide", "waitingListSave", "dayClose"]);
+function entries(s) {
+  const out = [];
+  for (const root of ROOTS) for (const [a, x] of Object.entries(s[root] || {})) {
+    if (NESTED.has(root)) {
+      for (const [b, row] of Object.entries(x || {})) if (row && typeof row === "object") out.push({ key: root + "/" + (root === "bookings" ? b : a + "/" + b), path: [root, a, b], row, phone: root === "bookings" ? row.phone : a });
+    } else if (x && typeof x === "object") out.push({ key: root + "/" + a, path: [root, a], row: x, phone: ["patients", "files", "followups"].includes(root) ? a : x.phone || x.p || x.booking?.phone });
+  }
+  return out;
+}
+function directlyWritten(item, input, before) {
+  if (!MANUAL.has(input.action)) return false;
+  if (input.action === "patch") return Object.keys(input.updates || {}).some((path) => {
+    const target = item.path.join("/");
+    return path === target || path.startsWith(target + "/");
+  });
+  if (input.action === "commit") return item.path[0] === "bookings" && (input.puts || []).some((x) => x.n?.id === item.row.id) || item.path[0] === "patients" && (input.puts || []).some((x) => corePhone(x.n?.phone) === item.phone);
+  if (input.action === "patientSave") return item.path[0] === "patients" && [corePhone(input.phone), corePhone(input.newPhone)].includes(item.phone);
+  if (input.action === "requestDecide") return item.phone === before.appointmentRequests?.[input.id]?.phone;
+  const roots = { attachmentUpload: "attachments", checkinSet: "checkins", taskSave: "tasks", appointmentRequest: "appointmentRequests", appointmentChangeRequest: "appointmentRequests", waitingListSave: "waitingList", dayClose: "dayClosures" };
+  return item.path[0] === roots[input.action];
+}
+function corePhone(value) {
+  return phone(value);
+}
+function stamp(before, next, input, uid, at) {
+  const prior = new Map(entries(before).map((x) => [x.key, x]));
+  next.recordProvenance = structuredClone(before.recordProvenance || {});
+  for (const item of entries(next)) {
+    let oldKey = item.key;
+    if (input.action === "patientSave" && corePhone(input.newPhone) && item.phone === corePhone(input.newPhone) && ["patients", "files", "complaints", "attachments"].includes(item.path[0])) oldKey = [item.path[0], corePhone(input.phone), ...item.path.slice(2)].join("/");
+    const old = prior.get(oldKey);
+    if (oldKey === item.key && old && JSON.stringify(old.row) === JSON.stringify(item.row)) continue;
+    const saved = before.recordProvenance?.[oldKey] || (item.path[0] === "deletedBookings" ? before.recordProvenance?.["bookings/" + item.row.booking?.id] : null);
+    if (input.action === "trashRestore") {
+      if (!saved) next.recordProvenance[item.key] = { origin: "restored", createdAt: null };
+      continue;
+    }
+    const training = item.row.trainingBatch || item.row.booking?.trainingBatch || old?.row.trainingBatch || old?.row.booking?.trainingBatch || saved?.origin === "training";
+    const manual = directlyWritten(item, input, before) && !training;
+    let meta = saved ? { ...saved } : old ? { origin: training ? "training" : "legacy", createdAt: null } : { origin: training ? "training" : manual ? "manual" : "import", createdAt: at, by: uid };
+    if (manual) meta.lastManualAt = at;
+    if (training) meta.origin = "training";
+    next.recordProvenance[item.key] = meta;
+  }
+  return next;
+}
+
+// supabase/functions/clinic-api/november-cleanup.js
+var CUTOFF = "2026-11-01";
+var INSTANT = Date.parse("2026-10-31T22:00:00.000Z");
+function authorize(s, uid) {
+  if (role(s, uid).r !== "admin") fail2("\u0627\u0644\u062D\u0630\u0641 \u0645\u062A\u0627\u062D \u0644\u0644\u0623\u062F\u0645\u0646 \u0641\u0642\u0637", 403);
+  requirePermission(role(s, uid), "data.delete");
+}
+function protectedEntry(s, item) {
+  const m = s.recordProvenance?.[item.key];
+  if (!m || m.origin === "training" || item.row.trainingBatch || item.row.booking?.trainingBatch) return false;
+  return m.origin === "manual" && Date.parse(m.createdAt) >= INSTANT || Date.parse(m.lastManualAt) >= INSTANT;
+}
+function inspect(s, uid) {
+  authorize(s, uid);
+  const items = entries(s), keep = new Set(items.filter((x) => protectedEntry(s, x)).map((x) => x.key)), phones = new Set(items.filter((x) => keep.has(x.key)).map((x) => x.phone).filter(Boolean)), bookingIds = new Set(items.filter((x) => keep.has(x.key) && x.path[0] === "bookings").map((x) => x.row.id));
+  for (const item of items) if (item.path[0] === "patients" && phones.has(item.phone) || item.path[0] === "checkins" && bookingIds.has(item.path[1])) keep.add(item.key);
+  const remove = items.filter((x) => !keep.has(x.key)), deleted = {}, retained = {};
+  for (const item of items) {
+    const target = keep.has(item.key) ? retained : deleted;
+    target[item.path[0]] = (target[item.path[0]] || 0) + 1;
+  }
+  const previewToken = JSON.stringify([s.audit?.at(-1)?.id || null, s.audit?.length || 0, remove.map((x) => x.key), [...keep]]);
+  return { cutoff: CUTOFF, deleted, retained, deleteCount: remove.length, retainCount: keep.size, previewToken, remove, keep };
+}
+function preview(s, uid) {
+  const { remove, keep, ...result } = inspect(s, uid);
+  return result;
+}
+function apply(original, uid, input) {
+  const plan3 = inspect(original, uid);
+  if (input.confirmation !== "DELETE_NON_MANUAL_BEFORE_NOVEMBER_2026") fail2("\u062A\u0623\u0643\u064A\u062F \u062D\u0630\u0641 \u0627\u0644\u0628\u064A\u0627\u0646\u0627\u062A \u0627\u0644\u0642\u062F\u064A\u0645\u0629 \u0645\u0637\u0644\u0648\u0628");
+  if (input.previewToken !== plan3.previewToken) fail2("\u062A\u063A\u064A\u0631\u062A \u0627\u0644\u0628\u064A\u0627\u0646\u0627\u062A \u0645\u0646\u0630 \u0627\u0644\u0645\u0639\u0627\u064A\u0646\u0629\u061B \u0627\u0641\u062A\u062D \u0645\u0644\u062E\u0635 \u0627\u0644\u062D\u0630\u0641 \u0645\u062C\u062F\u062F\u064B\u0627", 409);
+  const s = structuredClone(original);
+  for (const item of plan3.remove) {
+    let parent = s;
+    for (const part of item.path.slice(0, -1)) parent = parent?.[part];
+    if (parent) delete parent[item.path.at(-1)];
+  }
+  for (const phone3 of Object.keys(s.complaintSequences || {})) if (!s.patients?.[phone3]) delete s.complaintSequences[phone3];
+  for (const batch of Object.values(s.settings?.trainingYearBatches || {})) batch.status = "purged";
+  rebuild(s);
+  return { state: s, summary: { cutoff: CUTOFF, deleted: plan3.deleted, retained: plan3.retained, deleteCount: plan3.deleteCount, retainCount: plan3.retainCount } };
+}
+async function handle(adapter2, input, uid) {
+  if (input.action === "trainingCleanupPreview") return preview(await adapter2.read(), uid);
+  let summary;
+  await adapter2.mutate((s) => {
+    const result = apply(s, uid, input);
+    summary = result.summary;
+    return result.state;
+  });
+  return { ok: true, ...summary };
+}
+
 // supabase/functions/clinic-api/schedule.js
 function validDate(date2) {
   const parsed = /* @__PURE__ */ new Date(date2 + "T12:00:00Z");
@@ -961,12 +1066,12 @@ function normalize2(original, uid) {
 }
 
 // supabase/functions/clinic-api/year-end-training.js
-function authorize(s, uid, key) {
+function authorize2(s, uid, key) {
   if (role(s, uid).r !== "admin") fail2("\u0647\u0630\u0647 \u0627\u0644\u0639\u0645\u0644\u064A\u0629 \u0644\u0644\u0623\u062F\u0645\u0646 \u0641\u0642\u0637", 403);
   requirePermission(role(s, uid), key);
 }
 function plan(s, uid) {
-  authorize(s, uid, "data.import");
+  authorize2(s, uid, "data.import");
   const from = today(), to = from.slice(0, 4) + "-12-31", days = [], taggedBatches = new Set(Object.values(s.bookings || {}).flatMap((rows) => Object.values(rows).map((x) => x.trainingBatch)).filter(Boolean)), batches = Object.values(s.settings?.trainingYearBatches || {}).filter((x) => x.status === "active" || taggedBatches.has(x.id)).map((x) => ({ ...x, status: "active" })), active = batches.find((x) => x.year === from.slice(0, 4));
   if (active) return { from, to, days, bookings: active.bookings, patients: active.patients, existingBatch: active, batches };
   for (let d = from; d <= to; ) {
@@ -1027,7 +1132,7 @@ function seed(original, uid) {
   return { state: s, summary };
 }
 function purge(original, uid, batch) {
-  authorize(original, uid, "data.delete");
+  authorize2(original, uid, "data.delete");
   const meta = original.settings?.trainingYearBatches?.[batch];
   if (!meta) fail2("\u062F\u0641\u0639\u0629 \u0627\u0644\u062A\u062F\u0631\u064A\u0628 \u063A\u064A\u0631 \u0645\u0648\u062C\u0648\u062F\u0629", 404);
   const s = structuredClone(original), summary = { patients: 0, bookings: 0, complaints: 0, preservedSharedPatients: 0 };
@@ -1058,7 +1163,7 @@ function purge(original, uid, batch) {
   rebuild(s);
   return { state: s, summary };
 }
-async function handle(adapter2, input, uid) {
+async function handle2(adapter2, input, uid) {
   if (input.action === "trainingYearPreview") return plan(await adapter2.read(), uid);
   const key = input.action === "trainingYearSeed" ? "SEED_YEAR_END_TRAINING" : "DELETE_YEAR_END_TRAINING";
   if (input.confirmation !== key) fail2("\u0631\u0627\u062C\u0639 \u062A\u0623\u0643\u064A\u062F \u0627\u0644\u0639\u0645\u0644\u064A\u0629 \u0623\u0648\u0644\u064B\u0627");
@@ -1072,7 +1177,7 @@ async function handle(adapter2, input, uid) {
 }
 
 // supabase/functions/clinic-api/release.js
-var release_default = { "version": "2026.10.27.1", "apiContract": 1, "capabilities": ["pdfReports", "splitBackup", "phoneChangeLookup", "patientRequestAlerts", "globalThemePresets", "patientNotificationCenter", "yearEndTrainingData"] };
+var release_default = { "version": "2026.10.27.2", "apiContract": 1, "capabilities": ["pdfReports", "splitBackup", "phoneChangeLookup", "patientRequestAlerts", "globalThemePresets", "patientNotificationCenter", "yearEndTrainingData", "novemberManualDataProtection"] };
 
 // supabase/functions/clinic-api/request-notifications.js
 import { createHash as createHash2 } from "node:crypto";
@@ -1108,7 +1213,7 @@ function list(state, uid, input) {
   const pending = rows.filter((x) => x.event === "created" && x.status === "pending"), minutes = state.settings?.bookingRequests?.requestOverdueMinutes || 60;
   return { latestId: rows[0]?.id || null, items: filtered.slice(currentPage * 30, (currentPage + 1) * 30), total: filtered.length, page: currentPage, pageSize: 30, unread: rows.filter((x) => !x.readAt).length, pending: pending.length, overdue: pending.filter((x) => Date.now() - Date.parse(x.at) >= minutes * 6e4).length, newBookings: pending.filter((x) => x.kind === "new").length, reschedule: pending.filter((x) => x.kind === "reschedule").length, cancellations: pending.filter((x) => x.kind === "cancel").length, readAllToken: readAllToken(rows, uid), serverAt: (/* @__PURE__ */ new Date()).toISOString() };
 }
-async function handle2(adapter2, input, uid) {
+async function handle3(adapter2, input, uid) {
   if (input.action === "requestNotifications") return list(await (adapter2.readRequestNotifications ? adapter2.readRequestNotifications() : adapter2.read()), uid, input);
   if (input.action === "requestNotificationRead" && (typeof input.id !== "string" || input.id.length > 160 || typeof input.read !== "boolean")) fail2("\u0627\u062E\u062A\u0631 \u0625\u0634\u0639\u0627\u0631\u064B\u0627 \u0648\u062D\u0627\u0644\u0629 \u0642\u0631\u0627\u0621\u0629 \u0635\u062D\u064A\u062D\u0629");
   if (input.action === "requestNotificationsReadAll" && typeof input.readAllToken !== "string") fail2("\u062D\u062F\u0651\u062B \u0627\u0644\u0625\u0634\u0639\u0627\u0631\u0627\u062A \u0623\u0648\u0644\u064B\u0627");
@@ -1205,7 +1310,7 @@ function normalize3(input = {}, branches2 = []) {
 // supabase/functions/clinic-api/color-refresh.js
 var light = { background: "#f2f5f6", card: "#ffffff", text: "#243543", primary: "#315468", accent: "#976471", muted: "#536779", line: "#bdcbd4", headerBackground: "#315468", headerText: "#ffffff" };
 var dark = { background: "#151c24", card: "#202b35", text: "#e1e8ed", primary: "#b7c9d4", accent: "#b89ca5", muted: "#adbac5", line: "#50606e", headerBackground: "#202e3a", headerText: "#e1e8ed" };
-async function handle3(adapter2, input, uid) {
+async function handle4(adapter2, input, uid) {
   let changed = false;
   await adapter2.mutate((original) => {
     const r = role(original, uid);
@@ -1615,7 +1720,7 @@ function text(x, max, path, optional = false) {
   if (typeof x !== "string" || x.length > max) bad2(path, "\u0646\u0635 \u063A\u064A\u0631 \u0635\u062D\u064A\u062D \u0623\u0648 \u0623\u0637\u0648\u0644 \u0645\u0646 \u0627\u0644\u062D\u062F \u0627\u0644\u0645\u0633\u0645\u0648\u062D");
   return x;
 }
-function stamp(x, path) {
+function stamp2(x, path) {
   if (x === void 0 || x === "") return void 0;
   if (typeof x !== "string" || x.length > 60 || !Number.isFinite(Date.parse(x))) bad2(path, "\u062A\u0648\u0642\u064A\u062A \u063A\u064A\u0631 \u0635\u062D\u064A\u062D");
   return new Date(x).toISOString();
@@ -1681,10 +1786,10 @@ function normalize4(input, state = {}, withSettings = false, maxBytes = 85e4) {
       seenPhones.add(d + "|" + n.phone);
       if (seenIds.size > 1e3) bad2("\u0627\u0644\u062D\u062C\u0648\u0632\u0627\u062A", "\u0627\u0644\u062D\u062F \u0627\u0644\u0623\u0642\u0635\u0649 1000 \u062D\u062C\u0632 \u0641\u064A \u0627\u0644\u0639\u0645\u0644\u064A\u0629");
       if (x.no !== void 0 && (!Number.isSafeInteger(x.no) || x.no < 1 || x.no > 1e7)) bad2("\u0631\u0642\u0645 \u0627\u0644\u062A\u0630\u0643\u0631\u0629", "\u0631\u0642\u0645 \u063A\u064A\u0631 \u0635\u062D\u064A\u062D");
-      const startedAt = stamp(x.startedAt, "\u0628\u062F\u0621 \u0627\u0644\u0643\u0634\u0641");
+      const startedAt = stamp2(x.startedAt, "\u0628\u062F\u0621 \u0627\u0644\u0643\u0634\u0641");
       out.bookings[d] ||= {};
       out.bookings[d][id2] = { ...n, ...x.no ? { no: x.no } : {}, ...startedAt ? { startedAt } : {}, rev: 1 };
-      for (const k of ["createdAt", "updatedAt"]) if (x[k]) out.bookings[d][id2][k] = stamp(x[k], k);
+      for (const k of ["createdAt", "updatedAt"]) if (x[k]) out.bookings[d][id2][k] = stamp2(x[k], k);
       for (const k of ["createdBy", "updatedBy"]) if (x[k]) out.bookings[d][id2][k] = text(x[k], 128, k);
     });
   });
@@ -1696,15 +1801,15 @@ function normalize4(input, state = {}, withSettings = false, maxBytes = 85e4) {
       f[k] = text(x[k], k === "source" ? 512 : 2e3, "files/" + k);
       if (k === "followUp" && f[k]) date(f[k]);
     }
-    if (x.t) f.t = stamp(x.t, "\u062A\u062D\u062F\u064A\u062B \u0627\u0644\u0645\u0644\u0641");
+    if (x.t) f.t = stamp2(x.t, "\u062A\u062D\u062F\u064A\u062B \u0627\u0644\u0645\u0644\u0641");
     if (x.by !== void 0) f.by = text(x.by, 128, "\u0643\u0627\u062A\u0628 \u0627\u0644\u0645\u0644\u0641");
     if (x.importedRecords !== void 0) {
       if (!Array.isArray(x.importedRecords) || x.importedRecords.length > 100) bad2("files", "\u0623\u0631\u0634\u064A\u0641 \u062F\u0645\u062C \u063A\u064A\u0631 \u0635\u062D\u064A\u062D");
       f.importedRecords = x.importedRecords.map((y) => {
         if (!object(y)) bad2("files", "\u0633\u062C\u0644 \u0645\u062F\u0645\u062C \u063A\u064A\u0631 \u0635\u062D\u064A\u062D");
-        const z = { sourcePhone: phone2(y.sourcePhone, "\u0645\u0644\u0641 \u0645\u062F\u0645\u062C"), mergedAt: stamp(y.mergedAt, "\u062A\u0627\u0631\u064A\u062E \u0627\u0644\u062F\u0645\u062C"), n: text(y.n, 5e3, "\u0645\u0644\u0627\u062D\u0638\u0627\u062A \u0645\u062F\u0645\u062C\u0629", true) };
+        const z = { sourcePhone: phone2(y.sourcePhone, "\u0645\u0644\u0641 \u0645\u062F\u0645\u062C"), mergedAt: stamp2(y.mergedAt, "\u062A\u0627\u0631\u064A\u062E \u0627\u0644\u062F\u0645\u062C"), n: text(y.n, 5e3, "\u0645\u0644\u0627\u062D\u0638\u0627\u062A \u0645\u062F\u0645\u062C\u0629", true) };
         for (const k of ["allergies", "chronic", "diagnosis", "treatment"]) if (y[k] !== void 0) z[k] = text(y[k], 2e3, k);
-        if (y.t) z.t = stamp(y.t, "\u062A\u0627\u0631\u064A\u062E \u0627\u0644\u0633\u062C\u0644");
+        if (y.t) z.t = stamp2(y.t, "\u062A\u0627\u0631\u064A\u062E \u0627\u0644\u0633\u062C\u0644");
         if (y.by) z.by = text(y.by, 128, "\u0643\u0627\u062A\u0628 \u0627\u0644\u0633\u062C\u0644");
         return z;
       });
@@ -1722,7 +1827,7 @@ function normalize4(input, state = {}, withSettings = false, maxBytes = 85e4) {
       const body = text(x.text, 2e3, "\u0627\u0644\u0634\u0643\u0648\u0649");
       if (!body.trim()) bad2("\u0627\u0644\u0634\u0643\u0648\u0649", "\u0627\u0644\u0646\u0635 \u0645\u0637\u0644\u0648\u0628");
       if (x.no !== void 0 && (!Number.isSafeInteger(x.no) || x.no < 1)) bad2("complaints", "\u0631\u0642\u0645 \u0634\u0643\u0648\u0649 \u063A\u064A\u0631 \u0635\u062D\u064A\u062D");
-      out.complaints[p][id2] = { id: id2, ...x.no ? { no: x.no } : {}, reason: text(x.reason, 2e3, "\u0633\u0628\u0628 \u0627\u0644\u0634\u0643\u0648\u0649", true), date: date2, text: body, tx: text(x.tx, 1e3, "\u0627\u0644\u0639\u0644\u0627\u062C", true), by: text(x.by, 128, "\u0643\u0627\u062A\u0628 \u0627\u0644\u0634\u0643\u0648\u0649", true) || "\u0645\u0633\u062A\u0648\u0631\u062F", ...x.at ? { at: stamp(x.at, "\u0648\u0642\u062A \u0627\u0644\u0634\u0643\u0648\u0649") } : {} };
+      out.complaints[p][id2] = { id: id2, ...x.no ? { no: x.no } : {}, reason: text(x.reason, 2e3, "\u0633\u0628\u0628 \u0627\u0644\u0634\u0643\u0648\u0649", true), date: date2, text: body, tx: text(x.tx, 1e3, "\u0627\u0644\u0639\u0644\u0627\u062C", true), by: text(x.by, 128, "\u0643\u0627\u062A\u0628 \u0627\u0644\u0634\u0643\u0648\u0649", true) || "\u0645\u0633\u062A\u0648\u0631\u062F", ...x.at ? { at: stamp2(x.at, "\u0648\u0642\u062A \u0627\u0644\u0634\u0643\u0648\u0649") } : {} };
     });
   });
   map(data.complaintSequences, "complaintSequences", (raw, value) => {
@@ -1869,7 +1974,7 @@ function rehearse(payload, uid) {
   if (plan3.summary.totalConflicts) fail2("\u062A\u0648\u062C\u062F \u062A\u0639\u0627\u0631\u0636\u0627\u062A \u062A\u0645\u0646\u0639 \u062A\u062C\u0631\u0628\u0629 \u0627\u0644\u0627\u0633\u062A\u0639\u0627\u062F\u0629", 409);
   return { at: (/* @__PURE__ */ new Date()).toISOString(), status: "passed", scope: "clinical-json", counts: Object.fromEntries(["patients", "bookings", "files", "complaints"].map((k) => [k, plan3.summary[k].added])), imagesVerified: false, warning: "\u062A\u062C\u0631\u0628\u0629 \u0645\u0639\u0632\u0648\u0644\u0629 \u0644\u0644\u0628\u064A\u0627\u0646\u0627\u062A \u0627\u0644\u0637\u0628\u064A\u0629 \u0641\u0642\u0637\u061B \u0644\u0627 \u062A\u062A\u062D\u0642\u0642 \u0645\u0646 \u0648\u062C\u0648\u062F \u0645\u0644\u0641\u0627\u062A \u0627\u0644\u0635\u0648\u0631 \u0648\u0644\u0627 \u062A\u0633\u062A\u0628\u062F\u0644 \u0623\u064A \u0633\u062C\u0644 \u0641\u0639\u0644\u064A." };
 }
-async function handle4(adapter2, input, uid) {
+async function handle5(adapter2, input, uid) {
   const s = await adapter2.read();
   requirePermission(role(s, uid), "data.export");
   if (input.action === "backupRehearsalStatus") return s.backupRehearsal || null;
@@ -1888,7 +1993,7 @@ import { Buffer as Buffer4 } from "node:buffer";
 import { createHash as createHash4, randomUUID } from "node:crypto";
 
 // supabase/functions/clinic-api/history.js
-var ROOTS = ["patients", "files", "complaints", "attachments", "bookings", "inbox", "followups", "deletedBookings", "sessions", "complaintSequences", "settings", "roles", "tasks", "checkins", "appointmentRequests", "waitingList", "slotOpenings", "dayClosures", "patientMerges", "userPreferences"];
+var ROOTS2 = ["patients", "files", "complaints", "attachments", "bookings", "inbox", "followups", "deletedBookings", "sessions", "complaintSequences", "settings", "roles", "tasks", "checkins", "appointmentRequests", "waitingList", "slotOpenings", "dayClosures", "patientMerges", "userPreferences"];
 var object2 = (x) => x !== null && typeof x === "object" && !Array.isArray(x);
 var same2 = (a, b) => JSON.stringify(a) === JSON.stringify(b);
 function diff(before, after, path = [], out = []) {
@@ -1947,8 +2052,9 @@ function context(before, next, changes, input = {}) {
 }
 function record(before, next, input, uid) {
   const changes = [];
-  for (const root of ROOTS) diff(before[root] || {}, next[root] || {}, [root], changes);
+  for (const root of ROOTS2) diff(before[root] || {}, next[root] || {}, [root], changes);
   const id2 = crypto.randomUUID(), at = (/* @__PURE__ */ new Date()).toISOString(), branches2 = [...new Set((input.puts || []).map((x) => x.n?.b).concat((input.dels || []).map((x) => x.b)).filter(Boolean))];
+  stamp(before, next, input, uid, at);
   const phones = /* @__PURE__ */ new Set();
   for (const change of changes) {
     const [root, a, b] = change.path;
@@ -2059,7 +2165,7 @@ function list2(state, uid, input) {
 }
 
 // supabase/functions/clinic-api/workflow.js
-var stamp2 = () => (/* @__PURE__ */ new Date()).toISOString();
+var stamp3 = () => (/* @__PURE__ */ new Date()).toISOString();
 var digest2 = (x) => createHash4("sha256").update(JSON.stringify(x)).digest("hex");
 var text2 = (x, max, label, required = false) => {
   if (typeof x !== "string" || x.length > max || required && !x.trim()) fail2("\u0631\u0627\u062C\u0639 " + label);
@@ -2114,7 +2220,7 @@ function draftAccess(s, r, x) {
   if (x.branch) branch(s, r, x.branch);
   if (["complaint", "medical"].includes(x.kind)) access(s, r, phone(x.entity));
 }
-async function handle5(adapter2, input, uid) {
+async function handle6(adapter2, input, uid) {
   const action = input.action;
   if (action === "nurseRequestAccessUpgrade") {
     let changed = false;
@@ -2172,7 +2278,7 @@ async function handle5(adapter2, input, uid) {
       allowed(r, x.b);
       if (d !== today() || !["arrived", "not_arrived", "left"].includes(input.status)) fail2("\u0627\u0644\u0648\u0635\u0648\u0644 \u0645\u062A\u0627\u062D \u0644\u062D\u062C\u0648\u0632\u0627\u062A \u0627\u0644\u064A\u0648\u0645 \u0641\u0642\u0637");
       s.checkins ||= {};
-      s.checkins[x.id] = { arrivalAt: s.checkins[x.id]?.arrivalAt || (input.status === "arrived" ? stamp2() : null), status: input.status, at: stamp2(), by: r.u, byUid: uid, branch: x.b };
+      s.checkins[x.id] = { arrivalAt: s.checkins[x.id]?.arrivalAt || (input.status === "arrived" ? stamp3() : null), status: input.status, at: stamp3(), by: r.u, byUid: uid, branch: x.b };
       return s;
     });
     return { ok: true };
@@ -2197,7 +2303,7 @@ async function handle5(adapter2, input, uid) {
       if (!["open", "in_progress", "done", "cancelled"].includes(status)) fail2("\u062D\u0627\u0644\u0629 \u0645\u0647\u0645\u0629 \u063A\u064A\u0631 \u0635\u062D\u064A\u062D\u0629");
       s.tasks ||= {};
       const id2 = old?.id || randomUUID();
-      saved = s.tasks[id2] = { id: id2, branch: b, phone: p, title: text2(input.title, 120, "\u0639\u0646\u0648\u0627\u0646 \u0627\u0644\u0645\u0647\u0645\u0629", true), description: text2(input.description || "", 2e3, "\u0648\u0635\u0641 \u0627\u0644\u0645\u0647\u0645\u0629"), due, assignee, status, by: old?.by || r.u, createdAt: old?.createdAt || stamp2(), updatedAt: stamp2(), updatedBy: r.u, rev: (old?.rev || 0) + 1 };
+      saved = s.tasks[id2] = { id: id2, branch: b, phone: p, title: text2(input.title, 120, "\u0639\u0646\u0648\u0627\u0646 \u0627\u0644\u0645\u0647\u0645\u0629", true), description: text2(input.description || "", 2e3, "\u0648\u0635\u0641 \u0627\u0644\u0645\u0647\u0645\u0629"), due, assignee, status, by: old?.by || r.u, createdAt: old?.createdAt || stamp3(), updatedAt: stamp3(), updatedBy: r.u, rev: (old?.rev || 0) + 1 };
       return s;
     });
     return saved;
@@ -2213,7 +2319,7 @@ async function handle5(adapter2, input, uid) {
       s.drafts[uid] ||= {};
       for (const [key, x] of Object.entries(s.drafts[uid])) if (Date.now() - Date.parse(x.updatedAt) > 7 * 864e5) delete s.drafts[uid][key];
       if (!s.drafts[uid][id2] && Object.keys(s.drafts[uid]).length >= 30) fail2("\u0627\u062D\u0630\u0641 \u0628\u0639\u0636 \u0627\u0644\u0645\u0633\u0648\u062F\u0627\u062A \u0627\u0644\u0642\u062F\u064A\u0645\u0629 \u0623\u0648\u0644\u064B\u0627");
-      saved = s.drafts[uid][id2] = { id: id2, kind: input.kind, entity: String(input.entity || "new").slice(0, 128), branch: input.branch || null, data: structuredClone(input.data), updatedAt: stamp2() };
+      saved = s.drafts[uid][id2] = { id: id2, kind: input.kind, entity: String(input.entity || "new").slice(0, 128), branch: input.branch || null, data: structuredClone(input.data), updatedAt: stamp3() };
       return s;
     });
     return { id: saved.id, updatedAt: saved.updatedAt };
@@ -2258,7 +2364,7 @@ async function handle5(adapter2, input, uid) {
         const arrived = s.checkins?.[x.id];
         return arrived?.status === "arrived" && x.startedAt ? Math.max(0, Date.parse(x.startedAt) - Date.parse(arrived.arrivalAt || arrived.at)) / 6e4 : null;
       }).filter((x) => Number.isFinite(x));
-      return { branch: b, date: d, counts, averageWaitMinutes: elapsed.length ? Math.round(elapsed.reduce((a, b2) => a + b2, 0) / elapsed.length) : null, generatedAt: stamp2(), pending: rows.filter((x) => ["wait", "exam"].includes(x.s)).map((x) => ({ id: x.id, no: x.no, status: x.s })), closed: s.dayClosures?.[d + "_" + b] || null };
+      return { branch: b, date: d, counts, averageWaitMinutes: elapsed.length ? Math.round(elapsed.reduce((a, b2) => a + b2, 0) / elapsed.length) : null, generatedAt: stamp3(), pending: rows.filter((x) => ["wait", "exam"].includes(x.s)).map((x) => ({ id: x.id, no: x.no, status: x.s })), closed: s.dayClosures?.[d + "_" + b] || null };
     };
     if (action === "daySummary") return build2(await adapter2.read());
     let summary;
@@ -2270,7 +2376,7 @@ async function handle5(adapter2, input, uid) {
       if (input.confirmation !== "CLOSE_DAY") fail2("\u0631\u0627\u062C\u0639 \u0645\u0644\u062E\u0635 \u0627\u0644\u064A\u0648\u0645 \u0648\u0623\u0643\u062F \u0627\u0644\u0625\u0642\u0641\u0627\u0644");
       if (summary.pending.some((x) => x.status === "exam")) fail2("\u0623\u0646\u0647 \u062C\u0644\u0633\u0629 \u0627\u0644\u0643\u0634\u0641 \u0623\u0648\u0644\u064B\u0627", 409);
       s.dayClosures ||= {};
-      s.dayClosures[input.date + "_" + input.branch] = { ...summary, closed: null, by: r.u, at: stamp2(), note: text2(input.note || "", 1e3, "\u0645\u0644\u0627\u062D\u0638\u0627\u062A \u0627\u0644\u0625\u0642\u0641\u0627\u0644") };
+      s.dayClosures[input.date + "_" + input.branch] = { ...summary, closed: null, by: r.u, at: stamp3(), note: text2(input.note || "", 1e3, "\u0645\u0644\u0627\u062D\u0638\u0627\u062A \u0627\u0644\u0625\u0642\u0641\u0627\u0644") };
       return s;
     });
     return summary;
@@ -2308,13 +2414,13 @@ async function handle5(adapter2, input, uid) {
       if (s.files[source]) {
         const from = s.files[source], to = s.files[target] || { n: "", rev: 0 };
         const { importedRecords: archives, ...originalFile } = from;
-        to.importedRecords = [...to.importedRecords || [], ...archives || [], { ...originalFile, sourcePhone: source, mergedAt: stamp2() }];
+        to.importedRecords = [...to.importedRecords || [], ...archives || [], { ...originalFile, sourcePhone: source, mergedAt: stamp3() }];
         if (to.importedRecords.length > 100) fail2("\u0623\u0631\u0634\u064A\u0641 \u0627\u0644\u0645\u0644\u0641\u0627\u062A \u0627\u0644\u0645\u062F\u0645\u062C\u0629 \u062A\u062C\u0627\u0648\u0632 \u0627\u0644\u062D\u062F \u0627\u0644\u0645\u0633\u0645\u0648\u062D", 409);
         to.n = [to.n, from.n ? "\u0633\u062C\u0644 \u0645\u062F\u0645\u062C \u0628\u062A\u0627\u0631\u064A\u062E " + today() + ":\n" + from.n : ""].filter(Boolean).join("\n\n");
         if (to.n.length > 5e3) to.n = to.n.slice(0, 5e3);
         for (const k of ["allergies", "chronic", "diagnosis", "treatment"]) if (!to[k] && from[k]) to[k] = from[k];
         to.rev = (to.rev || 0) + 1;
-        to.t = stamp2();
+        to.t = stamp3();
         s.files[target] = to;
         delete s.files[source];
       }
@@ -2343,7 +2449,7 @@ async function handle5(adapter2, input, uid) {
       s.patientMerges ||= {};
       const changes = [];
       for (const key of ["patients", "bookings", "files", "complaints", "complaintSequences", "attachments", "inbox", "tasks"]) diff(original[key] || {}, s[key] || {}, [key], changes);
-      s.patientMerges[id2] = { id: id2, source, target, at: stamp2(), by: uid, changes: structuredClone(changes) };
+      s.patientMerges[id2] = { id: id2, source, target, at: stamp3(), by: uid, changes: structuredClone(changes) };
       return s;
     });
     return { ok: true, id: id2 };
@@ -2371,7 +2477,7 @@ async function handle5(adapter2, input, uid) {
         if (x.added) delete node[x.path.at(-1)];
         else node[x.path.at(-1)] = structuredClone(x.before);
       }
-      m.undoneAt = stamp2();
+      m.undoneAt = stamp3();
       m.undoneBy = uid;
       rebuild(s);
       return s;
@@ -2428,7 +2534,7 @@ function cutoff(s, booking2) {
   }
   return target - Date.now() >= settings(s).changeCutoffHours * 36e5;
 }
-async function handle6(adapter2, input, uid, client) {
+async function handle7(adapter2, input, uid, client) {
   const action = input.action;
   if (action === "requestSummary") {
     const s = await adapter2.read(), r = role(s, uid);
@@ -2602,11 +2708,11 @@ import { Buffer as Buffer5 } from "node:buffer";
 import { randomUUID as randomUUID3 } from "node:crypto";
 var MAX_BYTES = 8e6;
 var TTL = 60 * 60 * 1e3;
-function authorize2(s, uid) {
+function authorize3(s, uid) {
   requirePermission(role(s, uid), "data.import");
 }
 function session(s, uid, id2) {
-  authorize2(s, uid);
+  authorize3(s, uid);
   const x = s.importSessions?.[uid];
   if (!x || x.id !== id2 || Date.now() - x.createdAt > TTL) fail2("\u0627\u0646\u062A\u0647\u062A \u062C\u0644\u0633\u0629 \u062A\u062C\u0647\u064A\u0632 \u0627\u0644\u0645\u0644\u0641\u061B \u0623\u0639\u062F \u0627\u062E\u062A\u064A\u0627\u0631 \u0627\u0644\u0645\u0644\u0641", 409);
   return x;
@@ -2621,11 +2727,11 @@ function assemble(x) {
     fail2("\u0627\u0644\u0646\u0633\u062E\u0629 \u063A\u064A\u0631 \u0645\u0643\u062A\u0645\u0644\u0629 \u0623\u0648 JSON \u063A\u064A\u0631 \u0635\u062D\u064A\u062D");
   }
 }
-async function handle7(adapter2, input, uid) {
+async function handle8(adapter2, input, uid) {
   if (input.action === "importStageStart") {
     let id2;
     await adapter2.mutate((original) => {
-      authorize2(original, uid);
+      authorize3(original, uid);
       if (!Number.isInteger(input.total) || input.total < 1 || input.total > 48) fail2("\u0639\u062F\u062F \u0623\u062C\u0632\u0627\u0621 \u063A\u064A\u0631 \u0635\u062D\u064A\u062D");
       if (input.options && Object.keys(input.options).some((k) => k !== "importSettings") || input.options?.importSettings !== void 0 && typeof input.options.importSettings !== "boolean") fail2("\u062E\u064A\u0627\u0631\u0627\u062A \u063A\u064A\u0631 \u0635\u062D\u064A\u062D\u0629");
       const s = structuredClone(original);
@@ -2673,7 +2779,7 @@ async function handle7(adapter2, input, uid) {
   }
   if (input.action === "importStageCancel") {
     await adapter2.mutate((original) => {
-      authorize2(original, uid);
+      authorize3(original, uid);
       const s = structuredClone(original);
       if (s.importSessions?.[uid]?.id === input.id) delete s.importSessions[uid];
       return s;
@@ -2738,7 +2844,7 @@ function reconcile(before, next) {
   next.settings.scheduleTransferPendingCount = Object.keys(next.scheduleTransferPending).length;
   return rebuild(next);
 }
-function preview(state, branch2, schedule3) {
+function preview2(state, branch2, schedule3) {
   const next = structuredClone(state);
   next.settings ||= {};
   next.settings.sched = { ...next.settings.sched, [branch2]: schedule2(schedule3) };
@@ -3265,7 +3371,7 @@ var training_branch_assignments_500_default = {
 
 // supabase/functions/clinic-api/training-assignment.js
 var grants = ["patients.print", "patients.read", "patients.edit", "bookings.read", "bookings.create", "bookings.edit", "bookings.status", "complaints.read", "complaints.create", "attachments.read", "attachments.create"];
-function preview2(state, uid, accounts) {
+function preview3(state, uid, accounts) {
   if (role(state, uid).r !== "admin") fail2("\u062A\u0646\u0638\u064A\u0645 \u0628\u064A\u0627\u0646\u0627\u062A \u0627\u0644\u062A\u062F\u0631\u064A\u0628 \u0645\u062A\u0627\u062D \u0644\u0644\u0623\u062F\u0645\u0646 \u0641\u0642\u0637", 403);
   if (!accounts || typeof accounts.dmn !== "string" || typeof accounts.libya !== "string" || accounts.dmn === accounts.libya) fail2("\u0627\u062E\u062A\u0631 \u062D\u0633\u0627\u0628\u064A\u0646 \u0645\u062E\u062A\u0644\u0641\u064A\u0646 \u0644\u0625\u062F\u062E\u0627\u0644 \u0627\u0644\u0628\u064A\u0627\u0646\u0627\u062A");
   const roles = [];
@@ -3353,7 +3459,7 @@ var MAX_BYTES2 = 6e5;
 var MAX_PDF_BYTES = 5e6;
 var MAX_FILES = 20;
 var validId3 = (id2) => typeof id2 === "string" && /^[0-9a-f-]{36}$/.test(id2);
-function authorize3(state, uid, phone3, write = false) {
+function authorize4(state, uid, phone3, write = false) {
   const role2 = role(state, uid);
   requirePermission(role2, write ? "attachments.create" : "attachments.read");
   if (!/^01[0125]\d{8}$/.test(phone3) || !state.patients?.[phone3]) fail2("\u0627\u0644\u062D\u0627\u0644\u0629 \u063A\u064A\u0631 \u0645\u0648\u062C\u0648\u062F\u0629", 404);
@@ -3382,7 +3488,7 @@ function decodeImage(input) {
 }
 async function handleAttachments(adapter2, input, uid) {
   const phone3 = phone(input.phone), write = input.action === "attachmentUpload";
-  const state = await adapter2.read(), role2 = authorize3(state, uid, phone3, write), records = state.attachments?.[phone3] || {};
+  const state = await adapter2.read(), role2 = authorize4(state, uid, phone3, write), records = state.attachments?.[phone3] || {};
   if (input.action === "attachmentList") return Object.values(records).map(({ key, byUid, ...item2 }) => ({ ...item2, canDelete: can(role2, "attachments.delete") || byUid === uid && can(role2, "attachments.own.delete") }));
   if (input.action === "attachmentUpload") {
     if (!adapter2.uploadAttachment) fail2("\u062A\u062E\u0632\u064A\u0646 \u0627\u0644\u062A\u0642\u0627\u0631\u064A\u0631 \u063A\u064A\u0631 \u0645\u0647\u064A\u0623", 503);
@@ -3415,7 +3521,7 @@ async function handleAttachments(adapter2, input, uid) {
     await adapter2.uploadAttachment(id2, bytes, input.mime);
     try {
       await adapter2.mutate((original) => {
-        authorize3(original, uid, phone3, true);
+        authorize4(original, uid, phone3, true);
         const s = structuredClone(original);
         s.attachments ||= {};
         const items = s.attachments[phone3] ||= {};
@@ -3444,7 +3550,7 @@ async function handleAttachments(adapter2, input, uid) {
   if (input.action === "attachmentDelete") {
     if (!can(role2, "attachments.delete") && !(item.byUid === uid && can(role2, "attachments.own.delete"))) fail2("\u064A\u0645\u0643\u0646 \u0644\u0644\u0645\u0645\u0631\u0636\u0629 \u062D\u0630\u0641 \u0627\u0644\u0635\u0648\u0631 \u0627\u0644\u062A\u064A \u0631\u0641\u0639\u062A\u0647\u0627 \u0641\u0642\u0637", 403);
     await adapter2.mutate((original) => {
-      const currentRole = authorize3(original, uid, phone3);
+      const currentRole = authorize4(original, uid, phone3);
       const s = structuredClone(original);
       const current = s.attachments?.[phone3]?.[input.id];
       if (current) {
@@ -3490,24 +3596,25 @@ function review(state, branch2, proposed) {
 
 // supabase/functions/clinic-api/service.js
 function createService(baseAdapter) {
-  return async function handle9(input, uid, client = "local") {
+  return async function handle10(input, uid, client = "local") {
     const { action } = input || {};
-    if (actions.includes(action)) return handle2(baseAdapter, input, uid);
+    if (actions.includes(action)) return handle3(baseAdapter, input, uid);
     const adapter2 = { ...baseAdapter, mutate: (fn) => baseAdapter.mutate((original) => {
       const before = structuredClone(original);
       return record(before, reconcile(before, fn(original)), input, uid);
     }) };
-    if (["trainingYearPreview", "trainingYearSeed", "trainingYearPurge"].includes(action)) return handle(adapter2, input, uid);
-    if (["backupRehearsal", "backupRehearsalStatus"].includes(action)) return handle4(adapter2, input, uid);
+    if (["trainingCleanupPreview", "trainingCleanupApply"].includes(action)) return handle(adapter2, input, uid);
+    if (["trainingYearPreview", "trainingYearSeed", "trainingYearPurge"].includes(action)) return handle2(adapter2, input, uid);
+    if (["backupRehearsal", "backupRehearsalStatus"].includes(action)) return handle5(adapter2, input, uid);
     if (action === "systemVersion") {
       const s = await adapter2.read();
       if (role(s, uid).r !== "admin") fail2("\u0639\u0631\u0636 \u0625\u0635\u062F\u0627\u0631 \u0627\u0644\u0646\u0638\u0627\u0645 \u0645\u062A\u0627\u062D \u0644\u0644\u0623\u062F\u0645\u0646 \u0641\u0642\u0637", 403);
       return release_default;
     }
-    if (action === "refreshClinicColors") return handle3(adapter2, input, uid);
-    if (actions2.includes(action)) return handle5(adapter2, input, uid);
-    if (actions3.includes(action)) return handle6(adapter2, input, uid, client);
-    if (["importStageStart", "importStagePart", "importStagePreview", "importStageApply", "importStageCancel"].includes(action)) return handle7(adapter2, input, uid);
+    if (action === "refreshClinicColors") return handle4(adapter2, input, uid);
+    if (actions2.includes(action)) return handle6(adapter2, input, uid);
+    if (actions3.includes(action)) return handle7(adapter2, input, uid, client);
+    if (["importStageStart", "importStagePart", "importStagePreview", "importStageApply", "importStageCancel"].includes(action)) return handle8(adapter2, input, uid);
     if (action === "normalizeDemoNames") {
       let summary;
       await adapter2.mutate((s) => {
@@ -3534,7 +3641,7 @@ function createService(baseAdapter) {
     if (["attachmentList", "attachmentUpload", "attachmentRead", "attachmentDelete"].includes(action)) return handleAttachments(adapter2, input, uid);
     const readFields = (fields, day = null, entity = null) => adapter2.readFields ? adapter2.readFields(fields, day, entity) : adapter2.read();
     if (action === "organizeTrainingPreview" || action === "organizeTrainingApply") {
-      const plan3 = preview2(await adapter2.read(), uid, input.accounts), previewToken = JSON.stringify(plan3);
+      const plan3 = preview3(await adapter2.read(), uid, input.accounts), previewToken = JSON.stringify(plan3);
       if (action === "organizeTrainingPreview") return { ...plan3, previewToken };
       if (input.previewToken !== previewToken) fail2("\u062A\u063A\u064A\u0631\u062A \u0627\u0644\u062D\u0633\u0627\u0628\u0627\u062A \u0623\u0648 \u0627\u0644\u062D\u0627\u0644\u0627\u062A\u061B \u0623\u0639\u062F \u0627\u0644\u0645\u0639\u0627\u064A\u0646\u0629", 409);
       if (plan3.missing) fail2("\u0627\u0633\u062A\u0648\u0631\u062F \u0627\u0644\u062D\u0627\u0644\u0627\u062A \u0627\u0644\u062A\u062F\u0631\u064A\u0628\u064A\u0629 \u0627\u0644\u0646\u0627\u0642\u0635\u0629 \u0623\u0648\u0644\u064B\u0627. \u0627\u0644\u0639\u062F\u062F \u0627\u0644\u0646\u0627\u0642\u0635: " + plan3.missing, 409);
@@ -3544,7 +3651,7 @@ function createService(baseAdapter) {
         try {
           const current = await adapter2.read();
           if (JSON.stringify(current.roles[item.uid]) !== JSON.stringify(item.before)) fail2("\u062A\u063A\u064A\u0631 \u0627\u0644\u062D\u0633\u0627\u0628 \u0623\u062B\u0646\u0627\u0621 \u0627\u0644\u062A\u0646\u0641\u064A\u0630", 409);
-          await handle9({ action: "userSave", uid: item.uid, role: item.role }, uid, client);
+          await handle10({ action: "userSave", uid: item.uid, role: item.role }, uid, client);
           results.push({ username: item.role.u, ok: true });
         } catch (e) {
           results.push({ username: item.role.u, ok: false, error: e.status ? e.message : "\u062A\u0639\u0630\u0631 \u062A\u062D\u062F\u064A\u062B \u0627\u0644\u062D\u0633\u0627\u0628" });
@@ -3566,16 +3673,16 @@ function createService(baseAdapter) {
           if (role(current, uid).r !== "admin") fail2("\u0627\u0646\u062A\u0647\u062A \u0635\u0644\u0627\u062D\u064A\u0629 \u0627\u0644\u0623\u062F\u0645\u0646", 403);
           if (item.uid && JSON.stringify(current.roles[item.uid]) !== JSON.stringify(item.before)) fail2("\u062A\u063A\u064A\u0631 \u0627\u0644\u062D\u0633\u0627\u0628 \u0623\u062B\u0646\u0627\u0621 \u0627\u0644\u062A\u0646\u0641\u064A\u0630", 409);
           if (item.create) {
-            await handle9({ action: "userCreate", u: item.username, p: input.password, role: item.role }, uid, client);
+            await handle10({ action: "userCreate", u: item.username, p: input.password, role: item.role }, uid, client);
           } else {
             if (item.role.r === "sec") {
-              const result = await handle9({ action: "userCredentials", uid: item.uid, username: item.username, password: input.password }, uid, client);
+              const result = await handle10({ action: "userCredentials", uid: item.uid, username: item.username, password: input.password }, uid, client);
               credentialsSaved = true;
               if (result.warning) results.push({ username: item.username, warning: result.warning });
             }
             const latest = await adapter2.read(), expected = credentialsSaved ? { ...item.before, u: item.username } : item.before;
             if (JSON.stringify(latest.roles[item.uid]) !== JSON.stringify(expected)) fail2("\u062A\u063A\u064A\u0631\u062A \u0627\u0644\u0635\u0644\u0627\u062D\u064A\u0627\u062A \u0623\u062B\u0646\u0627\u0621 \u0627\u0644\u062A\u0646\u0641\u064A\u0630\u061B \u0623\u0639\u062F \u0627\u0644\u0645\u0639\u0627\u064A\u0646\u0629", 409);
-            await handle9({ action: "userSave", uid: item.uid, role: item.role }, uid, client);
+            await handle10({ action: "userSave", uid: item.uid, role: item.role }, uid, client);
           }
           results.push({ username: item.username, ok: true });
         } catch (e) {
@@ -3687,7 +3794,7 @@ function createService(baseAdapter) {
     if (action === "schedulePreview") {
       const state = await adapter2.read();
       requirePermission(role(state, uid), "clinic.manage");
-      return { ...review(state, input.branch, input.schedule), ...preview(state, input.branch, input.schedule) };
+      return { ...review(state, input.branch, input.schedule), ...preview2(state, input.branch, input.schedule) };
     }
     if (action === "branchDaysSet") {
       await adapter2.mutate((original) => {
@@ -3884,7 +3991,7 @@ function createService(baseAdapter) {
       const state = await adapter2.read(), old = state.roles?.[input.uid];
       mutate(state, uid, { ...input, role: { ...input.role, u: old?.u } }, core_exports);
       const next = validateRole(input.role, fail2, branchIds(state));
-      if (next.u !== old.u) await handle9({ action: "userCredentials", uid: input.uid, username: next.u }, uid, client);
+      if (next.u !== old.u) await handle10({ action: "userCredentials", uid: input.uid, username: next.u }, uid, client);
       await adapter2.mutate((s) => mutate(s, uid, { ...input, role: next }, core_exports));
       return { ok: true, username: next.u };
     }
@@ -4017,7 +4124,7 @@ function createService(baseAdapter) {
 
 // supabase/functions/clinic-api/index.js
 var adapter = supabaseAdapter(Deno.env.get("SUPABASE_URL"), Deno.env.get("SUPABASE_SERVICE_ROLE_KEY"));
-var handle8 = createService(adapter);
+var handle9 = createService(adapter);
 var headers = { "Access-Control-Allow-Origin": "*", "Access-Control-Allow-Headers": "authorization,apikey,content-type,x-client-info,x-request-id", "Access-Control-Expose-Headers": "x-request-id", "Access-Control-Allow-Methods": "POST,OPTIONS", "Content-Type": "application/json; charset=utf-8", "Cache-Control": "no-store" };
 Deno.serve((req) => {
   const requestId = crypto.randomUUID();
@@ -4042,7 +4149,7 @@ Deno.serve((req) => {
         uid = await adapter.verify(token);
       }
       const client = req.headers.get("x-forwarded-for")?.split(",")[0].trim() || "unknown";
-      const data = await handle8(input, uid, client);
+      const data = await handle9(input, uid, client);
       console.info(JSON.stringify({ event: "clinic_request", requestId, action, status: 200, durationMs: Date.now() - started }));
       return new Response(JSON.stringify({ data }), { headers: responseHeaders });
     } catch (e) {
