@@ -1,3 +1,4 @@
+const yearEndTraining=require('./year-end-training.cjs');
 const release=require('./release.cjs');
 const requestNotifications=require('./request-notifications.cjs');
 const colorRefresh=require('./color-refresh.cjs');
@@ -24,6 +25,7 @@ function createService(baseAdapter) {
   const adapter={...baseAdapter,mutate:fn=>baseAdapter.mutate(original=>{
    const before=structuredClone(original);return history.record(before,scheduleTransfers.reconcile(before,fn(original)),input,uid);
   })};
+  if(['trainingYearPreview','trainingYearSeed','trainingYearPurge'].includes(action))return yearEndTraining.handle(adapter,input,uid);
   if(['backupRehearsal','backupRehearsalStatus'].includes(action))return backupRehearsal.handle(adapter,input,uid);
   if(action==='systemVersion'){const s=await adapter.read();if(core.role(s,uid).r!=='admin')core.fail('عرض إصدار النظام متاح للأدمن فقط',403);return release;}
   if(action==='refreshClinicColors')return colorRefresh.handle(adapter,input,uid);
@@ -133,7 +135,7 @@ function createService(baseAdapter) {
   if(action==='purgeDemo'){
    await adapter.mutate(original=>{
     perms.requirePermission(core.role(original,uid),'data.delete');const state=structuredClone(original),phones=new Set();
-    for(const rows of Object.values(state.bookings||{}))for(const [id,x] of Object.entries(rows))if(/^demo[-_]/.test(id)&&/^010000\d{5}$/.test(x.phone)){phones.add(x.phone);delete rows[id];}
+    for(const rows of Object.values(state.bookings||{}))for(const [id,x] of Object.entries(rows))if(!x.trainingBatch&&/^demo[-_]/.test(id)&&/^010000\d{5}$/.test(x.phone)){phones.add(x.phone);delete rows[id];}
     for(const p of phones){
      if(Object.values(state.bookings||{}).some(rows=>Object.values(rows).some(x=>x.phone===p)))continue;
      delete state.patients?.[p];delete state.files?.[p];delete state.complaints?.[p];

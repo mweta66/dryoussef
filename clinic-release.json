@@ -1,5 +1,5 @@
 {
-  "version": "2026.10.19.8",
+  "version": "2026.10.27.1",
   "apiContract": 1,
   "capabilities": [
     "pdfReports",
@@ -7,6 +7,7 @@
     "phoneChangeLookup",
     "patientRequestAlerts",
     "globalThemePresets",
-    "patientNotificationCenter"
+    "patientNotificationCenter",
+    "yearEndTrainingData"
   ]
 }

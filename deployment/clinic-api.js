@@ -107,6 +107,12 @@ function supabaseAdapter(url, secret, fetcher = fetch) {
     },
     deleteAttachment: async (id2) => call("/storage/v1/object/clinic-patient-reports", { method: "DELETE", body: JSON.stringify({ prefixes: [id2] }) }),
     read: async () => (await snapshot()).payload,
+    readRequestNotifications: async () => {
+      const selection = "roles:payload->roles,settings:payload->settings,appointmentRequests:payload->appointmentRequests,requestNotificationReads:payload->requestNotificationReads";
+      const rows = await call("/rest/v1/clinic_state?id=eq.true&select=" + encodeURIComponent(selection));
+      if (!rows?.[0]) throw Error("Clinic schema is not initialized");
+      return rows[0];
+    },
     readFields: async (fields, day = null, entity = null) => rpc("clinic_read_slice", { fields, selected_day: day, entity }),
     readHistory: async (p) => rpc("clinic_patient_history", { patient_phone: p }),
     readDay: async (day) => rpc("clinic_read_day", { selected_day: day }),
@@ -175,9 +181,6 @@ function supabaseAdapter(url, secret, fetcher = fetch) {
     }
   };
 }
-
-// supabase/functions/clinic-api/release.js
-var release_default = { "version": "2026.10.19.7", "apiContract": 1, "capabilities": ["pdfReports", "splitBackup", "phoneChangeLookup", "patientRequestAlerts", "globalThemePresets"] };
 
 // supabase/functions/clinic-api/core.js
 var core_exports = {};
@@ -551,8 +554,8 @@ function canExamine(state, d, b) {
 function assertExamine(state, d, b) {
   if (!canExamine(state, d, b)) fail2("\u0627\u0644\u0637\u0628\u064A\u0628 \u0645\u062A\u0648\u0627\u062C\u062F \u0623\u0648 \u0644\u062F\u064A\u0647 \u062C\u0644\u0633\u0629 \u0643\u0634\u0641 \u0641\u064A \u0627\u0644\u0641\u0631\u0639 \u0627\u0644\u0622\u062E\u0631. \u0623\u0646\u0647\u0650 \u0627\u0644\u062C\u0644\u0633\u0629 \u0627\u0644\u062D\u0627\u0644\u064A\u0629 \u0648\u062D\u062F\u062F \u0641\u0631\u0639 \u0627\u0644\u062A\u0648\u0627\u062C\u062F \u0623\u0648\u0644\u064B\u0627.", 409);
 }
-function queueTrack(state, list2, x, clock = Date.now(), prepared) {
-  const ordered = prepared?.ordered || list2.filter((y) => y.b === x.b).sort(queueOrder), active = prepared ? prepared.active : ordered.find((y) => y.s === "exam"), waiting = prepared?.waiting || ordered.filter((y) => y.s === "wait");
+function queueTrack(state, list3, x, clock = Date.now(), prepared) {
+  const ordered = prepared?.ordered || list3.filter((y) => y.b === x.b).sort(queueOrder), active = prepared ? prepared.active : ordered.find((y) => y.s === "exam"), waiting = prepared?.waiting || ordered.filter((y) => y.s === "wait");
   const avg = Math.max(1, Math.min(180, Number(state.settings?.avg) || 15)), index = Math.max(0, prepared ? prepared.positions.get(x.id) ?? 0 : waiting.findIndex((y) => y.id === x.id));
   const selected = prepared ? prepared.presence : presence(state, x.date), session2 = state.sessions?.[x.date + "_" + x.b], blocked = session2 && session2.status !== "running" || selected && selected !== x.b;
   const started = !blocked && active && (prepared ? prepared.isToday : x.date === today(new Date(clock))) && Number.isFinite(Date.parse(active.startedAt)), remaining = started ? Math.max(0, avg * 6e4 - (clock - Date.parse(active.startedAt))) : avg * 6e4;
@@ -563,13 +566,13 @@ function rebuild(state) {
   state.track = {};
   const clock = Date.now(), currentDay = today(new Date(clock));
   for (const [d, rows] of Object.entries(state.bookings || {})) {
-    const list2 = Object.values(rows || {}), selected = presence(state, d);
+    const list3 = Object.values(rows || {}), selected = presence(state, d);
     for (const b of branchIds(state)) {
-      const q = list2.filter((x) => x.b === b).sort(queueOrder);
+      const q = list3.filter((x) => x.b === b).sort(queueOrder);
       const waiting = q.filter((x) => x.s === "wait"), prepared = { presence: selected, ordered: q, active: q.find((x) => x.s === "exam"), waiting, positions: new Map(waiting.map((x, i) => [x.id, i])), isToday: d === currentDay };
       for (const x of q) {
         state.track[d] ||= {};
-        state.track[d][x.phone] = queueTrack(state, list2, x, clock, prepared);
+        state.track[d][x.phone] = queueTrack(state, list3, x, clock, prepared);
       }
     }
   }
@@ -676,9 +679,9 @@ function commit(state, uid, puts, dels, now = today()) {
   for (const key of advance) {
     const d = key.slice(0, 10), b = key.slice(11);
     if (!canExamine(state, d, b) || d !== now || state.sessions?.[key] && state.sessions[key].status !== "running") continue;
-    const list2 = Object.values(state.bookings[d] || {}).filter((x) => x.b === b);
-    if (list2.some((x) => x.s === "exam")) continue;
-    const next = list2.filter((x) => x.s === "wait").sort(queueOrder)[0];
+    const list3 = Object.values(state.bookings[d] || {}).filter((x) => x.b === b);
+    if (list3.some((x) => x.s === "exam")) continue;
+    const next = list3.filter((x) => x.s === "wait").sort(queueOrder)[0];
     if (next) {
       next.s = "exam";
       next.startedAt = (/* @__PURE__ */ new Date()).toISOString();
@@ -776,6 +779,358 @@ function lookup(state, p, now = today(), clock = Date.now()) {
 }
 var coreExports = { allowed, publicSettings, branchIds, presence, canExamine, assertExamine, phone, today, date, role, booking, commit, read: read2, patch: patch2, lookup, rebuild, fail: fail2, schedule: schedule2, queueOrder, queueTrack };
 
+// supabase/functions/clinic-api/schedule.js
+function validDate(date2) {
+  const parsed = /* @__PURE__ */ new Date(date2 + "T12:00:00Z");
+  return /^\d{4}-\d{2}-\d{2}$/.test(date2) && Number.isFinite(parsed.getTime()) && parsed.toISOString().slice(0, 10) === date2;
+}
+function availability(registry, schedules, date2) {
+  const result = { scheduled: [], flexible: [] };
+  if (!validDate(date2)) return result;
+  const day = (/* @__PURE__ */ new Date(date2 + "T12:00:00Z")).getUTCDay();
+  for (const [id2, branch2] of Object.entries(registry)) {
+    if (branch2.enabled === false) continue;
+    const schedule3 = schedules[id2];
+    if (Object.hasOwn(schedule3?.exceptions || {}, date2)) {
+      const slots2 = schedule3.exceptions[date2];
+      if (slots2.length) result.scheduled.push({ id: id2, slots: slots2 });
+      continue;
+    }
+    if (schedule3?.mode === "days") {
+      if (schedule3.d?.includes(day)) result.scheduled.push({ id: id2, slots: [], dayOnly: true });
+      continue;
+    }
+    if (!schedule3 || schedule3.mode === "flexible") {
+      result.flexible.push(id2);
+      continue;
+    }
+    const slots = schedule3.mode === "weekly" ? schedule3.weekly?.[day] || [] : schedule3.d?.includes(day) ? [{ f: schedule3.f, t: schedule3.t }] : [];
+    if (slots.length) result.scheduled.push({ id: id2, slots });
+  }
+  return result;
+}
+function choose(registry, schedules, date2, time2) {
+  const items = availability(registry, schedules, date2).scheduled;
+  if (items.length === 1) return items[0].id;
+  if (time2 && items.every((item) => !item.dayOnly)) {
+    const active = items.filter((item) => item.slots.some((slot) => slot.f <= time2 && time2 < slot.t));
+    if (active.length === 1) return active[0].id;
+  }
+  return null;
+}
+
+// supabase/functions/clinic-api/demo-profiles.js
+var profiles = [
+  { reason: "\u0645\u062A\u0627\u0628\u0639\u0629 \u062D\u0645\u0644", text: "\u0645\u062A\u0627\u0628\u0639\u0629 \u062F\u0648\u0631\u064A\u0629 \u0644\u0644\u062D\u0645\u0644 \u0645\u0639 \u063A\u062B\u064A\u0627\u0646 \u0645\u062A\u0642\u0637\u0639 \u062F\u0648\u0646 \u0646\u0632\u064A\u0641 \u0623\u0648 \u0623\u0644\u0645 \u0634\u062F\u064A\u062F.", diagnosis: "\u0645\u062A\u0627\u0628\u0639\u0629 \u062D\u0645\u0644 \u062F\u0627\u062E\u0644 \u0627\u0644\u0631\u062D\u0645", treatment: "\u0627\u0633\u062A\u0645\u0631\u0627\u0631 \u0627\u0644\u0645\u062A\u0627\u0628\u0639\u0629 \u0627\u0644\u062F\u0648\u0631\u064A\u0629 \u0648\u0645\u0631\u0627\u062C\u0639\u0629 \u0646\u062A\u0627\u0626\u062C \u0627\u0644\u062A\u062D\u0627\u0644\u064A\u0644 \u0627\u0644\u0645\u0637\u0644\u0648\u0628\u0629.", notes: "\u0645\u0631\u0627\u062C\u0639\u0629 \u0635\u0648\u0631\u0629 \u0627\u0644\u062F\u0645 \u0648\u062A\u062D\u0644\u064A\u0644 \u0627\u0644\u0628\u0648\u0644 \u0648\u0627\u0644\u0633\u0648\u0646\u0627\u0631 \u0641\u064A \u0627\u0644\u0632\u064A\u0627\u0631\u0629 \u0627\u0644\u0642\u0627\u062F\u0645\u0629." },
+  { reason: "\u0627\u0636\u0637\u0631\u0627\u0628 \u0627\u0644\u062F\u0648\u0631\u0629 \u0627\u0644\u0634\u0647\u0631\u064A\u0629", text: "\u0639\u062F\u0645 \u0627\u0646\u062A\u0638\u0627\u0645 \u0627\u0644\u062F\u0648\u0631\u0629 \u062E\u0644\u0627\u0644 \u0627\u0644\u0623\u0634\u0647\u0631 \u0627\u0644\u062B\u0644\u0627\u062B\u0629 \u0627\u0644\u0623\u062E\u064A\u0631\u0629 \u0645\u0639 \u062A\u0642\u0644\u0635\u0627\u062A \u0645\u062A\u0648\u0633\u0637\u0629.", diagnosis: "\u0627\u0636\u0637\u0631\u0627\u0628 \u0628\u0627\u0644\u062F\u0648\u0631\u0629 \u0627\u0644\u0634\u0647\u0631\u064A\u0629 \u0642\u064A\u062F \u0627\u0644\u062A\u0642\u064A\u064A\u0645", treatment: "\u062A\u0633\u062C\u064A\u0644 \u0645\u0648\u0627\u0639\u064A\u062F \u0627\u0644\u062F\u0648\u0631\u0629 \u0648\u0627\u0633\u062A\u0643\u0645\u0627\u0644 \u0627\u0644\u0641\u062D\u0648\u0635\u0627\u062A \u062B\u0645 \u0645\u0631\u0627\u062C\u0639\u0629 \u0627\u0644\u0646\u062A\u0627\u0626\u062C.", notes: "\u0637\u0644\u0628 \u0633\u0648\u0646\u0627\u0631 \u0644\u0644\u062D\u0648\u0636 \u0648\u062A\u062D\u0627\u0644\u064A\u0644 \u062D\u0633\u0628 \u0627\u0644\u062A\u0642\u064A\u064A\u0645 \u0627\u0644\u0625\u0643\u0644\u064A\u0646\u064A\u0643\u064A." },
+  { reason: "\u062A\u0623\u062E\u0631 \u0627\u0644\u0625\u0646\u062C\u0627\u0628", text: "\u0645\u0631\u0627\u062C\u0639\u0629 \u0644\u0628\u062D\u062B \u062A\u0623\u062E\u0631 \u062D\u062F\u0648\u062B \u0627\u0644\u062D\u0645\u0644 \u0648\u0645\u0646\u0627\u0642\u0634\u0629 \u0627\u0644\u0641\u062D\u0648\u0635\u0627\u062A \u0627\u0644\u0633\u0627\u0628\u0642\u0629.", diagnosis: "\u062A\u0642\u064A\u064A\u0645 \u0623\u0633\u0628\u0627\u0628 \u062A\u0623\u062E\u0631 \u0627\u0644\u0625\u0646\u062C\u0627\u0628", treatment: "\u0627\u0633\u062A\u0643\u0645\u0627\u0644 \u062A\u0642\u064A\u064A\u0645 \u0627\u0644\u0632\u0648\u062C\u064A\u0646 \u0648\u062A\u062D\u062F\u064A\u062F \u0627\u0644\u062E\u0637\u0629 \u0628\u0639\u062F \u0645\u0631\u0627\u062C\u0639\u0629 \u0627\u0644\u0641\u062D\u0648\u0635\u0627\u062A.", notes: "\u062A\u0645\u062A \u0645\u0631\u0627\u062C\u0639\u0629 \u0627\u0644\u062A\u0627\u0631\u064A\u062E \u0627\u0644\u0645\u0631\u0636\u064A \u0648\u0634\u0631\u062D \u062E\u0637\u0648\u0627\u062A \u0627\u0644\u062A\u0642\u064A\u064A\u0645." },
+  { reason: "\u0645\u0631\u0627\u062C\u0639\u0629 \u0646\u062A\u0627\u0626\u062C \u0627\u0644\u062A\u062D\u0627\u0644\u064A\u0644", text: "\u062D\u0636\u0648\u0631 \u0644\u0645\u0631\u0627\u062C\u0639\u0629 \u0627\u0644\u062A\u062D\u0627\u0644\u064A\u0644 \u0648\u0627\u0644\u0633\u0648\u0646\u0627\u0631 \u062F\u0648\u0646 \u0623\u0639\u0631\u0627\u0636 \u062C\u062F\u064A\u062F\u0629.", diagnosis: "\u0645\u062A\u0627\u0628\u0639\u0629 \u0646\u062A\u0627\u0626\u062C \u0627\u0644\u0641\u062D\u0648\u0635\u0627\u062A", treatment: "\u0645\u062A\u0627\u0628\u0639\u0629 \u0648\u0641\u0642 \u0646\u062A\u0627\u0626\u062C \u0627\u0644\u0641\u062D\u0648\u0635\u0627\u062A \u0648\u0627\u0644\u062A\u0642\u064A\u064A\u0645 \u0641\u064A \u0627\u0644\u0632\u064A\u0627\u0631\u0629.", notes: "\u0645\u0642\u0627\u0631\u0646\u0629 \u0627\u0644\u0646\u062A\u0627\u0626\u062C \u0627\u0644\u062D\u0627\u0644\u064A\u0629 \u0628\u0627\u0644\u0633\u0627\u0628\u0642\u0629 \u0648\u0645\u0646\u0627\u0642\u0634\u0629 \u0627\u0644\u062E\u0637\u0629 \u0645\u0639 \u0627\u0644\u0645\u0631\u064A\u0636\u0629." },
+  { reason: "\u0623\u0644\u0645 \u0623\u0633\u0641\u0644 \u0627\u0644\u0628\u0637\u0646", text: "\u0623\u0644\u0645 \u0645\u062A\u0642\u0637\u0639 \u0623\u0633\u0641\u0644 \u0627\u0644\u0628\u0637\u0646 \u0645\u0646\u0630 \u0639\u062F\u0629 \u0623\u064A\u0627\u0645 \u062F\u0648\u0646 \u062D\u0631\u0627\u0631\u0629 \u0623\u0648 \u0642\u064A\u0621 \u0645\u0633\u062A\u0645\u0631.", diagnosis: "\u0623\u0644\u0645 \u0628\u0627\u0644\u062D\u0648\u0636 \u0642\u064A\u062F \u0627\u0644\u062A\u0642\u064A\u064A\u0645", treatment: "\u0627\u0633\u062A\u0643\u0645\u0627\u0644 \u0627\u0644\u0641\u062D\u0635 \u0648\u0627\u0644\u0633\u0648\u0646\u0627\u0631 \u0648\u0645\u0631\u0627\u062C\u0639\u0629 \u0639\u0627\u062C\u0644\u0629 \u0639\u0646\u062F \u0632\u064A\u0627\u062F\u0629 \u0627\u0644\u0623\u0644\u0645 \u0623\u0648 \u062D\u062F\u0648\u062B \u0646\u0632\u064A\u0641.", notes: "\u0645\u0631\u0627\u062C\u0639\u0629 \u0627\u0644\u0623\u0639\u0631\u0627\u0636 \u0627\u0644\u0645\u0635\u0627\u062D\u0628\u0629 \u0648\u0627\u0644\u062A\u0627\u0631\u064A\u062E \u0627\u0644\u0645\u0631\u0636\u064A \u0642\u0628\u0644 \u062A\u062D\u062F\u064A\u062F \u0627\u0644\u0639\u0644\u0627\u062C." },
+  { reason: "\u0645\u062A\u0627\u0628\u0639\u0629 \u0628\u0639\u062F \u0627\u0644\u0648\u0644\u0627\u062F\u0629", text: "\u0645\u062A\u0627\u0628\u0639\u0629 \u0628\u0639\u062F \u0627\u0644\u0648\u0644\u0627\u062F\u0629 \u0648\u0645\u0646\u0627\u0642\u0634\u0629 \u0627\u0644\u062A\u0639\u0627\u0641\u064A \u0648\u0627\u0644\u0631\u0636\u0627\u0639\u0629 \u0648\u062A\u0646\u0638\u064A\u0645 \u0627\u0644\u0623\u0633\u0631\u0629.", diagnosis: "\u0645\u062A\u0627\u0628\u0639\u0629 \u0645\u0627 \u0628\u0639\u062F \u0627\u0644\u0648\u0644\u0627\u062F\u0629", treatment: "\u0625\u0631\u0634\u0627\u062F\u0627\u062A \u0627\u0644\u062A\u0639\u0627\u0641\u064A \u0648\u0627\u0644\u0645\u062A\u0627\u0628\u0639\u0629 \u0648\u0645\u0646\u0627\u0642\u0634\u0629 \u0627\u0644\u062E\u064A\u0627\u0631\u0627\u062A \u0627\u0644\u0645\u0646\u0627\u0633\u0628\u0629 \u0644\u062A\u0646\u0638\u064A\u0645 \u0627\u0644\u0623\u0633\u0631\u0629.", notes: "\u062A\u0645\u062A \u0645\u0646\u0627\u0642\u0634\u0629 \u0627\u0644\u062A\u063A\u0630\u064A\u0629 \u0648\u0627\u0644\u0631\u0636\u0627\u0639\u0629 \u0648\u0639\u0644\u0627\u0645\u0627\u062A \u062A\u0633\u062A\u062F\u0639\u064A \u0627\u0644\u0645\u0631\u0627\u062C\u0639\u0629." }
+];
+function clinicalProfile(i) {
+  const profile = profiles[i % profiles.length];
+  return { profile, bookingNote: ["", "\u064A\u0641\u0636\u0644 \u0627\u0644\u062A\u0648\u0627\u0635\u0644 \u0628\u0639\u062F \u0627\u0644\u0638\u0647\u0631", "\u0627\u0644\u062D\u0636\u0648\u0631 \u0642\u0628\u0644 \u0627\u0644\u0645\u0648\u0639\u062F \u0628\u0631\u0628\u0639 \u0633\u0627\u0639\u0629", "\u0645\u0631\u0627\u062C\u0639\u0629 \u0646\u062A\u0627\u0626\u062C \u0627\u0644\u0641\u062D\u0648\u0635\u0627\u062A \u0627\u0644\u0633\u0627\u0628\u0642\u0629"][i % 4], file: { n: profile.notes, allergies: i % 11 === 0 ? "\u062D\u0633\u0627\u0633\u064A\u0629 \u0645\u0646 \u0627\u0644\u0628\u0646\u0633\u0644\u064A\u0646" : "\u0644\u0627 \u062A\u0648\u062C\u062F \u062D\u0633\u0627\u0633\u064A\u0629 \u0645\u0639\u0631\u0648\u0641\u0629", chronic: i % 13 === 0 ? "\u0642\u0635\u0648\u0631 \u0628\u0627\u0644\u063A\u062F\u0629 \u0627\u0644\u062F\u0631\u0642\u064A\u0629 \u062A\u062D\u062A \u0627\u0644\u0645\u062A\u0627\u0628\u0639\u0629" : i % 17 === 0 ? "\u0627\u0631\u062A\u0641\u0627\u0639 \u0636\u063A\u0637 \u0627\u0644\u062F\u0645 \u062A\u062D\u062A \u0627\u0644\u0645\u062A\u0627\u0628\u0639\u0629" : "\u0644\u0627 \u062A\u0648\u062C\u062F \u0623\u0645\u0631\u0627\u0636 \u0645\u0632\u0645\u0646\u0629 \u0645\u0633\u062C\u0644\u0629", diagnosis: profile.diagnosis, treatment: profile.treatment } };
+}
+
+// supabase/functions/clinic-api/demo-names.js
+var first = ["\u0645\u0631\u064A\u0645", "\u0633\u0627\u0631\u0629", "\u0622\u064A\u0629", "\u0646\u0648\u0631", "\u0647\u0628\u0629", "\u0625\u064A\u0645\u0627\u0646", "\u0645\u0646\u0649", "\u062F\u0639\u0627\u0621", "\u0623\u0633\u0645\u0627\u0621", "\u0641\u0627\u0637\u0645\u0629", "\u064A\u0627\u0633\u0645\u064A\u0646", "\u0631\u0627\u0646\u064A\u0627", "\u062F\u064A\u0646\u0627", "\u0623\u0645\u0644", "\u0646\u062F\u0649", "\u0634\u064A\u0645\u0627\u0621", "\u0631\u062D\u0627\u0628", "\u0633\u0644\u0645\u0649", "\u0628\u0633\u0645\u0629", "\u062D\u0646\u0627\u0646"];
+var middle = ["\u0623\u062D\u0645\u062F", "\u0645\u062D\u0645\u062F", "\u0645\u062D\u0645\u0648\u062F", "\u0625\u0628\u0631\u0627\u0647\u064A\u0645", "\u0645\u0635\u0637\u0641\u0649", "\u062D\u0633\u0646", "\u062D\u0633\u064A\u0646", "\u062E\u0627\u0644\u062F", "\u0639\u0645\u0631\u0648", "\u0639\u0644\u064A", "\u0637\u0627\u0631\u0642", "\u0633\u0627\u0645\u062D", "\u0639\u0627\u062F\u0644", "\u0643\u0631\u064A\u0645", "\u064A\u0627\u0633\u0631", "\u0648\u0644\u064A\u062F", "\u062D\u0633\u0627\u0645", "\u0634\u0631\u064A\u0641", "\u0639\u0635\u0627\u0645", "\u0633\u0639\u064A\u062F"];
+var last = ["\u0639\u0628\u062F \u0627\u0644\u0644\u0647", "\u0627\u0644\u0633\u064A\u062F", "\u062D\u0633\u0646", "\u0645\u0646\u0635\u0648\u0631", "\u0639\u0648\u0636", "\u0627\u0644\u0646\u062C\u0627\u0631", "\u0633\u0644\u064A\u0645\u0627\u0646", "\u0634\u0627\u0647\u064A\u0646", "\u0645\u0631\u0633\u064A", "\u0635\u0627\u0644\u062D", "\u0639\u0628\u0627\u0633", "\u0641\u0624\u0627\u062F", "\u0643\u0645\u0627\u0644", "\u0632\u0643\u064A", "\u0639\u0645\u0631\u0627\u0646", "\u0627\u0644\u0634\u0627\u0630\u0644\u064A", "\u0639\u062B\u0645\u0627\u0646", "\u064A\u0648\u0633\u0641", "\u062D\u0645\u062F\u064A", "\u0639\u0628\u062F \u0627\u0644\u062D\u0645\u064A\u062F"];
+var placeholder = (name) => /^(?:حالة|حاله|مريضة|مريضه)\s+(?:اصطناعي?(?:ة|ه)?(?:\s|$)|صناعي?(?:ة|ه)?(?:\s|$)|تجريبي?(?:ة|ه)?(?:\s|$)|افتراضي?(?:ة|ه)?(?:\s|$)|[0-9٠-٩])/.test(String(name || "").trim()) || /^(?:demo|test|synthetic)\s+(?:patient|case)\b/i.test(String(name || ""));
+function egyptianName(index) {
+  let name = first[index % 20] + " " + middle[Math.floor(index / 20) % 20] + " " + last[(index * 7 + Math.floor(index / 20) + Math.floor(index / 400)) % 20];
+  for (let extra = Math.floor(index / 8e3); extra > 0; extra = Math.floor((extra - 1) / 20)) name += " " + last[(extra - 1) % 20];
+  return name;
+}
+function spouse(phone3) {
+  const i = Number(phone3.slice(-5)), jobs = ["\u0645\u0647\u0646\u062F\u0633", "\u0645\u062D\u0627\u0633\u0628", "\u0645\u062F\u0631\u0633", "\u0637\u0628\u064A\u0628", "\u0635\u064A\u062F\u0644\u064A", "\u0645\u0648\u0638\u0641 \u0625\u062F\u0627\u0631\u064A", "\u062A\u0627\u062C\u0631", "\u0645\u062D\u0627\u0645", "\u0641\u0646\u064A \u0643\u0647\u0631\u0628\u0627\u0621", "\u0635\u0627\u062D\u0628 \u0645\u0634\u0631\u0648\u0639"];
+  return { spouseName: middle[(i * 3 + 2) % 20] + " " + middle[(Math.floor(i / 20) + 5) % 20] + " " + last[(i * 7 + 3) % 20], spouseJob: jobs[i % jobs.length], spousePhone: "010001" + phone3.slice(-5) };
+}
+var legacyValues = /* @__PURE__ */ new Set([
+  "\u0628\u064A\u0627\u0646\u0627\u062A \u0627\u0635\u0637\u0646\u0627\u0639\u064A\u0629 \u0644\u0644\u0627\u062E\u062A\u0628\u0627\u0631 \u0641\u0642\u0637 \u2014 \u0644\u0627 \u062A\u0633\u062A\u062E\u062F\u0645 \u0644\u0644\u062A\u0648\u0627\u0635\u0644 \u0623\u0648 \u0627\u0644\u0639\u0644\u0627\u062C",
+  "\u0628\u064A\u0627\u0646\u0627\u062A \u0627\u0635\u0637\u0646\u0627\u0639\u064A\u0629 \u0644\u0644\u0627\u062E\u062A\u0628\u0627\u0631 \u0641\u0642\u0637 \u2014 \u0644\u0627 \u062A\u0633\u062A\u062E\u062F\u0645 \u0644\u0644\u062A\u0648\u0627\u0635\u0644",
+  "\u0628\u064A\u0627\u0646\u0627\u062A \u0627\u0635\u0637\u0646\u0627\u0639\u064A\u0629 \u0644\u0644\u0627\u062E\u062A\u0628\u0627\u0631 \u0641\u0642\u0637",
+  "\u0628\u064A\u0627\u0646\u0627\u062A \u062A\u062C\u0631\u064A\u0628\u064A\u0629 \u0641\u0642\u0637",
+  "\u0645\u0644\u0627\u062D\u0638\u0627\u062A \u0637\u0628\u064A\u0628 \u062A\u062C\u0631\u064A\u0628\u064A\u0629: \u0645\u0631\u0627\u062C\u0639\u0629 \u0627\u0644\u062A\u062D\u0627\u0644\u064A\u0644 \u0648\u0627\u0644\u0633\u0648\u0646\u0627\u0631. \u0644\u064A\u0633\u062A \u0628\u064A\u0627\u0646\u0627\u062A \u0645\u0631\u064A\u0636 \u062D\u0642\u064A\u0642\u064A.",
+  "\u0645\u0644\u0627\u062D\u0638\u0627\u062A \u062F\u0643\u062A\u0648\u0631 \u062A\u062C\u0631\u064A\u0628\u064A\u0629: \u0645\u062A\u0627\u0628\u0639\u0629 \u0627\u0644\u062A\u062D\u0627\u0644\u064A\u0644 \u0648\u0627\u0644\u0633\u0648\u0646\u0627\u0631 \u0641\u064A \u0627\u0644\u0632\u064A\u0627\u0631\u0629 \u0627\u0644\u0642\u0627\u062F\u0645\u0629.",
+  "\u0645\u0644\u0641 \u062A\u062C\u0631\u064A\u0628\u064A \u0644\u0627 \u064A\u064F\u0633\u062A\u062E\u062F\u0645 \u0644\u0644\u062A\u0634\u062E\u064A\u0635 \u0623\u0648 \u0627\u0644\u0639\u0644\u0627\u062C",
+  "\u062D\u0633\u0627\u0633\u064A\u0629 \u062A\u062C\u0631\u064A\u0628\u064A\u0629",
+  "\u0644\u0627 \u062A\u0648\u062C\u062F \u0628\u064A\u0627\u0646\u0627\u062A \u062A\u062C\u0631\u064A\u0628\u064A\u0629",
+  "\u0628\u064A\u0627\u0646\u0627\u062A \u0627\u0635\u0637\u0646\u0627\u0639\u064A\u0629",
+  "\u0633\u062C\u0644 \u062A\u062C\u0631\u064A\u0628\u064A",
+  "\u062A\u0634\u062E\u064A\u0635 \u062A\u062C\u0631\u064A\u0628\u064A \u0641\u0642\u0637",
+  "\u062A\u0634\u062E\u064A\u0635 \u062A\u062C\u0631\u064A\u0628\u064A",
+  "\u062E\u0637\u0629 \u062A\u062C\u0631\u064A\u0628\u064A\u0629 \u063A\u064A\u0631 \u0645\u062E\u0635\u0635\u0629 \u0644\u0644\u0627\u0633\u062A\u062E\u062F\u0627\u0645 \u0627\u0644\u0637\u0628\u064A",
+  "\u062E\u0637\u0629 \u062A\u062C\u0631\u064A\u0628\u064A\u0629",
+  "\u0634\u0643\u0648\u0649 \u062A\u062C\u0631\u064A\u0628\u064A\u0629 \u0644\u0645\u0631\u0627\u062C\u0639\u0629 \u0648\u0638\u0627\u0626\u0641 \u0627\u0644\u0645\u0644\u0641 \u0627\u0644\u0637\u0628\u064A",
+  "\u0645\u0644\u0627\u062D\u0638\u0629 \u0639\u0644\u0627\u062C \u062A\u062C\u0631\u064A\u0628\u064A\u0629 \u0641\u0642\u0637",
+  "\u0634\u0643\u0648\u0649 \u0627\u0635\u0637\u0646\u0627\u0639\u064A\u0629 \u0644\u0644\u0627\u062E\u062A\u0628\u0627\u0631",
+  "\u0645\u062A\u0627\u0628\u0639\u0629 \u062A\u062C\u0631\u064A\u0628\u064A\u0629",
+  "\u0634\u0643\u0648\u0649 \u062A\u062C\u0631\u064A\u0628\u064A\u0629 \u0644\u0645\u0631\u0627\u062C\u0639\u0629 \u0627\u0644\u0637\u0628\u064A\u0628",
+  "\u0639\u0644\u0627\u062C \u062A\u062C\u0631\u064A\u0628\u064A \u0645\u0633\u062C\u0644 \u0644\u0644\u0627\u062E\u062A\u0628\u0627\u0631 \u0641\u0642\u0637"
+]);
+var legacyText = (value) => typeof value === "string" && legacyValues.has(value.trim());
+function normalize2(original, uid) {
+  requirePermission(role(original, uid), "data.import");
+  const s = structuredClone(original);
+  s.patients = { ...indexPatients({ ...s, patients: { ...s.patients } }).patients, ...s.patients };
+  const rows = Object.values(s.bookings || {}).flatMap(Object.values), phones = /* @__PURE__ */ new Set(), used = /* @__PURE__ */ new Set();
+  for (const [p, x] of Object.entries(s.patients || {})) {
+    if (placeholder(x.n)) phones.add(p);
+    else if (x.n) used.add(x.n);
+  }
+  for (const x of rows) {
+    if (placeholder(x.name)) phones.add(x.phone);
+    else if (x.name) used.add(x.name);
+  }
+  const samplePhones = /* @__PURE__ */ new Set([...phones, ...Object.keys(s.patients || {}).filter((p) => /^010000\d{5}$/.test(p)), ...rows.filter((x) => /^demo[-_]/.test(x.id || "")).map((x) => x.phone)]);
+  let serial = 0;
+  const summary = { patients: 0, bookings: 0, notifications: 0 };
+  for (const phone3 of [...phones].sort()) {
+    const patient = s.patients?.[phone3], proper = patient?.n && !placeholder(patient.n) ? patient.n : rows.find((x) => x.phone === phone3 && x.name && !placeholder(x.name))?.name;
+    let name = proper;
+    if (!name) {
+      do {
+        name = egyptianName(serial++);
+      } while (used.has(name));
+      used.add(name);
+    }
+    if (patient && placeholder(patient.n)) {
+      patient.n = name;
+      summary.patients++;
+    }
+    for (const row of rows) if (row.phone === phone3 && placeholder(row.name)) {
+      row.name = name;
+      row.rev = (row.rev || 0) + 1;
+      summary.bookings++;
+    }
+    for (const note of Object.values(s.inbox || {})) if (note.p === phone3 && placeholder(note.n)) {
+      note.n = name;
+      summary.notifications++;
+    }
+  }
+  summary.spouses = 0;
+  summary.clinicalFields = 0;
+  for (const [i, p] of [...samplePhones].sort().entries()) {
+    const patient = s.patients?.[p];
+    if (!patient) continue;
+    let changed = false;
+    for (const [k, v] of Object.entries(spouse(p))) if (patient[k] === void 0 || patient[k] === null) {
+      patient[k] = v;
+      changed = true;
+    }
+    if (changed) summary.spouses++;
+    const { profile, bookingNote, file } = clinicalProfile(i);
+    for (const row of rows) if (row.phone === p && legacyText(row.nt)) {
+      row.nt = bookingNote;
+      row.rev = (row.rev || 0) + 1;
+      summary.clinicalFields++;
+    }
+    const old = s.files?.[p];
+    let fileChanged = false;
+    if (old) {
+      for (const [k, v] of Object.entries(file)) if (legacyText(old[k])) {
+        old[k] = v;
+        fileChanged = true;
+        summary.clinicalFields++;
+      }
+    }
+    if (fileChanged) {
+      old.rev = (old.rev || 0) + 1;
+      old.t = (/* @__PURE__ */ new Date()).toISOString();
+    }
+    for (const complaint of Object.values(s.complaints?.[p] || {})) {
+      if ((legacyText(complaint.text) || legacyText(complaint.tx)) && !complaint.reason) {
+        complaint.reason = profile.reason;
+        summary.clinicalFields++;
+      }
+      for (const [k, v] of Object.entries({ reason: profile.reason, text: profile.text, tx: profile.treatment })) if (legacyText(complaint[k])) {
+        complaint[k] = v;
+        summary.clinicalFields++;
+      }
+      if (complaint.by === "\u0628\u064A\u0627\u0646\u0627\u062A \u062A\u062C\u0631\u064A\u0628\u064A\u0629") complaint.by = "nurse";
+    }
+    for (const note of Object.values(s.inbox || {})) if (note.p === p && note.by === "\u0628\u064A\u0627\u0646\u0627\u062A \u062A\u062C\u0631\u064A\u0628\u064A\u0629") note.by = "nurse";
+  }
+  s.settings ||= {};
+  s.settings.demoProfileVersion = 1;
+  s.settings.demoSpouseVersion = 1;
+  s.settings.demoNamesVersion = 1;
+  return { state: s, summary };
+}
+
+// supabase/functions/clinic-api/year-end-training.js
+function authorize(s, uid, key) {
+  if (role(s, uid).r !== "admin") fail2("\u0647\u0630\u0647 \u0627\u0644\u0639\u0645\u0644\u064A\u0629 \u0644\u0644\u0623\u062F\u0645\u0646 \u0641\u0642\u0637", 403);
+  requirePermission(role(s, uid), key);
+}
+function plan(s, uid) {
+  authorize(s, uid, "data.import");
+  const from = today(), to = from.slice(0, 4) + "-12-31", days = [], taggedBatches = new Set(Object.values(s.bookings || {}).flatMap((rows) => Object.values(rows).map((x) => x.trainingBatch)).filter(Boolean)), batches = Object.values(s.settings?.trainingYearBatches || {}).filter((x) => x.status === "active" || taggedBatches.has(x.id)).map((x) => ({ ...x, status: "active" })), active = batches.find((x) => x.year === from.slice(0, 4));
+  if (active) return { from, to, days, bookings: active.bookings, patients: active.patients, existingBatch: active, batches };
+  for (let d = from; d <= to; ) {
+    const available2 = availability(branches(s), s.settings?.sched || {}, d);
+    if (available2.scheduled.length > 1) fail2("\u062A\u0639\u0627\u0631\u0636 \u0641\u064A \u062C\u062F\u0648\u0644 \u0627\u0644\u0637\u0628\u064A\u0628 \u064A\u0648\u0645 " + d + "\u061B \u062D\u062F\u062F \u0641\u0631\u0639\u064B\u0627 \u0648\u0627\u062D\u062F\u064B\u0627 \u0642\u0628\u0644 \u0625\u0636\u0627\u0641\u0629 \u0627\u0644\u0628\u064A\u0627\u0646\u0627\u062A", 409);
+    for (const item of available2.scheduled) {
+      const limit = branches(s)[item.id].maxBookings || 0, existing = Object.values(s.bookings?.[d] || {}).filter((x) => x.b === item.id && x.s !== "cx").length, count = Math.max(0, Math.min(10, limit ? limit - existing : 10));
+      if (count) days.push({ date: d, branch: item.id, count });
+    }
+    const next = /* @__PURE__ */ new Date(d + "T12:00:00Z");
+    next.setUTCDate(next.getUTCDate() + 1);
+    d = next.toISOString().slice(0, 10);
+  }
+  return { from, to, days, bookings: days.reduce((n, d) => n + d.count, 0), patients: days.reduce((n, d) => n + d.count, 0), existingBatch: null, batches };
+}
+function seed(original, uid) {
+  const p = plan(original, uid);
+  if (p.existingBatch) return { state: original, summary: { ...p.existingBatch, alreadyExists: true } };
+  if (!p.bookings) fail2("\u0644\u0627 \u062A\u0648\u062C\u062F \u0623\u064A\u0627\u0645 \u0639\u0645\u0644 \u0645\u0639\u0644\u0646\u0629 \u0645\u062A\u0627\u062D\u0629 \u062D\u062A\u0649 \u0646\u0647\u0627\u064A\u0629 \u0627\u0644\u0639\u0627\u0645\u061B \u0631\u0627\u062C\u0639 \u0645\u0648\u0627\u0639\u064A\u062F \u0627\u0644\u0641\u0631\u0648\u0639", 409);
+  const s = structuredClone(original), at = (/* @__PURE__ */ new Date()).toISOString(), batch = "year-end-" + p.from.slice(0, 4) + "-" + Date.now() + "-" + Object.keys(original.settings?.trainingYearBatches || {}).length, by = role(s, uid).u;
+  for (const key of ["patients", "files", "complaints", "complaintSequences", "bookings", "sequences"]) s[key] ||= {};
+  const used = /* @__PURE__ */ new Set([...Object.keys(s.patients), ...Object.keys(s.files), ...Object.keys(s.complaints), ...Object.keys(s.attachments || {}), ...Object.values(s.bookings).flatMap((rows) => Object.values(rows).map((x) => x.phone)), ...Object.values(s.deletedBookings || {}).map((x) => x.booking?.phone)]);
+  for (const group of Object.values(s.recycleBin || {})) for (const item of group.items || []) {
+    if (["patients", "files", "complaints", "attachments"].includes(item.path?.[0])) used.add(item.path[1]);
+    if (item.path?.[0] === "bookings") {
+      if (item.before?.phone) used.add(item.before.phone);
+      else for (const x of Object.values(item.before || {})) if (x?.phone) used.add(x.phone);
+    }
+  }
+  let serial = 6e4, index = 0;
+  for (const day of p.days) for (let i = 0; i < day.count; i++) {
+    let phone3;
+    do {
+      phone3 = "010000" + String(++serial).padStart(5, "0");
+      if (serial > 99999) fail2("\u0646\u0641\u062F\u062A \u0623\u0631\u0642\u0627\u0645 \u0627\u0644\u062A\u062F\u0631\u064A\u0628 \u0627\u0644\u0645\u062A\u0627\u062D\u0629", 409);
+    } while (used.has(phone3));
+    used.add(phone3);
+    const name = egyptianName(index), spouse2 = spouse(phone3), { file } = clinicalProfile(index), id2 = "demo-year-" + batch + "-" + index, key = day.date + "_" + day.branch, rows = s.bookings[day.date] ||= {}, no = Math.max(s.sequences[key] || 0, 0, ...Object.values(rows).filter((x) => x.b === day.branch).map((x) => x.no || 0)) + 1;
+    rows[id2] = { id: id2, date: day.date, b: day.branch, no, name, phone: phone3, v: ["exam", "cons", "follow"][index % 3], s: "wait", nt: "", rev: 1, trainingBatch: batch, ...spouse2 };
+    s.sequences[key] = no;
+    s.patients[phone3] = { n: name, d: p.from, ...spouse2, trainingBatch: batch, rev: 1 };
+    s.files[phone3] = { ...file, t: at, rev: 1, trainingBatch: batch };
+    s.complaints[phone3] = {};
+    for (let visit = 0; visit < 3; visit++) {
+      const dt = /* @__PURE__ */ new Date(p.from + "T12:00:00Z");
+      dt.setUTCDate(dt.getUTCDate() - 42 + visit * 14);
+      const date2 = dt.toISOString().slice(0, 10), cid = id2 + "-visit-" + (visit + 1), profile = clinicalProfile(index + visit).profile;
+      s.complaints[phone3][cid] = { id: cid, no: visit + 1, date: date2, reason: profile.reason, text: profile.text, tx: profile.treatment, at: date2 + "T12:00:00.000Z", by, byUid: uid, trainingBatch: batch };
+    }
+    s.complaintSequences[phone3] = 3;
+    index++;
+  }
+  const summary = { id: batch, year: p.from.slice(0, 4), from: p.from, to: p.to, patients: index, bookings: index, complaints: index * 3, workingDays: p.days.length, status: "active", createdAt: at, createdBy: uid };
+  s.settings ||= {};
+  s.settings.trainingYearBatches ||= {};
+  s.settings.trainingYearBatches[batch] = summary;
+  rebuild(s);
+  return { state: s, summary };
+}
+function purge(original, uid, batch) {
+  authorize(original, uid, "data.delete");
+  const meta = original.settings?.trainingYearBatches?.[batch];
+  if (!meta) fail2("\u062F\u0641\u0639\u0629 \u0627\u0644\u062A\u062F\u0631\u064A\u0628 \u063A\u064A\u0631 \u0645\u0648\u062C\u0648\u062F\u0629", 404);
+  const s = structuredClone(original), summary = { patients: 0, bookings: 0, complaints: 0, preservedSharedPatients: 0 };
+  for (const rows of Object.values(s.bookings || {})) for (const [id2, x] of Object.entries(rows)) if (x.trainingBatch === batch) {
+    delete rows[id2];
+    summary.bookings++;
+  }
+  for (const [id2, x] of Object.entries(s.deletedBookings || {})) if (x.booking?.trainingBatch === batch) delete s.deletedBookings[id2];
+  for (const [phone3, patient] of Object.entries(s.patients || {})) {
+    const shared = Object.values(s.bookings || {}).some((rows) => Object.values(rows).some((x) => x.phone === phone3)) || Object.values(s.deletedBookings || {}).some((x) => x.booking?.phone === phone3);
+    for (const [id2, x] of Object.entries(s.complaints?.[phone3] || {})) if (x.trainingBatch === batch) {
+      delete s.complaints[phone3][id2];
+      summary.complaints++;
+    }
+    if (patient.trainingBatch !== batch) continue;
+    if (shared) {
+      summary.preservedSharedPatients++;
+      continue;
+    }
+    delete s.patients[phone3];
+    delete s.files?.[phone3];
+    delete s.complaints?.[phone3];
+    delete s.attachments?.[phone3];
+    for (const [id2, x] of Object.entries(s.inbox || {})) if (x.p === phone3) delete s.inbox[id2];
+    summary.patients++;
+  }
+  s.settings.trainingYearBatches[batch] = { ...meta, status: "purged", purgedAt: (/* @__PURE__ */ new Date()).toISOString(), purgedBy: uid };
+  rebuild(s);
+  return { state: s, summary };
+}
+async function handle(adapter2, input, uid) {
+  if (input.action === "trainingYearPreview") return plan(await adapter2.read(), uid);
+  const key = input.action === "trainingYearSeed" ? "SEED_YEAR_END_TRAINING" : "DELETE_YEAR_END_TRAINING";
+  if (input.confirmation !== key) fail2("\u0631\u0627\u062C\u0639 \u062A\u0623\u0643\u064A\u062F \u0627\u0644\u0639\u0645\u0644\u064A\u0629 \u0623\u0648\u0644\u064B\u0627");
+  let summary;
+  await adapter2.mutate((s) => {
+    const result = input.action === "trainingYearSeed" ? seed(s, uid) : purge(s, uid, input.batch);
+    summary = result.summary;
+    return result.state;
+  });
+  return { ok: true, ...summary };
+}
+
+// supabase/functions/clinic-api/release.js
+var release_default = { "version": "2026.10.27.1", "apiContract": 1, "capabilities": ["pdfReports", "splitBackup", "phoneChangeLookup", "patientRequestAlerts", "globalThemePresets", "patientNotificationCenter", "yearEndTrainingData"] };
+
+// supabase/functions/clinic-api/request-notifications.js
+import { createHash as createHash2 } from "node:crypto";
+var kinds = ["new", "reschedule", "cancel"];
+var actions = ["requestNotifications", "requestNotificationRead", "requestNotificationsReadAll"];
+var digest = (value) => createHash2("sha256").update(JSON.stringify(value)).digest("hex");
+function events(state, uid) {
+  const role2 = role(state, uid), readDetails = can(role2, "requests.read"), receipts = state.requestNotificationReads?.[uid] || {}, rows = [];
+  for (const request2 of Object.values(state.appointmentRequests || {})) {
+    if (!kinds.includes(request2.kind) || !allBranches(role2) && request2.branch !== role2.br) continue;
+    const common = { requestId: request2.id, kind: request2.kind, branch: request2.branch, date: request2.date, status: request2.status, canOpen: readDetails };
+    if (readDetails) Object.assign(common, { name: request2.name, phone: request2.phone, requestedDate: request2.requestedDate, requestedBranch: request2.requestedBranch });
+    const add = (suffix, event, at) => {
+      if (!Number.isFinite(Date.parse(at))) return;
+      const id2 = request2.id + ":" + suffix;
+      rows.push({ ...common, id: id2, event, at, readAt: receipts[id2] || null });
+    };
+    add("created", "created", request2.createdAt);
+    if (["confirmed", "rejected"].includes(request2.status) && request2.decidedAt) add("decision:" + request2.rev, request2.status, request2.decidedAt);
+  }
+  return rows.sort((a, b) => b.at.localeCompare(a.at) || b.id.localeCompare(a.id));
+}
+function readAllToken(rows, uid) {
+  return digest({ uid, ids: rows.map((x) => x.id) });
+}
+function list(state, uid, input) {
+  const rows = events(state, uid), kind = input.kind || "all", status = input.status || "all";
+  if (!["all", ...kinds].includes(kind) || !["all", "pending", "confirmed", "rejected"].includes(status) || input.unread !== void 0 && typeof input.unread !== "boolean") fail2("\u0641\u0644\u062A\u0631 \u0625\u0634\u0639\u0627\u0631\u0627\u062A \u063A\u064A\u0631 \u0635\u062D\u064A\u062D");
+  const page = input.page ?? 0;
+  if (!Number.isSafeInteger(page) || page < 0 || page > 1e5) fail2("\u0635\u0641\u062D\u0629 \u063A\u064A\u0631 \u0635\u062D\u064A\u062D\u0629");
+  const filtered = rows.filter((x) => (kind === "all" || x.kind === kind) && (status === "all" || x.status === status) && (!input.unread || !x.readAt));
+  const currentPage = Math.min(page, Math.max(0, Math.ceil(filtered.length / 30) - 1));
+  const pending = rows.filter((x) => x.event === "created" && x.status === "pending"), minutes = state.settings?.bookingRequests?.requestOverdueMinutes || 60;
+  return { latestId: rows[0]?.id || null, items: filtered.slice(currentPage * 30, (currentPage + 1) * 30), total: filtered.length, page: currentPage, pageSize: 30, unread: rows.filter((x) => !x.readAt).length, pending: pending.length, overdue: pending.filter((x) => Date.now() - Date.parse(x.at) >= minutes * 6e4).length, newBookings: pending.filter((x) => x.kind === "new").length, reschedule: pending.filter((x) => x.kind === "reschedule").length, cancellations: pending.filter((x) => x.kind === "cancel").length, readAllToken: readAllToken(rows, uid), serverAt: (/* @__PURE__ */ new Date()).toISOString() };
+}
+async function handle2(adapter2, input, uid) {
+  if (input.action === "requestNotifications") return list(await (adapter2.readRequestNotifications ? adapter2.readRequestNotifications() : adapter2.read()), uid, input);
+  if (input.action === "requestNotificationRead" && (typeof input.id !== "string" || input.id.length > 160 || typeof input.read !== "boolean")) fail2("\u0627\u062E\u062A\u0631 \u0625\u0634\u0639\u0627\u0631\u064B\u0627 \u0648\u062D\u0627\u0644\u0629 \u0642\u0631\u0627\u0621\u0629 \u0635\u062D\u064A\u062D\u0629");
+  if (input.action === "requestNotificationsReadAll" && typeof input.readAllToken !== "string") fail2("\u062D\u062F\u0651\u062B \u0627\u0644\u0625\u0634\u0639\u0627\u0631\u0627\u062A \u0623\u0648\u0644\u064B\u0627");
+  await adapter2.mutate((original) => {
+    const rows = events(original, uid), target = input.action === "requestNotificationRead" ? rows.filter((x) => x.id === input.id) : rows;
+    if (input.action === "requestNotificationRead" && !target.length) fail2("\u0627\u0644\u0625\u0634\u0639\u0627\u0631 \u063A\u064A\u0631 \u0645\u0648\u062C\u0648\u062F \u0641\u064A \u0646\u0637\u0627\u0642 \u062D\u0633\u0627\u0628\u0643", 404);
+    if (input.action === "requestNotificationsReadAll" && input.readAllToken !== readAllToken(rows, uid)) fail2("\u0648\u0635\u0644\u062A \u0625\u0634\u0639\u0627\u0631\u0627\u062A \u062C\u062F\u064A\u062F\u0629\u061B \u062D\u062F\u0651\u062B \u0627\u0644\u0642\u0627\u0626\u0645\u0629 \u0642\u0628\u0644 \u062A\u062D\u062F\u064A\u062F \u0627\u0644\u0643\u0644 \u0643\u0645\u0642\u0631\u0648\u0621", 409);
+    const state = structuredClone(original);
+    state.requestNotificationReads ||= {};
+    const reads = state.requestNotificationReads[uid] ||= {};
+    const at = (/* @__PURE__ */ new Date()).toISOString();
+    for (const x of target) {
+      if (input.read === false) delete reads[x.id];
+      else reads[x.id] = at;
+    }
+    const known = new Set(Object.values(state.appointmentRequests || {}).flatMap((x) => [x.id + ":created", x.id + ":decision:" + x.rev]));
+    for (const id2 of Object.keys(reads)) if (!known.has(id2)) delete reads[id2];
+    return state;
+  });
+  return { ok: true };
+}
+
 // supabase/functions/clinic-api/display-options.js
 var numbers = [["currentShare", 71, 60, 85], ["currentScale", 72, 60, 85], ["nextScale", 24, 12, 28], ["radius", 22, 0, 40], ["gap", 18, 8, 40], ["pollSeconds", 5, 5, 30], ["musicVolume", 18, 0, 100], ["callVolume", 85, 0, 100], ["musicTrack", 0, 0, 113]];
 var noticeNumbers = [["noticeFontSize", 18, 12, 48], ["noticeMaxWidth", 620, 160, 1e3], ["noticeBorderWidth", 2, 0, 8], ["noticeRadius", 12, 0, 48], ["noticePadding", 10, 4, 48], ["noticeNeonSize", 18, 0, 40]];
@@ -789,10 +1144,10 @@ function bad(message) {
   e.status = 400;
   throw e;
 }
-function validDate(value) {
+function validDate2(value) {
   return /^\d{4}-\d{2}-\d{2}$/.test(value) && Number.isFinite(Date.parse(value + "T12:00:00Z")) && (/* @__PURE__ */ new Date(value + "T12:00:00Z")).toISOString().slice(0, 10) === value;
 }
-function normalize2(input = {}, branches2 = []) {
+function normalize3(input = {}, branches2 = []) {
   if (!input || typeof input !== "object" || Array.isArray(input)) bad("\u0625\u0639\u062F\u0627\u062F\u0627\u062A \u0634\u0627\u0634\u0629 \u0627\u0644\u062F\u0648\u0631 \u063A\u064A\u0631 \u0635\u062D\u064A\u062D\u0629");
   const out = {};
   for (const [key, fallback, min, max] of numbers) {
@@ -813,8 +1168,8 @@ function normalize2(input = {}, branches2 = []) {
   out.dateMode = input.dateMode ?? "local";
   if (!["local", "today", "fixed"].includes(out.dateMode)) bad("\u0648\u0636\u0639 \u062A\u0627\u0631\u064A\u062E \u0627\u0644\u0634\u0627\u0634\u0629 \u063A\u064A\u0631 \u0635\u062D\u064A\u062D");
   out.date = input.date ?? "";
-  if (typeof out.date !== "string" || out.date !== "" && !validDate(out.date)) bad("\u062A\u0627\u0631\u064A\u062E \u0634\u0627\u0634\u0629 \u0627\u0644\u062F\u0648\u0631 \u063A\u064A\u0631 \u0635\u062D\u064A\u062D");
-  if (out.dateMode === "fixed" && !validDate(out.date)) bad("\u0627\u062E\u062A\u0631 \u062A\u0627\u0631\u064A\u062E\u064B\u0627 \u0635\u062D\u064A\u062D\u064B\u0627 \u0644\u062A\u062B\u0628\u064A\u062A \u0634\u0627\u0634\u0629 \u0627\u0644\u062F\u0648\u0631");
+  if (typeof out.date !== "string" || out.date !== "" && !validDate2(out.date)) bad("\u062A\u0627\u0631\u064A\u062E \u0634\u0627\u0634\u0629 \u0627\u0644\u062F\u0648\u0631 \u063A\u064A\u0631 \u0635\u062D\u064A\u062D");
+  if (out.dateMode === "fixed" && !validDate2(out.date)) bad("\u0627\u062E\u062A\u0631 \u062A\u0627\u0631\u064A\u062E\u064B\u0627 \u0635\u062D\u064A\u062D\u064B\u0627 \u0644\u062A\u062B\u0628\u064A\u062A \u0634\u0627\u0634\u0629 \u0627\u0644\u062F\u0648\u0631");
   for (const [key, fallback, min, max] of noticeNumbers) {
     const value = input[key] ?? fallback;
     if (!Number.isInteger(value) || value < min || value > max) bad("\u0631\u0627\u062C\u0639 \u0645\u0642\u0627\u0633 \u0628\u0631\u0648\u0627\u0632 \u0627\u0644\u0637\u0648\u0627\u0631\u0626: " + key);
@@ -850,7 +1205,7 @@ function normalize2(input = {}, branches2 = []) {
 // supabase/functions/clinic-api/color-refresh.js
 var light = { background: "#f2f5f6", card: "#ffffff", text: "#243543", primary: "#315468", accent: "#976471", muted: "#536779", line: "#bdcbd4", headerBackground: "#315468", headerText: "#ffffff" };
 var dark = { background: "#151c24", card: "#202b35", text: "#e1e8ed", primary: "#b7c9d4", accent: "#b89ca5", muted: "#adbac5", line: "#50606e", headerBackground: "#202e3a", headerText: "#e1e8ed" };
-async function handle(adapter2, input, uid) {
+async function handle3(adapter2, input, uid) {
   let changed = false;
   await adapter2.mutate((original) => {
     const r = role(original, uid);
@@ -861,7 +1216,7 @@ async function handle(adapter2, input, uid) {
     const old = s.settings.site?.design || {};
     s.settings.previousDesign = structuredClone(old);
     s.settings.site = { ...s.settings.site, design: { ...old, themePreset: 0, palettes: { light: { ...light }, dark: { ...dark } }, primary: light.primary, background: light.background, text: light.text, accent: light.accent, card: light.card, headerColors: { light: { background: light.headerBackground, text: light.headerText }, dark: { background: dark.headerBackground, text: dark.headerText } }, aboutTextColor: light.text, aboutBackground: light.card, aboutBorderColor: light.line, aboutNeonColor: light.accent } };
-    const queue = normalize2(s.settings.display || {}, branchIds(s, true));
+    const queue = normalize3(s.settings.display || {}, branchIds(s, true));
     s.settings.previousQueueColors = { colors: queue.colors, customColors: queue.customColors };
     s.settings.display = { ...queue, colors: structuredClone(colors), customColors: true, noticeTextColor: "#9b474f", noticeBackground: "#f8eaec", noticeBorderColor: "#b77c86", noticeNeonColor: "#a57080" };
     s.settings.displayRev = (s.settings.displayRev || 0) + 1;
@@ -874,7 +1229,7 @@ async function handle(adapter2, input, uid) {
 
 // supabase/functions/clinic-api/data-import.js
 import { Buffer as Buffer3 } from "node:buffer";
-import { createHash as createHash2 } from "node:crypto";
+import { createHash as createHash3 } from "node:crypto";
 
 // supabase/functions/clinic-api/management.js
 import { Buffer as Buffer2 } from "node:buffer";
@@ -1079,7 +1434,7 @@ function mutate(original, uid, input, core) {
     requirePermission(r, "display.manage");
     if (input.revision !== (s.settings?.displayRev || 0)) core.fail("\u062A\u063A\u064A\u0631\u062A \u0625\u0639\u062F\u0627\u062F\u0627\u062A \u0627\u0644\u0634\u0627\u0634\u0629 \u0645\u0646 \u062C\u0644\u0633\u0629 \u0623\u062E\u0631\u0649\u061B \u0623\u0639\u062F \u0627\u0644\u062A\u062D\u0645\u064A\u0644 \u0623\u0648\u0644\u064B\u0627", 409);
     s.settings ||= {};
-    const normalized = normalize2(input.config, core.branchIds(s, true)), previous = normalize2(s.settings.display || {}, core.branchIds(s, true));
+    const normalized = normalize3(input.config, core.branchIds(s, true)), previous = normalize3(s.settings.display || {}, core.branchIds(s, true));
     if (r.r !== "admin" && Object.keys(normalized).some((key) => (key === "footerText" || key.startsWith("notice")) && JSON.stringify(normalized[key]) !== JSON.stringify(previous[key]))) core.fail("\u062A\u0639\u062F\u064A\u0644 \u062A\u0635\u0645\u064A\u0645 \u0631\u0633\u0627\u0644\u0629 \u0627\u0644\u0637\u0648\u0627\u0631\u0626 \u0645\u062A\u0627\u062D \u0644\u0644\u0623\u062F\u0645\u0646 \u0641\u0642\u0637", 403);
     s.settings.display = normalized;
     s.settings.displayRev = (s.settings.displayRev || 0) + 1;
@@ -1152,7 +1507,7 @@ function mutate(original, uid, input, core) {
     next.settings.site = { ...s.settings?.site, design: checked.design };
     const design = next.settings.site.design, palettes = design.palettes;
     for (const mode of ["light", "dark"]) for (const key of ["background", "card", "text", "primary", "accent", "muted", "line", "headerBackground", "headerText"]) if (!palettes?.[mode]?.[key]) core.fail("\u0627\u062E\u062A\u0631 \u062B\u064A\u0645\u064B\u0627 \u0643\u0627\u0645\u0644\u064B\u0627 \u0644\u0644\u0646\u0647\u0627\u0631 \u0648\u0627\u0644\u0644\u064A\u0644 \u0642\u0628\u0644 \u0627\u0644\u062D\u0641\u0638");
-    const previous = normalize2(s.settings?.display || {}, core.branchIds(s, true)), light2 = palettes.light;
+    const previous = normalize3(s.settings?.display || {}, core.branchIds(s, true)), light2 = palettes.light;
     next.settings.previousDesign = structuredClone(s.settings?.site?.design || {});
     next.settings.previousThemeDisplay = Object.fromEntries(Object.entries(previous).filter(([key]) => key === "colors" || key === "customColors" || key.startsWith("notice") && key.endsWith("Color") || key === "noticeBackground"));
     Object.assign(design, { primary: light2.primary, background: light2.background, text: light2.text, accent: light2.accent, card: light2.card, aboutTextColor: light2.text, aboutBackground: light2.card, aboutBorderColor: light2.primary, aboutNeonColor: light2.accent, headerColors: Object.fromEntries(["light", "dark"].map((mode) => [mode, { background: palettes[mode].headerBackground, text: palettes[mode].headerText }])) });
@@ -1277,7 +1632,7 @@ function guardTree(value, depth = 0) {
     guardTree(v, depth + 1);
   }
 }
-function normalize3(input, state = {}, withSettings = false, maxBytes = 85e4) {
+function normalize4(input, state = {}, withSettings = false, maxBytes = 85e4) {
   if (!object(input)) bad2("\u0627\u0644\u0645\u0644\u0641", "\u0627\u062E\u062A\u0631 \u0646\u0633\u062E\u0629 JSON \u0635\u062D\u064A\u062D\u0629 \u0623\u0648 \u0627\u0644\u0642\u0627\u0644\u0628 \u0627\u0644\u0645\u062E\u0635\u0635");
   if (Buffer3.byteLength(JSON.stringify(input), "utf8") > maxBytes) bad2("\u0627\u0644\u062D\u062C\u0645", "\u0627\u0644\u0628\u064A\u0627\u0646\u0627\u062A \u0628\u0639\u062F \u0627\u0644\u0642\u0631\u0627\u0621\u0629 \u062A\u062A\u062C\u0627\u0648\u0632 850 \u0643\u064A\u0644\u0648\u0628\u0627\u064A\u062A\u061B \u0642\u0633\u0651\u0645 \u0627\u0644\u0645\u0644\u0641");
   guardTree(input);
@@ -1398,7 +1753,7 @@ function normalize3(input, state = {}, withSettings = false, maxBytes = 85e4) {
 function prepare(original, uid, input, options = {}, maxBytes = 85e4) {
   requirePermission(role(original, uid), "data.import");
   if (!object(options) || Object.keys(options).some((k) => k !== "importSettings") || options.importSettings !== void 0 && typeof options.importSettings !== "boolean") fail2("\u062E\u064A\u0627\u0631\u0627\u062A \u0627\u0644\u0627\u0633\u062A\u064A\u0631\u0627\u062F \u063A\u064A\u0631 \u0635\u062D\u064A\u062D\u0629");
-  const data = normalize3(input, original, options.importSettings === true, maxBytes), s = structuredClone(original), summary = { patients: { added: 0, duplicates: 0, conflicts: 0 }, bookings: { added: 0, duplicates: 0, conflicts: 0 }, files: { added: 0, duplicates: 0, conflicts: 0 }, complaints: { added: 0, duplicates: 0, conflicts: 0 }, renumbered: 0, examsToWaiting: 0, settingsChanged: false, ignored: data.ignored };
+  const data = normalize4(input, original, options.importSettings === true, maxBytes), s = structuredClone(original), summary = { patients: { added: 0, duplicates: 0, conflicts: 0 }, bookings: { added: 0, duplicates: 0, conflicts: 0 }, files: { added: 0, duplicates: 0, conflicts: 0 }, complaints: { added: 0, duplicates: 0, conflicts: 0 }, renumbered: 0, examsToWaiting: 0, settingsChanged: false, ignored: data.ignored };
   s.patients ||= {};
   s.bookings ||= {};
   s.files ||= {};
@@ -1499,7 +1854,7 @@ function prepare(original, uid, input, options = {}, maxBytes = 85e4) {
   }
   summary.totalAdded = ["patients", "bookings", "files", "complaints"].reduce((n, k) => n + summary[k].added, 0);
   summary.totalConflicts = ["patients", "bookings", "files", "complaints"].reduce((n, k) => n + summary[k].conflicts, 0);
-  const token = createHash2("sha256").update(JSON.stringify(canonical({ uid, day: today(), input, options, bookings: original.bookings, patients: original.patients, files: original.files, complaints: original.complaints, complaintSequences: original.complaintSequences, settings: original.settings, sequences: original.sequences, sessions: original.sessions, deletedBookings: original.deletedBookings }))).digest("hex");
+  const token = createHash3("sha256").update(JSON.stringify(canonical({ uid, day: today(), input, options, bookings: original.bookings, patients: original.patients, files: original.files, complaints: original.complaints, complaintSequences: original.complaintSequences, settings: original.settings, sequences: original.sequences, sessions: original.sessions, deletedBookings: original.deletedBookings }))).digest("hex");
   numberComplaints(s);
   rebuild(s);
   return { state: s, summary, token };
@@ -1510,11 +1865,11 @@ function rehearse(payload, uid) {
   const clean = { roles: structuredClone(payload.roles), settings: structuredClone(payload.settings || {}), patients: {}, bookings: {}, files: {}, complaints: {} };
   clean.roles[uid] = { ...clean.roles[uid], permissions: { ...clean.roles[uid]?.permissions, "data.import": true } };
   const data = Object.fromEntries(["patients", "bookings", "files", "complaints", "complaintSequences"].map((k) => [k, payload[k] || {}]));
-  const plan2 = prepare(clean, uid, data, {}, 8e6);
-  if (plan2.summary.totalConflicts) fail2("\u062A\u0648\u062C\u062F \u062A\u0639\u0627\u0631\u0636\u0627\u062A \u062A\u0645\u0646\u0639 \u062A\u062C\u0631\u0628\u0629 \u0627\u0644\u0627\u0633\u062A\u0639\u0627\u062F\u0629", 409);
-  return { at: (/* @__PURE__ */ new Date()).toISOString(), status: "passed", scope: "clinical-json", counts: Object.fromEntries(["patients", "bookings", "files", "complaints"].map((k) => [k, plan2.summary[k].added])), imagesVerified: false, warning: "\u062A\u062C\u0631\u0628\u0629 \u0645\u0639\u0632\u0648\u0644\u0629 \u0644\u0644\u0628\u064A\u0627\u0646\u0627\u062A \u0627\u0644\u0637\u0628\u064A\u0629 \u0641\u0642\u0637\u061B \u0644\u0627 \u062A\u062A\u062D\u0642\u0642 \u0645\u0646 \u0648\u062C\u0648\u062F \u0645\u0644\u0641\u0627\u062A \u0627\u0644\u0635\u0648\u0631 \u0648\u0644\u0627 \u062A\u0633\u062A\u0628\u062F\u0644 \u0623\u064A \u0633\u062C\u0644 \u0641\u0639\u0644\u064A." };
+  const plan3 = prepare(clean, uid, data, {}, 8e6);
+  if (plan3.summary.totalConflicts) fail2("\u062A\u0648\u062C\u062F \u062A\u0639\u0627\u0631\u0636\u0627\u062A \u062A\u0645\u0646\u0639 \u062A\u062C\u0631\u0628\u0629 \u0627\u0644\u0627\u0633\u062A\u0639\u0627\u062F\u0629", 409);
+  return { at: (/* @__PURE__ */ new Date()).toISOString(), status: "passed", scope: "clinical-json", counts: Object.fromEntries(["patients", "bookings", "files", "complaints"].map((k) => [k, plan3.summary[k].added])), imagesVerified: false, warning: "\u062A\u062C\u0631\u0628\u0629 \u0645\u0639\u0632\u0648\u0644\u0629 \u0644\u0644\u0628\u064A\u0627\u0646\u0627\u062A \u0627\u0644\u0637\u0628\u064A\u0629 \u0641\u0642\u0637\u061B \u0644\u0627 \u062A\u062A\u062D\u0642\u0642 \u0645\u0646 \u0648\u062C\u0648\u062F \u0645\u0644\u0641\u0627\u062A \u0627\u0644\u0635\u0648\u0631 \u0648\u0644\u0627 \u062A\u0633\u062A\u0628\u062F\u0644 \u0623\u064A \u0633\u062C\u0644 \u0641\u0639\u0644\u064A." };
 }
-async function handle2(adapter2, input, uid) {
+async function handle4(adapter2, input, uid) {
   const s = await adapter2.read();
   requirePermission(role(s, uid), "data.export");
   if (input.action === "backupRehearsalStatus") return s.backupRehearsal || null;
@@ -1530,7 +1885,7 @@ async function handle2(adapter2, input, uid) {
 
 // supabase/functions/clinic-api/workflow.js
 import { Buffer as Buffer4 } from "node:buffer";
-import { createHash as createHash3, randomUUID } from "node:crypto";
+import { createHash as createHash4, randomUUID } from "node:crypto";
 
 // supabase/functions/clinic-api/history.js
 var ROOTS = ["patients", "files", "complaints", "attachments", "bookings", "inbox", "followups", "deletedBookings", "sessions", "complaintSequences", "settings", "roles", "tasks", "checkins", "appointmentRequests", "waitingList", "slotOpenings", "dayClosures", "patientMerges", "userPreferences"];
@@ -1696,7 +2051,7 @@ function restore(original, uid, id2) {
   rebuild(s);
   return s;
 }
-function list(state, uid, input) {
+function list2(state, uid, input) {
   admin(state, uid);
   const page = Math.max(0, Math.floor(Number(input.page) || 0)), size = 30;
   let rows = Object.values(state.recycleBin || {}).filter((x) => !x.restoredAt).sort((a, b) => b.at.localeCompare(a.at));
@@ -1705,7 +2060,7 @@ function list(state, uid, input) {
 
 // supabase/functions/clinic-api/workflow.js
 var stamp2 = () => (/* @__PURE__ */ new Date()).toISOString();
-var digest = (x) => createHash3("sha256").update(JSON.stringify(x)).digest("hex");
+var digest2 = (x) => createHash4("sha256").update(JSON.stringify(x)).digest("hex");
 var text2 = (x, max, label, required = false) => {
   if (typeof x !== "string" || x.length > max || required && !x.trim()) fail2("\u0631\u0627\u062C\u0639 " + label);
   return x.trim();
@@ -1723,7 +2078,7 @@ function timeline(s, r, p) {
   access(s, r, p);
   const rows = [];
   if (can(r, "bookings.read")) {
-    for (const list2 of Object.values(s.bookings || {})) for (const x of Object.values(list2)) if (x.phone === p && (allBranches(r) || x.b === r.br)) {
+    for (const list3 of Object.values(s.bookings || {})) for (const x of Object.values(list3)) if (x.phone === p && (allBranches(r) || x.b === r.br)) {
       rows.push({ kind: "booking", id: x.id, at: x.createdAt || x.date + "T00:00:00Z", by: x.createdBy || "", updatedBy: x.updatedBy || "", updatedAt: x.updatedAt, date: x.date, no: x.no, branch: x.b, status: x.s, arrival: s.checkins?.[x.id]?.status || "not_arrived" });
       const check = s.checkins?.[x.id];
       if (check) rows.push({ kind: "arrival", id: x.id, at: check.at, status: check.status, by: check.by });
@@ -1743,13 +2098,13 @@ function mergePlan(s, uid, input) {
   access(s, r, source);
   access(s, r, target);
   for (const rows of Object.values(s.bookings || {})) {
-    const list2 = Object.values(rows);
-    if (list2.some((x) => x.phone === source) && list2.some((x) => x.phone === target)) fail2("\u064A\u0648\u062C\u062F \u062D\u062C\u0632 \u0644\u0644\u0645\u0644\u0641\u064A\u0646 \u0641\u064A \u0627\u0644\u064A\u0648\u0645 \u0646\u0641\u0633\u0647\u061B \u0631\u0627\u062C\u0639 \u0627\u0644\u062D\u062C\u0648\u0632\u0627\u062A \u0642\u0628\u0644 \u0627\u0644\u062F\u0645\u062C", 409);
+    const list3 = Object.values(rows);
+    if (list3.some((x) => x.phone === source) && list3.some((x) => x.phone === target)) fail2("\u064A\u0648\u062C\u062F \u062D\u062C\u0632 \u0644\u0644\u0645\u0644\u0641\u064A\u0646 \u0641\u064A \u0627\u0644\u064A\u0648\u0645 \u0646\u0641\u0633\u0647\u061B \u0631\u0627\u062C\u0639 \u0627\u0644\u062D\u062C\u0648\u0632\u0627\u062A \u0642\u0628\u0644 \u0627\u0644\u062F\u0645\u062C", 409);
   }
   if (Object.keys(s.attachments?.[source] || {}).some((id2) => Object.hasOwn(s.attachments?.[target] || {}, id2))) fail2("\u062A\u0639\u0627\u0631\u0636 \u0641\u064A \u0645\u0639\u0631\u0641\u0627\u062A \u0627\u0644\u0635\u0648\u0631\u061B \u0631\u0627\u062C\u0639 \u0627\u0644\u0645\u0631\u0641\u0642\u0627\u062A \u0642\u0628\u0644 \u0627\u0644\u062F\u0645\u062C", 409);
   if (Object.keys(s.attachments?.[source] || {}).length + Object.keys(s.attachments?.[target] || {}).length > 20) fail2("\u0627\u0644\u0645\u0644\u0641\u0627\u0646 \u064A\u062A\u062C\u0627\u0648\u0632\u0627\u0646 \u062D\u062F 20 \u0635\u0648\u0631\u0629\u061B \u0631\u0627\u062C\u0639 \u0627\u0644\u0645\u0631\u0641\u0642\u0627\u062A \u0642\u0628\u0644 \u0627\u0644\u062F\u0645\u062C", 409);
   const summary = { source, target, sourceName: s.patients[source].n, targetName: s.patients[target].n, complaints: Object.keys(s.complaints?.[source] || {}).length, images: Object.keys(s.attachments?.[source] || {}).length, bookings: Object.values(s.bookings || {}).flatMap(Object.values).filter((x) => x.phone === source).length };
-  return { summary, token: digest({ uid, source, target, patients: s.patients, bookings: s.bookings, files: s.files, complaints: s.complaints, attachments: s.attachments, complaintSequences: s.complaintSequences, tasks: s.tasks, checkins: s.checkins }) };
+  return { summary, token: digest2({ uid, source, target, patients: s.patients, bookings: s.bookings, files: s.files, complaints: s.complaints, attachments: s.attachments, complaintSequences: s.complaintSequences, tasks: s.tasks, checkins: s.checkins }) };
 }
 var draftKinds = { booking: "bookings.create", complaint: "complaints.create", medical: "notes.edit", patient: "patients.edit", about: "site.manage", task: "tasks.manage" };
 var draftFields = { booking: ["name", "phone", "b", "date", "v", "s", "nt", "spouseName", "spouseJob", "spousePhone"], complaint: ["date", "text", "reason", "tx"], medical: ["n", "diagnosis", "treatment", "allergies", "chronic", "rev"], patient: ["name", "phone", "newPhone", "spouseName", "spouseJob", "spousePhone"], about: ["text", "design"], task: ["title", "description", "due", "assignee", "phone", "branch"] };
@@ -1759,7 +2114,7 @@ function draftAccess(s, r, x) {
   if (x.branch) branch(s, r, x.branch);
   if (["complaint", "medical"].includes(x.kind)) access(s, r, phone(x.entity));
 }
-async function handle3(adapter2, input, uid) {
+async function handle5(adapter2, input, uid) {
   const action = input.action;
   if (action === "nurseRequestAccessUpgrade") {
     let changed = false;
@@ -1853,7 +2208,7 @@ async function handle3(adapter2, input, uid) {
       const s = structuredClone(original), r = role(s, uid);
       draftAccess(s, r, input);
       if (!input.data || Array.isArray(input.data) || typeof input.data !== "object" || Buffer4.byteLength(JSON.stringify(input.data)) > 2e4 || Object.entries(input.data).some(([k, v]) => !draftFields[input.kind].includes(k) || (k === "design" ? !v || Array.isArray(v) || typeof v !== "object" || Object.entries(v).some(([dk, dv]) => !/^about[A-Z][A-Za-z]+$/.test(dk) || !["string", "number", "boolean"].includes(typeof dv)) : k === "rev" ? !Number.isInteger(v) : typeof v !== "string"))) fail2("\u0628\u064A\u0627\u0646\u0627\u062A \u0627\u0644\u0645\u0633\u0648\u062F\u0629 \u063A\u064A\u0631 \u0635\u062D\u064A\u062D\u0629");
-      const id2 = digest({ kind: input.kind, entity: String(input.entity || "new").slice(0, 128) }).slice(0, 32);
+      const id2 = digest2({ kind: input.kind, entity: String(input.entity || "new").slice(0, 128) }).slice(0, 32);
       s.drafts ||= {};
       s.drafts[uid] ||= {};
       for (const [key, x] of Object.entries(s.drafts[uid])) if (Date.now() - Date.parse(x.updatedAt) > 7 * 864e5) delete s.drafts[uid][key];
@@ -1940,9 +2295,9 @@ async function handle3(adapter2, input, uid) {
   if (action === "patientMergeApply") {
     let id2;
     await adapter2.mutate((original) => {
-      const plan2 = mergePlan(original, uid, input);
-      if (input.previewToken !== plan2.token || input.confirmation !== "MERGE_PATIENTS") fail2("\u062A\u063A\u064A\u0631\u062A \u0627\u0644\u0628\u064A\u0627\u0646\u0627\u062A\u061B \u0623\u0639\u062F \u0627\u0644\u0645\u0639\u0627\u064A\u0646\u0629", 409);
-      const s = structuredClone(original), { source, target } = plan2.summary, patient = s.patients[source], dest = s.patients[target];
+      const plan3 = mergePlan(original, uid, input);
+      if (input.previewToken !== plan3.token || input.confirmation !== "MERGE_PATIENTS") fail2("\u062A\u063A\u064A\u0631\u062A \u0627\u0644\u0628\u064A\u0627\u0646\u0627\u062A\u061B \u0623\u0639\u062F \u0627\u0644\u0645\u0639\u0627\u064A\u0646\u0629", 409);
+      const s = structuredClone(original), { source, target } = plan3.summary, patient = s.patients[source], dest = s.patients[target];
       for (const key of ["spouseName", "spouseJob", "spousePhone"]) if (!dest[key] && patient[key]) dest[key] = patient[key];
       for (const rows of Object.values(s.bookings || {})) for (const x of Object.values(rows)) if (x.phone === source) {
         x.phone = target;
@@ -2025,52 +2380,10 @@ async function handle3(adapter2, input, uid) {
   }
   fail2("\u0639\u0645\u0644\u064A\u0629 \u063A\u064A\u0631 \u0645\u0633\u0645\u0648\u062D\u0629", 403);
 }
-var actions = ["nurseRequestAccessUpgrade", "preferencesGet", "preferencesSave", "timeline", "workflowList", "checkinSet", "taskSave", "draftSave", "draftGet", "draftDelete", "editingPresence", "daySummary", "dayClose", "similarPatients", "patientMergePreview", "patientMergeApply", "patientMergeList", "patientMergeUndo"];
+var actions2 = ["nurseRequestAccessUpgrade", "preferencesGet", "preferencesSave", "timeline", "workflowList", "checkinSet", "taskSave", "draftSave", "draftGet", "draftDelete", "editingPresence", "daySummary", "dayClose", "similarPatients", "patientMergePreview", "patientMergeApply", "patientMergeList", "patientMergeUndo"];
 
 // supabase/functions/clinic-api/patient-requests.js
 import { randomUUID as randomUUID2 } from "node:crypto";
-
-// supabase/functions/clinic-api/schedule.js
-function validDate2(date2) {
-  const parsed = /* @__PURE__ */ new Date(date2 + "T12:00:00Z");
-  return /^\d{4}-\d{2}-\d{2}$/.test(date2) && Number.isFinite(parsed.getTime()) && parsed.toISOString().slice(0, 10) === date2;
-}
-function availability(registry, schedules, date2) {
-  const result = { scheduled: [], flexible: [] };
-  if (!validDate2(date2)) return result;
-  const day = (/* @__PURE__ */ new Date(date2 + "T12:00:00Z")).getUTCDay();
-  for (const [id2, branch2] of Object.entries(registry)) {
-    if (branch2.enabled === false) continue;
-    const schedule3 = schedules[id2];
-    if (Object.hasOwn(schedule3?.exceptions || {}, date2)) {
-      const slots2 = schedule3.exceptions[date2];
-      if (slots2.length) result.scheduled.push({ id: id2, slots: slots2 });
-      continue;
-    }
-    if (schedule3?.mode === "days") {
-      if (schedule3.d?.includes(day)) result.scheduled.push({ id: id2, slots: [], dayOnly: true });
-      continue;
-    }
-    if (!schedule3 || schedule3.mode === "flexible") {
-      result.flexible.push(id2);
-      continue;
-    }
-    const slots = schedule3.mode === "weekly" ? schedule3.weekly?.[day] || [] : schedule3.d?.includes(day) ? [{ f: schedule3.f, t: schedule3.t }] : [];
-    if (slots.length) result.scheduled.push({ id: id2, slots });
-  }
-  return result;
-}
-function choose(registry, schedules, date2, time2) {
-  const items = availability(registry, schedules, date2).scheduled;
-  if (items.length === 1) return items[0].id;
-  if (time2 && items.every((item) => !item.dayOnly)) {
-    const active = items.filter((item) => item.slots.some((slot) => slot.f <= time2 && time2 < slot.t));
-    if (active.length === 1) return active[0].id;
-  }
-  return null;
-}
-
-// supabase/functions/clinic-api/patient-requests.js
 var time = () => (/* @__PURE__ */ new Date()).toISOString();
 function settings(s) {
   const x = s.settings?.bookingRequests || {};
@@ -2115,7 +2428,7 @@ function cutoff(s, booking2) {
   }
   return target - Date.now() >= settings(s).changeCutoffHours * 36e5;
 }
-async function handle4(adapter2, input, uid, client) {
+async function handle6(adapter2, input, uid, client) {
   const action = input.action;
   if (action === "requestSummary") {
     const s = await adapter2.read(), r = role(s, uid);
@@ -2282,18 +2595,18 @@ async function handle4(adapter2, input, uid, client) {
   fail2("\u0639\u0645\u0644\u064A\u0629 \u063A\u064A\u0631 \u0645\u0633\u0645\u0648\u062D\u0629", 403);
 }
 var publicActions = ["bookingAvailability", "appointmentRequest", "appointmentChangeRequest", "appointmentChangeOptions"];
-var actions2 = [...publicActions, "requestSummary", "requestDecide", "waitingListSave", "waitingListMatches", "bookingRequestSettings"];
+var actions3 = [...publicActions, "requestSummary", "requestDecide", "waitingListSave", "waitingListMatches", "bookingRequestSettings"];
 
 // supabase/functions/clinic-api/import-staging.js
 import { Buffer as Buffer5 } from "node:buffer";
 import { randomUUID as randomUUID3 } from "node:crypto";
 var MAX_BYTES = 8e6;
 var TTL = 60 * 60 * 1e3;
-function authorize(s, uid) {
+function authorize2(s, uid) {
   requirePermission(role(s, uid), "data.import");
 }
 function session(s, uid, id2) {
-  authorize(s, uid);
+  authorize2(s, uid);
   const x = s.importSessions?.[uid];
   if (!x || x.id !== id2 || Date.now() - x.createdAt > TTL) fail2("\u0627\u0646\u062A\u0647\u062A \u062C\u0644\u0633\u0629 \u062A\u062C\u0647\u064A\u0632 \u0627\u0644\u0645\u0644\u0641\u061B \u0623\u0639\u062F \u0627\u062E\u062A\u064A\u0627\u0631 \u0627\u0644\u0645\u0644\u0641", 409);
   return x;
@@ -2308,11 +2621,11 @@ function assemble(x) {
     fail2("\u0627\u0644\u0646\u0633\u062E\u0629 \u063A\u064A\u0631 \u0645\u0643\u062A\u0645\u0644\u0629 \u0623\u0648 JSON \u063A\u064A\u0631 \u0635\u062D\u064A\u062D");
   }
 }
-async function handle5(adapter2, input, uid) {
+async function handle7(adapter2, input, uid) {
   if (input.action === "importStageStart") {
     let id2;
     await adapter2.mutate((original) => {
-      authorize(original, uid);
+      authorize2(original, uid);
       if (!Number.isInteger(input.total) || input.total < 1 || input.total > 48) fail2("\u0639\u062F\u062F \u0623\u062C\u0632\u0627\u0621 \u063A\u064A\u0631 \u0635\u062D\u064A\u062D");
       if (input.options && Object.keys(input.options).some((k) => k !== "importSettings") || input.options?.importSettings !== void 0 && typeof input.options.importSettings !== "boolean") fail2("\u062E\u064A\u0627\u0631\u0627\u062A \u063A\u064A\u0631 \u0635\u062D\u064A\u062D\u0629");
       const s = structuredClone(original);
@@ -2343,24 +2656,24 @@ async function handle5(adapter2, input, uid) {
     return { ok: true };
   }
   if (input.action === "importStagePreview") {
-    const s = await adapter2.read(), x = session(s, uid, input.id), plan2 = prepare(s, uid, assemble(x), x.options, MAX_BYTES);
-    return { summary: plan2.summary, token: plan2.token };
+    const s = await adapter2.read(), x = session(s, uid, input.id), plan3 = prepare(s, uid, assemble(x), x.options, MAX_BYTES);
+    return { summary: plan3.summary, token: plan3.token };
   }
   if (input.action === "importStageApply") {
     if (input.confirmation !== "IMPORT_CLINIC_DATA" || typeof input.previewToken !== "string") fail2("\u0631\u0627\u062C\u0639 \u0627\u0644\u0645\u0639\u0627\u064A\u0646\u0629 \u0648\u0623\u0643\u062F \u0627\u0644\u0627\u0633\u062A\u064A\u0631\u0627\u062F");
     let summary;
     await adapter2.mutate((s) => {
-      const x = session(s, uid, input.id), plan2 = prepare(s, uid, assemble(x), x.options, MAX_BYTES);
-      if (plan2.token !== input.previewToken) fail2("\u062A\u063A\u064A\u0631\u062A \u0627\u0644\u0628\u064A\u0627\u0646\u0627\u062A \u0645\u0646\u0630 \u0627\u0644\u0645\u0639\u0627\u064A\u0646\u0629\u061B \u0623\u0639\u062F \u0627\u0644\u0645\u0639\u0627\u064A\u0646\u0629 \u0623\u0648\u0644\u064B\u0627", 409);
-      summary = plan2.summary;
-      delete plan2.state.importSessions[uid];
-      return plan2.state;
+      const x = session(s, uid, input.id), plan3 = prepare(s, uid, assemble(x), x.options, MAX_BYTES);
+      if (plan3.token !== input.previewToken) fail2("\u062A\u063A\u064A\u0631\u062A \u0627\u0644\u0628\u064A\u0627\u0646\u0627\u062A \u0645\u0646\u0630 \u0627\u0644\u0645\u0639\u0627\u064A\u0646\u0629\u061B \u0623\u0639\u062F \u0627\u0644\u0645\u0639\u0627\u064A\u0646\u0629 \u0623\u0648\u0644\u064B\u0627", 409);
+      summary = plan3.summary;
+      delete plan3.state.importSessions[uid];
+      return plan3.state;
     });
     return { ok: true, summary };
   }
   if (input.action === "importStageCancel") {
     await adapter2.mutate((original) => {
-      authorize(original, uid);
+      authorize2(original, uid);
       const s = structuredClone(original);
       if (s.importSessions?.[uid]?.id === input.id) delete s.importSessions[uid];
       return s;
@@ -2978,7 +3291,7 @@ function organize(original, uid) {
 // supabase/functions/clinic-api/staff-access.js
 var queueGrants = ["bookings.read", "bookings.create", "bookings.status", "patients.print", "patients.read", "patients.edit"];
 var nurseGrants = [...queueGrants, "requests.read", "patients.read", "complaints.read", "complaints.create", "attachments.read", "attachments.create", "attachments.own.delete"];
-function plan(state, uid, core) {
+function plan2(state, uid, core) {
   if (core.role(state, uid).r !== "admin") core.fail("\u0636\u0628\u0637 \u062D\u0633\u0627\u0628\u0627\u062A \u0627\u0644\u0641\u0631\u0648\u0639 \u0645\u062A\u0627\u062D \u0644\u0644\u0623\u062F\u0645\u0646 \u0641\u0642\u0637", 403);
   const registry = branches(state), roles = Object.entries(state.roles || {}), staff = [];
   for (const [branch2, username] of [["alex", "alex-sec"], ["matrouh", "matrouh-sec"], ["dmn", "dmn-sec"], ["libya", "libya-sec"]]) {
@@ -3022,147 +3335,6 @@ function build(state, uid, value) {
   return { patient, bookings, file, complaints, branches: Object.fromEntries(branches2.map((b) => [b, registry[b]?.name || b])), site: { clinicName: state.settings?.site?.clinicName || "\u0639\u064A\u0627\u062F\u0629 \u062F. \u064A\u0648\u0633\u0641 \u0639\u0632 \u0627\u0644\u0631\u062C\u0627\u0644", doctorName: state.settings?.site?.doctorName || "" }, generatedAt: (/* @__PURE__ */ new Date()).toISOString() };
 }
 
-// supabase/functions/clinic-api/demo-profiles.js
-var profiles = [
-  { reason: "\u0645\u062A\u0627\u0628\u0639\u0629 \u062D\u0645\u0644", text: "\u0645\u062A\u0627\u0628\u0639\u0629 \u062F\u0648\u0631\u064A\u0629 \u0644\u0644\u062D\u0645\u0644 \u0645\u0639 \u063A\u062B\u064A\u0627\u0646 \u0645\u062A\u0642\u0637\u0639 \u062F\u0648\u0646 \u0646\u0632\u064A\u0641 \u0623\u0648 \u0623\u0644\u0645 \u0634\u062F\u064A\u062F.", diagnosis: "\u0645\u062A\u0627\u0628\u0639\u0629 \u062D\u0645\u0644 \u062F\u0627\u062E\u0644 \u0627\u0644\u0631\u062D\u0645", treatment: "\u0627\u0633\u062A\u0645\u0631\u0627\u0631 \u0627\u0644\u0645\u062A\u0627\u0628\u0639\u0629 \u0627\u0644\u062F\u0648\u0631\u064A\u0629 \u0648\u0645\u0631\u0627\u062C\u0639\u0629 \u0646\u062A\u0627\u0626\u062C \u0627\u0644\u062A\u062D\u0627\u0644\u064A\u0644 \u0627\u0644\u0645\u0637\u0644\u0648\u0628\u0629.", notes: "\u0645\u0631\u0627\u062C\u0639\u0629 \u0635\u0648\u0631\u0629 \u0627\u0644\u062F\u0645 \u0648\u062A\u062D\u0644\u064A\u0644 \u0627\u0644\u0628\u0648\u0644 \u0648\u0627\u0644\u0633\u0648\u0646\u0627\u0631 \u0641\u064A \u0627\u0644\u0632\u064A\u0627\u0631\u0629 \u0627\u0644\u0642\u0627\u062F\u0645\u0629." },
-  { reason: "\u0627\u0636\u0637\u0631\u0627\u0628 \u0627\u0644\u062F\u0648\u0631\u0629 \u0627\u0644\u0634\u0647\u0631\u064A\u0629", text: "\u0639\u062F\u0645 \u0627\u0646\u062A\u0638\u0627\u0645 \u0627\u0644\u062F\u0648\u0631\u0629 \u062E\u0644\u0627\u0644 \u0627\u0644\u0623\u0634\u0647\u0631 \u0627\u0644\u062B\u0644\u0627\u062B\u0629 \u0627\u0644\u0623\u062E\u064A\u0631\u0629 \u0645\u0639 \u062A\u0642\u0644\u0635\u0627\u062A \u0645\u062A\u0648\u0633\u0637\u0629.", diagnosis: "\u0627\u0636\u0637\u0631\u0627\u0628 \u0628\u0627\u0644\u062F\u0648\u0631\u0629 \u0627\u0644\u0634\u0647\u0631\u064A\u0629 \u0642\u064A\u062F \u0627\u0644\u062A\u0642\u064A\u064A\u0645", treatment: "\u062A\u0633\u062C\u064A\u0644 \u0645\u0648\u0627\u0639\u064A\u062F \u0627\u0644\u062F\u0648\u0631\u0629 \u0648\u0627\u0633\u062A\u0643\u0645\u0627\u0644 \u0627\u0644\u0641\u062D\u0648\u0635\u0627\u062A \u062B\u0645 \u0645\u0631\u0627\u062C\u0639\u0629 \u0627\u0644\u0646\u062A\u0627\u0626\u062C.", notes: "\u0637\u0644\u0628 \u0633\u0648\u0646\u0627\u0631 \u0644\u0644\u062D\u0648\u0636 \u0648\u062A\u062D\u0627\u0644\u064A\u0644 \u062D\u0633\u0628 \u0627\u0644\u062A\u0642\u064A\u064A\u0645 \u0627\u0644\u0625\u0643\u0644\u064A\u0646\u064A\u0643\u064A." },
-  { reason: "\u062A\u0623\u062E\u0631 \u0627\u0644\u0625\u0646\u062C\u0627\u0628", text: "\u0645\u0631\u0627\u062C\u0639\u0629 \u0644\u0628\u062D\u062B \u062A\u0623\u062E\u0631 \u062D\u062F\u0648\u062B \u0627\u0644\u062D\u0645\u0644 \u0648\u0645\u0646\u0627\u0642\u0634\u0629 \u0627\u0644\u0641\u062D\u0648\u0635\u0627\u062A \u0627\u0644\u0633\u0627\u0628\u0642\u0629.", diagnosis: "\u062A\u0642\u064A\u064A\u0645 \u0623\u0633\u0628\u0627\u0628 \u062A\u0623\u062E\u0631 \u0627\u0644\u0625\u0646\u062C\u0627\u0628", treatment: "\u0627\u0633\u062A\u0643\u0645\u0627\u0644 \u062A\u0642\u064A\u064A\u0645 \u0627\u0644\u0632\u0648\u062C\u064A\u0646 \u0648\u062A\u062D\u062F\u064A\u062F \u0627\u0644\u062E\u0637\u0629 \u0628\u0639\u062F \u0645\u0631\u0627\u062C\u0639\u0629 \u0627\u0644\u0641\u062D\u0648\u0635\u0627\u062A.", notes: "\u062A\u0645\u062A \u0645\u0631\u0627\u062C\u0639\u0629 \u0627\u0644\u062A\u0627\u0631\u064A\u062E \u0627\u0644\u0645\u0631\u0636\u064A \u0648\u0634\u0631\u062D \u062E\u0637\u0648\u0627\u062A \u0627\u0644\u062A\u0642\u064A\u064A\u0645." },
-  { reason: "\u0645\u0631\u0627\u062C\u0639\u0629 \u0646\u062A\u0627\u0626\u062C \u0627\u0644\u062A\u062D\u0627\u0644\u064A\u0644", text: "\u062D\u0636\u0648\u0631 \u0644\u0645\u0631\u0627\u062C\u0639\u0629 \u0627\u0644\u062A\u062D\u0627\u0644\u064A\u0644 \u0648\u0627\u0644\u0633\u0648\u0646\u0627\u0631 \u062F\u0648\u0646 \u0623\u0639\u0631\u0627\u0636 \u062C\u062F\u064A\u062F\u0629.", diagnosis: "\u0645\u062A\u0627\u0628\u0639\u0629 \u0646\u062A\u0627\u0626\u062C \u0627\u0644\u0641\u062D\u0648\u0635\u0627\u062A", treatment: "\u0645\u062A\u0627\u0628\u0639\u0629 \u0648\u0641\u0642 \u0646\u062A\u0627\u0626\u062C \u0627\u0644\u0641\u062D\u0648\u0635\u0627\u062A \u0648\u0627\u0644\u062A\u0642\u064A\u064A\u0645 \u0641\u064A \u0627\u0644\u0632\u064A\u0627\u0631\u0629.", notes: "\u0645\u0642\u0627\u0631\u0646\u0629 \u0627\u0644\u0646\u062A\u0627\u0626\u062C \u0627\u0644\u062D\u0627\u0644\u064A\u0629 \u0628\u0627\u0644\u0633\u0627\u0628\u0642\u0629 \u0648\u0645\u0646\u0627\u0642\u0634\u0629 \u0627\u0644\u062E\u0637\u0629 \u0645\u0639 \u0627\u0644\u0645\u0631\u064A\u0636\u0629." },
-  { reason: "\u0623\u0644\u0645 \u0623\u0633\u0641\u0644 \u0627\u0644\u0628\u0637\u0646", text: "\u0623\u0644\u0645 \u0645\u062A\u0642\u0637\u0639 \u0623\u0633\u0641\u0644 \u0627\u0644\u0628\u0637\u0646 \u0645\u0646\u0630 \u0639\u062F\u0629 \u0623\u064A\u0627\u0645 \u062F\u0648\u0646 \u062D\u0631\u0627\u0631\u0629 \u0623\u0648 \u0642\u064A\u0621 \u0645\u0633\u062A\u0645\u0631.", diagnosis: "\u0623\u0644\u0645 \u0628\u0627\u0644\u062D\u0648\u0636 \u0642\u064A\u062F \u0627\u0644\u062A\u0642\u064A\u064A\u0645", treatment: "\u0627\u0633\u062A\u0643\u0645\u0627\u0644 \u0627\u0644\u0641\u062D\u0635 \u0648\u0627\u0644\u0633\u0648\u0646\u0627\u0631 \u0648\u0645\u0631\u0627\u062C\u0639\u0629 \u0639\u0627\u062C\u0644\u0629 \u0639\u0646\u062F \u0632\u064A\u0627\u062F\u0629 \u0627\u0644\u0623\u0644\u0645 \u0623\u0648 \u062D\u062F\u0648\u062B \u0646\u0632\u064A\u0641.", notes: "\u0645\u0631\u0627\u062C\u0639\u0629 \u0627\u0644\u0623\u0639\u0631\u0627\u0636 \u0627\u0644\u0645\u0635\u0627\u062D\u0628\u0629 \u0648\u0627\u0644\u062A\u0627\u0631\u064A\u062E \u0627\u0644\u0645\u0631\u0636\u064A \u0642\u0628\u0644 \u062A\u062D\u062F\u064A\u062F \u0627\u0644\u0639\u0644\u0627\u062C." },
-  { reason: "\u0645\u062A\u0627\u0628\u0639\u0629 \u0628\u0639\u062F \u0627\u0644\u0648\u0644\u0627\u062F\u0629", text: "\u0645\u062A\u0627\u0628\u0639\u0629 \u0628\u0639\u062F \u0627\u0644\u0648\u0644\u0627\u062F\u0629 \u0648\u0645\u0646\u0627\u0642\u0634\u0629 \u0627\u0644\u062A\u0639\u0627\u0641\u064A \u0648\u0627\u0644\u0631\u0636\u0627\u0639\u0629 \u0648\u062A\u0646\u0638\u064A\u0645 \u0627\u0644\u0623\u0633\u0631\u0629.", diagnosis: "\u0645\u062A\u0627\u0628\u0639\u0629 \u0645\u0627 \u0628\u0639\u062F \u0627\u0644\u0648\u0644\u0627\u062F\u0629", treatment: "\u0625\u0631\u0634\u0627\u062F\u0627\u062A \u0627\u0644\u062A\u0639\u0627\u0641\u064A \u0648\u0627\u0644\u0645\u062A\u0627\u0628\u0639\u0629 \u0648\u0645\u0646\u0627\u0642\u0634\u0629 \u0627\u0644\u062E\u064A\u0627\u0631\u0627\u062A \u0627\u0644\u0645\u0646\u0627\u0633\u0628\u0629 \u0644\u062A\u0646\u0638\u064A\u0645 \u0627\u0644\u0623\u0633\u0631\u0629.", notes: "\u062A\u0645\u062A \u0645\u0646\u0627\u0642\u0634\u0629 \u0627\u0644\u062A\u063A\u0630\u064A\u0629 \u0648\u0627\u0644\u0631\u0636\u0627\u0639\u0629 \u0648\u0639\u0644\u0627\u0645\u0627\u062A \u062A\u0633\u062A\u062F\u0639\u064A \u0627\u0644\u0645\u0631\u0627\u062C\u0639\u0629." }
-];
-function clinicalProfile(i) {
-  const profile = profiles[i % profiles.length];
-  return { profile, bookingNote: ["", "\u064A\u0641\u0636\u0644 \u0627\u0644\u062A\u0648\u0627\u0635\u0644 \u0628\u0639\u062F \u0627\u0644\u0638\u0647\u0631", "\u0627\u0644\u062D\u0636\u0648\u0631 \u0642\u0628\u0644 \u0627\u0644\u0645\u0648\u0639\u062F \u0628\u0631\u0628\u0639 \u0633\u0627\u0639\u0629", "\u0645\u0631\u0627\u062C\u0639\u0629 \u0646\u062A\u0627\u0626\u062C \u0627\u0644\u0641\u062D\u0648\u0635\u0627\u062A \u0627\u0644\u0633\u0627\u0628\u0642\u0629"][i % 4], file: { n: profile.notes, allergies: i % 11 === 0 ? "\u062D\u0633\u0627\u0633\u064A\u0629 \u0645\u0646 \u0627\u0644\u0628\u0646\u0633\u0644\u064A\u0646" : "\u0644\u0627 \u062A\u0648\u062C\u062F \u062D\u0633\u0627\u0633\u064A\u0629 \u0645\u0639\u0631\u0648\u0641\u0629", chronic: i % 13 === 0 ? "\u0642\u0635\u0648\u0631 \u0628\u0627\u0644\u063A\u062F\u0629 \u0627\u0644\u062F\u0631\u0642\u064A\u0629 \u062A\u062D\u062A \u0627\u0644\u0645\u062A\u0627\u0628\u0639\u0629" : i % 17 === 0 ? "\u0627\u0631\u062A\u0641\u0627\u0639 \u0636\u063A\u0637 \u0627\u0644\u062F\u0645 \u062A\u062D\u062A \u0627\u0644\u0645\u062A\u0627\u0628\u0639\u0629" : "\u0644\u0627 \u062A\u0648\u062C\u062F \u0623\u0645\u0631\u0627\u0636 \u0645\u0632\u0645\u0646\u0629 \u0645\u0633\u062C\u0644\u0629", diagnosis: profile.diagnosis, treatment: profile.treatment } };
-}
-
-// supabase/functions/clinic-api/demo-names.js
-var first = ["\u0645\u0631\u064A\u0645", "\u0633\u0627\u0631\u0629", "\u0622\u064A\u0629", "\u0646\u0648\u0631", "\u0647\u0628\u0629", "\u0625\u064A\u0645\u0627\u0646", "\u0645\u0646\u0649", "\u062F\u0639\u0627\u0621", "\u0623\u0633\u0645\u0627\u0621", "\u0641\u0627\u0637\u0645\u0629", "\u064A\u0627\u0633\u0645\u064A\u0646", "\u0631\u0627\u0646\u064A\u0627", "\u062F\u064A\u0646\u0627", "\u0623\u0645\u0644", "\u0646\u062F\u0649", "\u0634\u064A\u0645\u0627\u0621", "\u0631\u062D\u0627\u0628", "\u0633\u0644\u0645\u0649", "\u0628\u0633\u0645\u0629", "\u062D\u0646\u0627\u0646"];
-var middle = ["\u0623\u062D\u0645\u062F", "\u0645\u062D\u0645\u062F", "\u0645\u062D\u0645\u0648\u062F", "\u0625\u0628\u0631\u0627\u0647\u064A\u0645", "\u0645\u0635\u0637\u0641\u0649", "\u062D\u0633\u0646", "\u062D\u0633\u064A\u0646", "\u062E\u0627\u0644\u062F", "\u0639\u0645\u0631\u0648", "\u0639\u0644\u064A", "\u0637\u0627\u0631\u0642", "\u0633\u0627\u0645\u062D", "\u0639\u0627\u062F\u0644", "\u0643\u0631\u064A\u0645", "\u064A\u0627\u0633\u0631", "\u0648\u0644\u064A\u062F", "\u062D\u0633\u0627\u0645", "\u0634\u0631\u064A\u0641", "\u0639\u0635\u0627\u0645", "\u0633\u0639\u064A\u062F"];
-var last = ["\u0639\u0628\u062F \u0627\u0644\u0644\u0647", "\u0627\u0644\u0633\u064A\u062F", "\u062D\u0633\u0646", "\u0645\u0646\u0635\u0648\u0631", "\u0639\u0648\u0636", "\u0627\u0644\u0646\u062C\u0627\u0631", "\u0633\u0644\u064A\u0645\u0627\u0646", "\u0634\u0627\u0647\u064A\u0646", "\u0645\u0631\u0633\u064A", "\u0635\u0627\u0644\u062D", "\u0639\u0628\u0627\u0633", "\u0641\u0624\u0627\u062F", "\u0643\u0645\u0627\u0644", "\u0632\u0643\u064A", "\u0639\u0645\u0631\u0627\u0646", "\u0627\u0644\u0634\u0627\u0630\u0644\u064A", "\u0639\u062B\u0645\u0627\u0646", "\u064A\u0648\u0633\u0641", "\u062D\u0645\u062F\u064A", "\u0639\u0628\u062F \u0627\u0644\u062D\u0645\u064A\u062F"];
-var placeholder = (name) => /^(?:حالة|حاله|مريضة|مريضه)\s+(?:اصطناعي?(?:ة|ه)?(?:\s|$)|صناعي?(?:ة|ه)?(?:\s|$)|تجريبي?(?:ة|ه)?(?:\s|$)|افتراضي?(?:ة|ه)?(?:\s|$)|[0-9٠-٩])/.test(String(name || "").trim()) || /^(?:demo|test|synthetic)\s+(?:patient|case)\b/i.test(String(name || ""));
-function egyptianName(index) {
-  let name = first[index % 20] + " " + middle[Math.floor(index / 20) % 20] + " " + last[(index * 7 + Math.floor(index / 20) + Math.floor(index / 400)) % 20];
-  for (let extra = Math.floor(index / 8e3); extra > 0; extra = Math.floor((extra - 1) / 20)) name += " " + last[(extra - 1) % 20];
-  return name;
-}
-function spouse(phone3) {
-  const i = Number(phone3.slice(-5)), jobs = ["\u0645\u0647\u0646\u062F\u0633", "\u0645\u062D\u0627\u0633\u0628", "\u0645\u062F\u0631\u0633", "\u0637\u0628\u064A\u0628", "\u0635\u064A\u062F\u0644\u064A", "\u0645\u0648\u0638\u0641 \u0625\u062F\u0627\u0631\u064A", "\u062A\u0627\u062C\u0631", "\u0645\u062D\u0627\u0645", "\u0641\u0646\u064A \u0643\u0647\u0631\u0628\u0627\u0621", "\u0635\u0627\u062D\u0628 \u0645\u0634\u0631\u0648\u0639"];
-  return { spouseName: middle[(i * 3 + 2) % 20] + " " + middle[(Math.floor(i / 20) + 5) % 20] + " " + last[(i * 7 + 3) % 20], spouseJob: jobs[i % jobs.length], spousePhone: "010001" + phone3.slice(-5) };
-}
-var legacyValues = /* @__PURE__ */ new Set([
-  "\u0628\u064A\u0627\u0646\u0627\u062A \u0627\u0635\u0637\u0646\u0627\u0639\u064A\u0629 \u0644\u0644\u0627\u062E\u062A\u0628\u0627\u0631 \u0641\u0642\u0637 \u2014 \u0644\u0627 \u062A\u0633\u062A\u062E\u062F\u0645 \u0644\u0644\u062A\u0648\u0627\u0635\u0644 \u0623\u0648 \u0627\u0644\u0639\u0644\u0627\u062C",
-  "\u0628\u064A\u0627\u0646\u0627\u062A \u0627\u0635\u0637\u0646\u0627\u0639\u064A\u0629 \u0644\u0644\u0627\u062E\u062A\u0628\u0627\u0631 \u0641\u0642\u0637 \u2014 \u0644\u0627 \u062A\u0633\u062A\u062E\u062F\u0645 \u0644\u0644\u062A\u0648\u0627\u0635\u0644",
-  "\u0628\u064A\u0627\u0646\u0627\u062A \u0627\u0635\u0637\u0646\u0627\u0639\u064A\u0629 \u0644\u0644\u0627\u062E\u062A\u0628\u0627\u0631 \u0641\u0642\u0637",
-  "\u0628\u064A\u0627\u0646\u0627\u062A \u062A\u062C\u0631\u064A\u0628\u064A\u0629 \u0641\u0642\u0637",
-  "\u0645\u0644\u0627\u062D\u0638\u0627\u062A \u0637\u0628\u064A\u0628 \u062A\u062C\u0631\u064A\u0628\u064A\u0629: \u0645\u0631\u0627\u062C\u0639\u0629 \u0627\u0644\u062A\u062D\u0627\u0644\u064A\u0644 \u0648\u0627\u0644\u0633\u0648\u0646\u0627\u0631. \u0644\u064A\u0633\u062A \u0628\u064A\u0627\u0646\u0627\u062A \u0645\u0631\u064A\u0636 \u062D\u0642\u064A\u0642\u064A.",
-  "\u0645\u0644\u0627\u062D\u0638\u0627\u062A \u062F\u0643\u062A\u0648\u0631 \u062A\u062C\u0631\u064A\u0628\u064A\u0629: \u0645\u062A\u0627\u0628\u0639\u0629 \u0627\u0644\u062A\u062D\u0627\u0644\u064A\u0644 \u0648\u0627\u0644\u0633\u0648\u0646\u0627\u0631 \u0641\u064A \u0627\u0644\u0632\u064A\u0627\u0631\u0629 \u0627\u0644\u0642\u0627\u062F\u0645\u0629.",
-  "\u0645\u0644\u0641 \u062A\u062C\u0631\u064A\u0628\u064A \u0644\u0627 \u064A\u064F\u0633\u062A\u062E\u062F\u0645 \u0644\u0644\u062A\u0634\u062E\u064A\u0635 \u0623\u0648 \u0627\u0644\u0639\u0644\u0627\u062C",
-  "\u062D\u0633\u0627\u0633\u064A\u0629 \u062A\u062C\u0631\u064A\u0628\u064A\u0629",
-  "\u0644\u0627 \u062A\u0648\u062C\u062F \u0628\u064A\u0627\u0646\u0627\u062A \u062A\u062C\u0631\u064A\u0628\u064A\u0629",
-  "\u0628\u064A\u0627\u0646\u0627\u062A \u0627\u0635\u0637\u0646\u0627\u0639\u064A\u0629",
-  "\u0633\u062C\u0644 \u062A\u062C\u0631\u064A\u0628\u064A",
-  "\u062A\u0634\u062E\u064A\u0635 \u062A\u062C\u0631\u064A\u0628\u064A \u0641\u0642\u0637",
-  "\u062A\u0634\u062E\u064A\u0635 \u062A\u062C\u0631\u064A\u0628\u064A",
-  "\u062E\u0637\u0629 \u062A\u062C\u0631\u064A\u0628\u064A\u0629 \u063A\u064A\u0631 \u0645\u062E\u0635\u0635\u0629 \u0644\u0644\u0627\u0633\u062A\u062E\u062F\u0627\u0645 \u0627\u0644\u0637\u0628\u064A",
-  "\u062E\u0637\u0629 \u062A\u062C\u0631\u064A\u0628\u064A\u0629",
-  "\u0634\u0643\u0648\u0649 \u062A\u062C\u0631\u064A\u0628\u064A\u0629 \u0644\u0645\u0631\u0627\u062C\u0639\u0629 \u0648\u0638\u0627\u0626\u0641 \u0627\u0644\u0645\u0644\u0641 \u0627\u0644\u0637\u0628\u064A",
-  "\u0645\u0644\u0627\u062D\u0638\u0629 \u0639\u0644\u0627\u062C \u062A\u062C\u0631\u064A\u0628\u064A\u0629 \u0641\u0642\u0637",
-  "\u0634\u0643\u0648\u0649 \u0627\u0635\u0637\u0646\u0627\u0639\u064A\u0629 \u0644\u0644\u0627\u062E\u062A\u0628\u0627\u0631",
-  "\u0645\u062A\u0627\u0628\u0639\u0629 \u062A\u062C\u0631\u064A\u0628\u064A\u0629",
-  "\u0634\u0643\u0648\u0649 \u062A\u062C\u0631\u064A\u0628\u064A\u0629 \u0644\u0645\u0631\u0627\u062C\u0639\u0629 \u0627\u0644\u0637\u0628\u064A\u0628",
-  "\u0639\u0644\u0627\u062C \u062A\u062C\u0631\u064A\u0628\u064A \u0645\u0633\u062C\u0644 \u0644\u0644\u0627\u062E\u062A\u0628\u0627\u0631 \u0641\u0642\u0637"
-]);
-var legacyText = (value) => typeof value === "string" && legacyValues.has(value.trim());
-function normalize4(original, uid) {
-  requirePermission(role(original, uid), "data.import");
-  const s = structuredClone(original);
-  s.patients = { ...indexPatients({ ...s, patients: { ...s.patients } }).patients, ...s.patients };
-  const rows = Object.values(s.bookings || {}).flatMap(Object.values), phones = /* @__PURE__ */ new Set(), used = /* @__PURE__ */ new Set();
-  for (const [p, x] of Object.entries(s.patients || {})) {
-    if (placeholder(x.n)) phones.add(p);
-    else if (x.n) used.add(x.n);
-  }
-  for (const x of rows) {
-    if (placeholder(x.name)) phones.add(x.phone);
-    else if (x.name) used.add(x.name);
-  }
-  const samplePhones = /* @__PURE__ */ new Set([...phones, ...Object.keys(s.patients || {}).filter((p) => /^010000\d{5}$/.test(p)), ...rows.filter((x) => /^demo[-_]/.test(x.id || "")).map((x) => x.phone)]);
-  let serial = 0;
-  const summary = { patients: 0, bookings: 0, notifications: 0 };
-  for (const phone3 of [...phones].sort()) {
-    const patient = s.patients?.[phone3], proper = patient?.n && !placeholder(patient.n) ? patient.n : rows.find((x) => x.phone === phone3 && x.name && !placeholder(x.name))?.name;
-    let name = proper;
-    if (!name) {
-      do {
-        name = egyptianName(serial++);
-      } while (used.has(name));
-      used.add(name);
-    }
-    if (patient && placeholder(patient.n)) {
-      patient.n = name;
-      summary.patients++;
-    }
-    for (const row of rows) if (row.phone === phone3 && placeholder(row.name)) {
-      row.name = name;
-      row.rev = (row.rev || 0) + 1;
-      summary.bookings++;
-    }
-    for (const note of Object.values(s.inbox || {})) if (note.p === phone3 && placeholder(note.n)) {
-      note.n = name;
-      summary.notifications++;
-    }
-  }
-  summary.spouses = 0;
-  summary.clinicalFields = 0;
-  for (const [i, p] of [...samplePhones].sort().entries()) {
-    const patient = s.patients?.[p];
-    if (!patient) continue;
-    let changed = false;
-    for (const [k, v] of Object.entries(spouse(p))) if (patient[k] === void 0 || patient[k] === null) {
-      patient[k] = v;
-      changed = true;
-    }
-    if (changed) summary.spouses++;
-    const { profile, bookingNote, file } = clinicalProfile(i);
-    for (const row of rows) if (row.phone === p && legacyText(row.nt)) {
-      row.nt = bookingNote;
-      row.rev = (row.rev || 0) + 1;
-      summary.clinicalFields++;
-    }
-    const old = s.files?.[p];
-    let fileChanged = false;
-    if (old) {
-      for (const [k, v] of Object.entries(file)) if (legacyText(old[k])) {
-        old[k] = v;
-        fileChanged = true;
-        summary.clinicalFields++;
-      }
-    }
-    if (fileChanged) {
-      old.rev = (old.rev || 0) + 1;
-      old.t = (/* @__PURE__ */ new Date()).toISOString();
-    }
-    for (const complaint of Object.values(s.complaints?.[p] || {})) {
-      if ((legacyText(complaint.text) || legacyText(complaint.tx)) && !complaint.reason) {
-        complaint.reason = profile.reason;
-        summary.clinicalFields++;
-      }
-      for (const [k, v] of Object.entries({ reason: profile.reason, text: profile.text, tx: profile.treatment })) if (legacyText(complaint[k])) {
-        complaint[k] = v;
-        summary.clinicalFields++;
-      }
-      if (complaint.by === "\u0628\u064A\u0627\u0646\u0627\u062A \u062A\u062C\u0631\u064A\u0628\u064A\u0629") complaint.by = "nurse";
-    }
-    for (const note of Object.values(s.inbox || {})) if (note.p === p && note.by === "\u0628\u064A\u0627\u0646\u0627\u062A \u062A\u062C\u0631\u064A\u0628\u064A\u0629") note.by = "nurse";
-  }
-  s.settings ||= {};
-  s.settings.demoProfileVersion = 1;
-  s.settings.demoSpouseVersion = 1;
-  s.settings.demoNamesVersion = 1;
-  return { state: s, summary };
-}
-
 // supabase/functions/clinic-api/clinic-features.js
 function publicQueue(s, b, d = today()) {
   if (!branchIds(s, true).includes(b)) fail2("\u0627\u0644\u0641\u0631\u0639 \u063A\u064A\u0631 \u0645\u062A\u0627\u062D \u0644\u0644\u0639\u0631\u0636 \u0627\u0644\u0639\u0627\u0645", 404);
@@ -3181,7 +3353,7 @@ var MAX_BYTES2 = 6e5;
 var MAX_PDF_BYTES = 5e6;
 var MAX_FILES = 20;
 var validId3 = (id2) => typeof id2 === "string" && /^[0-9a-f-]{36}$/.test(id2);
-function authorize2(state, uid, phone3, write = false) {
+function authorize3(state, uid, phone3, write = false) {
   const role2 = role(state, uid);
   requirePermission(role2, write ? "attachments.create" : "attachments.read");
   if (!/^01[0125]\d{8}$/.test(phone3) || !state.patients?.[phone3]) fail2("\u0627\u0644\u062D\u0627\u0644\u0629 \u063A\u064A\u0631 \u0645\u0648\u062C\u0648\u062F\u0629", 404);
@@ -3210,7 +3382,7 @@ function decodeImage(input) {
 }
 async function handleAttachments(adapter2, input, uid) {
   const phone3 = phone(input.phone), write = input.action === "attachmentUpload";
-  const state = await adapter2.read(), role2 = authorize2(state, uid, phone3, write), records = state.attachments?.[phone3] || {};
+  const state = await adapter2.read(), role2 = authorize3(state, uid, phone3, write), records = state.attachments?.[phone3] || {};
   if (input.action === "attachmentList") return Object.values(records).map(({ key, byUid, ...item2 }) => ({ ...item2, canDelete: can(role2, "attachments.delete") || byUid === uid && can(role2, "attachments.own.delete") }));
   if (input.action === "attachmentUpload") {
     if (!adapter2.uploadAttachment) fail2("\u062A\u062E\u0632\u064A\u0646 \u0627\u0644\u062A\u0642\u0627\u0631\u064A\u0631 \u063A\u064A\u0631 \u0645\u0647\u064A\u0623", 503);
@@ -3218,13 +3390,13 @@ async function handleAttachments(adapter2, input, uid) {
     if (input.category !== void 0 && !["report", "lab", "radiology", "other"].includes(input.category)) fail2("\u062A\u0635\u0646\u064A\u0641 \u0627\u0644\u062A\u0642\u0631\u064A\u0631 \u063A\u064A\u0631 \u0635\u062D\u064A\u062D");
     const reportDate = date(input.reportDate || today());
     if (reportDate > today()) fail2("\u062A\u0627\u0631\u064A\u062E \u0627\u0644\u062A\u0642\u0631\u064A\u0631 \u0644\u0627 \u064A\u0643\u0648\u0646 \u0641\u064A \u0627\u0644\u0645\u0633\u062A\u0642\u0628\u0644");
-    let digest2;
+    let digest3;
     if (input.restoreSourceId !== void 0) {
       if (!can(role2, "data.restore") || !validId3(input.restoreSourceId)) fail2("\u0627\u0633\u062A\u0639\u0627\u062F\u0629 \u0627\u0644\u0635\u0648\u0631 \u0644\u0645\u062F\u064A\u0631 \u0627\u0644\u0646\u0638\u0627\u0645 \u0641\u0642\u0637", 403);
-      digest2 = Array.from(new Uint8Array(await crypto.subtle.digest("SHA-256", bytes))).map((x) => x.toString(16).padStart(2, "0")).join("");
+      digest3 = Array.from(new Uint8Array(await crypto.subtle.digest("SHA-256", bytes))).map((x) => x.toString(16).padStart(2, "0")).join("");
       const previous = Object.values(records).find((x) => (x.restoreSourceId || x.id) === input.restoreSourceId);
       if (previous) {
-        let same3 = previous.digest === digest2;
+        let same3 = previous.digest === digest3;
         if (!same3 && adapter2.readAttachmentBytes) {
           const original = await adapter2.readAttachmentBytes(previous.key, previous.mime);
           same3 = original.data === input.data;
@@ -3239,11 +3411,11 @@ async function handleAttachments(adapter2, input, uid) {
       }
     }
     if (Object.keys(records).length >= MAX_FILES) fail2("\u0627\u0644\u062D\u062F \u0627\u0644\u0623\u0642\u0635\u0649 20 \u0635\u0648\u0631\u0629 \u0644\u0643\u0644 \u062D\u0627\u0644\u0629");
-    const id2 = crypto.randomUUID(), record2 = { id: id2, key: id2, name: input.name.trim(), mime: input.mime, size: bytes.length, createdAt: (/* @__PURE__ */ new Date()).toISOString(), by: role2.u, byUid: uid, category: input.category || "report", reportDate, ...input.restoreSourceId ? { restoreSourceId: input.restoreSourceId, digest: digest2 } : {} };
+    const id2 = crypto.randomUUID(), record2 = { id: id2, key: id2, name: input.name.trim(), mime: input.mime, size: bytes.length, createdAt: (/* @__PURE__ */ new Date()).toISOString(), by: role2.u, byUid: uid, category: input.category || "report", reportDate, ...input.restoreSourceId ? { restoreSourceId: input.restoreSourceId, digest: digest3 } : {} };
     await adapter2.uploadAttachment(id2, bytes, input.mime);
     try {
       await adapter2.mutate((original) => {
-        authorize2(original, uid, phone3, true);
+        authorize3(original, uid, phone3, true);
         const s = structuredClone(original);
         s.attachments ||= {};
         const items = s.attachments[phone3] ||= {};
@@ -3272,7 +3444,7 @@ async function handleAttachments(adapter2, input, uid) {
   if (input.action === "attachmentDelete") {
     if (!can(role2, "attachments.delete") && !(item.byUid === uid && can(role2, "attachments.own.delete"))) fail2("\u064A\u0645\u0643\u0646 \u0644\u0644\u0645\u0645\u0631\u0636\u0629 \u062D\u0630\u0641 \u0627\u0644\u0635\u0648\u0631 \u0627\u0644\u062A\u064A \u0631\u0641\u0639\u062A\u0647\u0627 \u0641\u0642\u0637", 403);
     await adapter2.mutate((original) => {
-      const currentRole = authorize2(original, uid, phone3);
+      const currentRole = authorize3(original, uid, phone3);
       const s = structuredClone(original);
       const current = s.attachments?.[phone3]?.[input.id];
       if (current) {
@@ -3318,32 +3490,34 @@ function review(state, branch2, proposed) {
 
 // supabase/functions/clinic-api/service.js
 function createService(baseAdapter) {
-  return async function handle7(input, uid, client = "local") {
+  return async function handle9(input, uid, client = "local") {
     const { action } = input || {};
+    if (actions.includes(action)) return handle2(baseAdapter, input, uid);
     const adapter2 = { ...baseAdapter, mutate: (fn) => baseAdapter.mutate((original) => {
       const before = structuredClone(original);
       return record(before, reconcile(before, fn(original)), input, uid);
     }) };
-    if (["backupRehearsal", "backupRehearsalStatus"].includes(action)) return handle2(adapter2, input, uid);
+    if (["trainingYearPreview", "trainingYearSeed", "trainingYearPurge"].includes(action)) return handle(adapter2, input, uid);
+    if (["backupRehearsal", "backupRehearsalStatus"].includes(action)) return handle4(adapter2, input, uid);
     if (action === "systemVersion") {
       const s = await adapter2.read();
       if (role(s, uid).r !== "admin") fail2("\u0639\u0631\u0636 \u0625\u0635\u062F\u0627\u0631 \u0627\u0644\u0646\u0638\u0627\u0645 \u0645\u062A\u0627\u062D \u0644\u0644\u0623\u062F\u0645\u0646 \u0641\u0642\u0637", 403);
       return release_default;
     }
-    if (action === "refreshClinicColors") return handle(adapter2, input, uid);
-    if (actions.includes(action)) return handle3(adapter2, input, uid);
-    if (actions2.includes(action)) return handle4(adapter2, input, uid, client);
-    if (["importStageStart", "importStagePart", "importStagePreview", "importStageApply", "importStageCancel"].includes(action)) return handle5(adapter2, input, uid);
+    if (action === "refreshClinicColors") return handle3(adapter2, input, uid);
+    if (actions2.includes(action)) return handle5(adapter2, input, uid);
+    if (actions3.includes(action)) return handle6(adapter2, input, uid, client);
+    if (["importStageStart", "importStagePart", "importStagePreview", "importStageApply", "importStageCancel"].includes(action)) return handle7(adapter2, input, uid);
     if (action === "normalizeDemoNames") {
       let summary;
       await adapter2.mutate((s) => {
-        const result = normalize4(s, uid);
+        const result = normalize2(s, uid);
         summary = result.summary;
         return result.state;
       });
       return { ok: true, ...summary, profileMigrationVersion: 1 };
     }
-    if (action === "trashList") return list(await adapter2.read(), uid, input);
+    if (action === "trashList") return list2(await adapter2.read(), uid, input);
     if (action === "trashRestore") {
       await adapter2.mutate((s) => restore(s, uid, input.id));
       return { ok: true };
@@ -3360,48 +3534,48 @@ function createService(baseAdapter) {
     if (["attachmentList", "attachmentUpload", "attachmentRead", "attachmentDelete"].includes(action)) return handleAttachments(adapter2, input, uid);
     const readFields = (fields, day = null, entity = null) => adapter2.readFields ? adapter2.readFields(fields, day, entity) : adapter2.read();
     if (action === "organizeTrainingPreview" || action === "organizeTrainingApply") {
-      const plan2 = preview2(await adapter2.read(), uid, input.accounts), previewToken = JSON.stringify(plan2);
-      if (action === "organizeTrainingPreview") return { ...plan2, previewToken };
+      const plan3 = preview2(await adapter2.read(), uid, input.accounts), previewToken = JSON.stringify(plan3);
+      if (action === "organizeTrainingPreview") return { ...plan3, previewToken };
       if (input.previewToken !== previewToken) fail2("\u062A\u063A\u064A\u0631\u062A \u0627\u0644\u062D\u0633\u0627\u0628\u0627\u062A \u0623\u0648 \u0627\u0644\u062D\u0627\u0644\u0627\u062A\u061B \u0623\u0639\u062F \u0627\u0644\u0645\u0639\u0627\u064A\u0646\u0629", 409);
-      if (plan2.missing) fail2("\u0627\u0633\u062A\u0648\u0631\u062F \u0627\u0644\u062D\u0627\u0644\u0627\u062A \u0627\u0644\u062A\u062F\u0631\u064A\u0628\u064A\u0629 \u0627\u0644\u0646\u0627\u0642\u0635\u0629 \u0623\u0648\u0644\u064B\u0627. \u0627\u0644\u0639\u062F\u062F \u0627\u0644\u0646\u0627\u0642\u0635: " + plan2.missing, 409);
+      if (plan3.missing) fail2("\u0627\u0633\u062A\u0648\u0631\u062F \u0627\u0644\u062D\u0627\u0644\u0627\u062A \u0627\u0644\u062A\u062F\u0631\u064A\u0628\u064A\u0629 \u0627\u0644\u0646\u0627\u0642\u0635\u0629 \u0623\u0648\u0644\u064B\u0627. \u0627\u0644\u0639\u062F\u062F \u0627\u0644\u0646\u0627\u0642\u0635: " + plan3.missing, 409);
       await adapter2.mutate((s) => organize(s, uid));
       const results = [];
-      for (const item of plan2.roles) {
+      for (const item of plan3.roles) {
         try {
           const current = await adapter2.read();
           if (JSON.stringify(current.roles[item.uid]) !== JSON.stringify(item.before)) fail2("\u062A\u063A\u064A\u0631 \u0627\u0644\u062D\u0633\u0627\u0628 \u0623\u062B\u0646\u0627\u0621 \u0627\u0644\u062A\u0646\u0641\u064A\u0630", 409);
-          await handle7({ action: "userSave", uid: item.uid, role: item.role }, uid, client);
+          await handle9({ action: "userSave", uid: item.uid, role: item.role }, uid, client);
           results.push({ username: item.role.u, ok: true });
         } catch (e) {
           results.push({ username: item.role.u, ok: false, error: e.status ? e.message : "\u062A\u0639\u0630\u0631 \u062A\u062D\u062F\u064A\u062B \u0627\u0644\u062D\u0633\u0627\u0628" });
           break;
         }
       }
-      return { ok: results.every((x) => x.ok), dataOrganized: true, counts: plan2.counts, results };
+      return { ok: results.every((x) => x.ok), dataOrganized: true, counts: plan3.counts, results };
     }
     if (action === "staffAccessPreview" || action === "staffAccessApply") {
-      const plan2 = plan(await adapter2.read(), uid, core_exports), previewToken = JSON.stringify(plan2);
-      if (action === "staffAccessPreview") return { ...plan2, previewToken };
+      const plan3 = plan2(await adapter2.read(), uid, core_exports), previewToken = JSON.stringify(plan3);
+      if (action === "staffAccessPreview") return { ...plan3, previewToken };
       if (input.previewToken !== previewToken) fail2("\u062A\u063A\u064A\u0631\u062A \u062D\u0633\u0627\u0628\u0627\u062A \u0627\u0644\u0645\u0633\u062A\u062E\u062F\u0645\u064A\u0646\u061B \u0627\u0641\u062A\u062D \u0636\u0628\u0637 \u0627\u0644\u062D\u0633\u0627\u0628\u0627\u062A \u0645\u0646 \u062C\u062F\u064A\u062F", 409);
       if (typeof input.password !== "string" || input.password.length < 6 || input.password.length > 128) fail2("\u0643\u0644\u0645\u0629 \u0627\u0644\u0633\u0631 \u0645\u0646 6 \u0625\u0644\u0649 128 \u062D\u0631\u0641\u064B\u0627");
       const results = [];
-      for (const item of plan2.staff) {
+      for (const item of plan3.staff) {
         let credentialsSaved = false;
         try {
           const current = await adapter2.read();
           if (role(current, uid).r !== "admin") fail2("\u0627\u0646\u062A\u0647\u062A \u0635\u0644\u0627\u062D\u064A\u0629 \u0627\u0644\u0623\u062F\u0645\u0646", 403);
           if (item.uid && JSON.stringify(current.roles[item.uid]) !== JSON.stringify(item.before)) fail2("\u062A\u063A\u064A\u0631 \u0627\u0644\u062D\u0633\u0627\u0628 \u0623\u062B\u0646\u0627\u0621 \u0627\u0644\u062A\u0646\u0641\u064A\u0630", 409);
           if (item.create) {
-            await handle7({ action: "userCreate", u: item.username, p: input.password, role: item.role }, uid, client);
+            await handle9({ action: "userCreate", u: item.username, p: input.password, role: item.role }, uid, client);
           } else {
             if (item.role.r === "sec") {
-              const result = await handle7({ action: "userCredentials", uid: item.uid, username: item.username, password: input.password }, uid, client);
+              const result = await handle9({ action: "userCredentials", uid: item.uid, username: item.username, password: input.password }, uid, client);
               credentialsSaved = true;
               if (result.warning) results.push({ username: item.username, warning: result.warning });
             }
             const latest = await adapter2.read(), expected = credentialsSaved ? { ...item.before, u: item.username } : item.before;
             if (JSON.stringify(latest.roles[item.uid]) !== JSON.stringify(expected)) fail2("\u062A\u063A\u064A\u0631\u062A \u0627\u0644\u0635\u0644\u0627\u062D\u064A\u0627\u062A \u0623\u062B\u0646\u0627\u0621 \u0627\u0644\u062A\u0646\u0641\u064A\u0630\u061B \u0623\u0639\u062F \u0627\u0644\u0645\u0639\u0627\u064A\u0646\u0629", 409);
-            await handle7({ action: "userSave", uid: item.uid, role: item.role }, uid, client);
+            await handle9({ action: "userSave", uid: item.uid, role: item.role }, uid, client);
           }
           results.push({ username: item.username, ok: true });
         } catch (e) {
@@ -3421,17 +3595,17 @@ function createService(baseAdapter) {
       return { familyMetadata: 1 };
     }
     if (action === "importPreview") {
-      const plan2 = prepare(await adapter2.read(), uid, input.data, input.options);
-      return { summary: plan2.summary, token: plan2.token };
+      const plan3 = prepare(await adapter2.read(), uid, input.data, input.options);
+      return { summary: plan3.summary, token: plan3.token };
     }
     if (action === "importApply") {
       if (input.confirmation !== "IMPORT_CLINIC_DATA" || typeof input.previewToken !== "string") fail2("\u0631\u0627\u062C\u0639 \u0627\u0644\u0645\u0639\u0627\u064A\u0646\u0629 \u0648\u0623\u0643\u062F \u0627\u0644\u0627\u0633\u062A\u064A\u0631\u0627\u062F \u0623\u0648\u0644\u064B\u0627");
       let summary;
       await adapter2.mutate((s) => {
-        const plan2 = prepare(s, uid, input.data, input.options);
-        if (plan2.token !== input.previewToken) fail2("\u062A\u063A\u064A\u0631\u062A \u0628\u064A\u0627\u0646\u0627\u062A \u0627\u0644\u0639\u064A\u0627\u062F\u0629 \u0623\u0648 \u0627\u0644\u0645\u0644\u0641 \u0645\u0646\u0630 \u0627\u0644\u0645\u0639\u0627\u064A\u0646\u0629\u061B \u0623\u0639\u062F \u0627\u0644\u0645\u0639\u0627\u064A\u0646\u0629 \u0623\u0648\u0644\u064B\u0627", 409);
-        summary = plan2.summary;
-        return plan2.state;
+        const plan3 = prepare(s, uid, input.data, input.options);
+        if (plan3.token !== input.previewToken) fail2("\u062A\u063A\u064A\u0631\u062A \u0628\u064A\u0627\u0646\u0627\u062A \u0627\u0644\u0639\u064A\u0627\u062F\u0629 \u0623\u0648 \u0627\u0644\u0645\u0644\u0641 \u0645\u0646\u0630 \u0627\u0644\u0645\u0639\u0627\u064A\u0646\u0629\u061B \u0623\u0639\u062F \u0627\u0644\u0645\u0639\u0627\u064A\u0646\u0629 \u0623\u0648\u0644\u064B\u0627", 409);
+        summary = plan3.summary;
+        return plan3.state;
       });
       return { ok: true, summary };
     }
@@ -3683,7 +3857,7 @@ function createService(baseAdapter) {
       await adapter2.mutate((original) => {
         requirePermission(role(original, uid), "data.delete");
         const state = structuredClone(original), phones = /* @__PURE__ */ new Set();
-        for (const rows of Object.values(state.bookings || {})) for (const [id2, x] of Object.entries(rows)) if (/^demo[-_]/.test(id2) && /^010000\d{5}$/.test(x.phone)) {
+        for (const rows of Object.values(state.bookings || {})) for (const [id2, x] of Object.entries(rows)) if (!x.trainingBatch && /^demo[-_]/.test(id2) && /^010000\d{5}$/.test(x.phone)) {
           phones.add(x.phone);
           delete rows[id2];
         }
@@ -3710,7 +3884,7 @@ function createService(baseAdapter) {
       const state = await adapter2.read(), old = state.roles?.[input.uid];
       mutate(state, uid, { ...input, role: { ...input.role, u: old?.u } }, core_exports);
       const next = validateRole(input.role, fail2, branchIds(state));
-      if (next.u !== old.u) await handle7({ action: "userCredentials", uid: input.uid, username: next.u }, uid, client);
+      if (next.u !== old.u) await handle9({ action: "userCredentials", uid: input.uid, username: next.u }, uid, client);
       await adapter2.mutate((s) => mutate(s, uid, { ...input, role: next }, core_exports));
       return { ok: true, username: next.u };
     }
@@ -3843,7 +4017,7 @@ function createService(baseAdapter) {
 
 // supabase/functions/clinic-api/index.js
 var adapter = supabaseAdapter(Deno.env.get("SUPABASE_URL"), Deno.env.get("SUPABASE_SERVICE_ROLE_KEY"));
-var handle6 = createService(adapter);
+var handle8 = createService(adapter);
 var headers = { "Access-Control-Allow-Origin": "*", "Access-Control-Allow-Headers": "authorization,apikey,content-type,x-client-info,x-request-id", "Access-Control-Expose-Headers": "x-request-id", "Access-Control-Allow-Methods": "POST,OPTIONS", "Content-Type": "application/json; charset=utf-8", "Cache-Control": "no-store" };
 Deno.serve((req) => {
   const requestId = crypto.randomUUID();
@@ -3868,7 +4042,7 @@ Deno.serve((req) => {
         uid = await adapter.verify(token);
       }
       const client = req.headers.get("x-forwarded-for")?.split(",")[0].trim() || "unknown";
-      const data = await handle6(input, uid, client);
+      const data = await handle8(input, uid, client);
       console.info(JSON.stringify({ event: "clinic_request", requestId, action, status: 200, durationMs: Date.now() - started }));
       return new Response(JSON.stringify({ data }), { headers: responseHeaders });
     } catch (e) {
