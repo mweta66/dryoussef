@@ -34,6 +34,10 @@ Latest isolated run: **47 assertions passed**. Coverage includes:
 
 The separate adapter/upstream tests cover valid nullable receipt responses versus malformed JSON, narrow missing-RPC fallback, and actionable status classification for permission/validation/missing-record/conflict SQL errors.
 
+## Single-file deployment variant
+
+`deployment/clinical-workflow-upgrade.sql` combines the exact three migrations in one transaction, with prerequisite checks and finite lock/statement timeouts. Regenerate with `node scripts/build-clinical-sql.cjs`. Verify with `node scripts/qa/verify-clinical-sql.cjs --deployment-bundle`. Its isolated PostgreSQL run passed **49 assertions**, including rejection when the projection trigger is disabled, repeat application, and unchanged canonical patient payload/version. Evidence: [combined-sql-verification.json](qa-clinical-upgrade-2026-11-01/combined-sql-verification.json).
+
 ## Limits
 
 The delta RPC reduces archive transfer and request payloads and preserves canonical archives atomically. It **does not physically split all archives into separate tables**, and the existing projection trigger still examines the canonical JSON payload internally. These checks do not establish O(1) SQL cost, production capacity, network reliability, or deployment readiness.
