@@ -1,3 +1,4 @@
+const secretaryAccess=require('./secretary-access.cjs');
 const consultation=require('./consultation.cjs');
 const followupPlans=require('./followup-plans.cjs');
 const patientSearch=require('./patient-search.cjs');
@@ -46,6 +47,7 @@ function createService(baseAdapter) {
    if(options.receipt&&!baseAdapter.mutationReceipt){next.mutationReceipts||={};next.mutationReceipts[uid+'_'+options.receipt.key]={...options.receipt,status:'saved',committedAt:new Date().toISOString()};}
    return next;
   },options)};
+  if(action===secretaryAccess.action)return secretaryAccess.handle(adapter,input,uid);
   if(consultation.actions.includes(action))return consultation.handle(adapter,input,uid);
   if(followupPlans.actions.includes(action))return followupPlans.handle(adapter,input,uid);
   if(patientSearch.actions.includes(action))return patientSearch.handle(adapter,input,uid);

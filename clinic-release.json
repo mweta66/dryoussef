@@ -1,5 +1,5 @@
 {
-  "version": "2026.11.01.2",
+  "version": "2026.11.01.3",
   "apiContract": 1,
   "capabilities": [
     "pdfReports",
@@ -29,6 +29,7 @@
     "safePatientDeletion",
     "deleteReadback",
     "legacyArchiveTolerance",
-    "staleRequestRejection"
+    "staleRequestRejection",
+    "secretaryClinicalRead"
   ]
 }

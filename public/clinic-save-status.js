@@ -3,7 +3,7 @@ var ClinicSaveStatus=(function(){
  if(typeof window!=='undefined'&&window.ClinicSaveStatus)return window.ClinicSaveStatus;
  var baseGateway=gateway,current=null,serial=0;
  var reads=new Set(['exportData','get','workspace','systemHealth','systemVersion','reportData','lookup','lookupHistory','publicQueue','bookingAvailability','bookingCapabilities','appointmentChangeOptions','requestSummary','requestNotifications','requestAssignees','bookingContactList','bookingContactGet','followupPlanList','consultationView','patientSearch','patientHistoryPage','workflowList','timeline','daySummary','similarPatients','patientMergeList','draftGet','preferencesGet','backupDownload','backupRehearsalStatus','auditDetail','trashList','attachmentList','attachmentRead','attachmentExport','recoveryBackupExport','recoveryFileExport','recoveryBackupVerify','mutationReceiptGet']);
- var silentWrites=new Set(['editingPresence','draftSave','draftDelete','requestNotificationRead','requestNotificationsReadAll','preferencesSave','refreshClinicColors','nurseRequestAccessUpgrade']);
+ var silentWrites=new Set(['editingPresence','draftSave','draftDelete','requestNotificationRead','requestNotificationsReadAll','preferencesSave','refreshClinicColors','nurseRequestAccessUpgrade','secretaryClinicalAccessUpgrade']);
  var receipted=new Set(['commit','patch','sessionSet','presenceSet','checkinSet','consultationComplete','consultationUrgentReview','consultationUrgentResolve','bookingContactSet','requestAssign','requestDecide']);
  function owner(){return typeof AUTH!=='undefined'&&AUTH?.uid||null;}
  function fresh(uid){return {owner:uid,status:'idle',lastRead:null,lastWrite:null,lastReadFailure:null,readCount:0,writeCount:0,active:new Map(),unresolved:new Map()};}

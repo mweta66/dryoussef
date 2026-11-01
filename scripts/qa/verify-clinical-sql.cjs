@@ -68,8 +68,11 @@ async function patientDeletionRoundtrip(){
   else if(name==='clinic_compare_and_swap'){
    writes++;result=sql(`set role service_role;select public.clinic_compare_and_swap(${Number(body.expected_version)},${j(body.next_payload)});`)==='t';
    if(writes===1)throw new TypeError('simulated lost delete response after actual SQL commit');
-  }else if(name==='clinic_read_slice')result=val(`public.clinic_read_slice(array[${body.fields.map(quote).join(',')}]::text[],${body.selected_day==null?'null':quote(body.selected_day)+'::date'},${body.entity==null?'null':quote(body.entity)})`);
+  }else if(name==='clinic_operational_snapshot')result=val('public.clinic_operational_snapshot()');
+  else if(name==='clinic_compare_and_swap_delta')result=val(`public.clinic_compare_and_swap_delta(${Number(body.expected_version)},${j(body.changes)},${j(body.archive_delta)},${j(body.receipt)})`);
+  else if(name==='clinic_read_slice')result=val(`public.clinic_read_slice(array[${body.fields.map(quote).join(',')}]::text[],${body.selected_day==null?'null':quote(body.selected_day)+'::date'},${body.entity==null?'null':quote(body.entity)})`);
   else if(name==='clinic_patient_search_page')result=val(`public.clinic_patient_search_page(${quote(body.actor_uid)},${quote(body.search_query||'')},${body.selected_branch==null?'null':quote(body.selected_branch)},${Number(body.selected_page||0)},${Number(body.page_size||20)})`);
+  else if(name==='clinic_patient_history_page')result=val(`public.clinic_patient_history_page(${quote(body.actor_uid)},${body.patient_phone==null?'null':quote(body.patient_phone)},${body.patient_id==null?'null':quote(body.patient_id)},${quote(body.entry_kind||'all')},${Number(body.selected_page||0)},${Number(body.page_size||20)})`);
   else throw Error('Unexpected deletion RPC '+name);
   return new Response(JSON.stringify(result),{status:200,headers:{'Content-Type':'application/json'}});
  });
@@ -81,6 +84,12 @@ async function patientDeletionRoundtrip(){
  const search=await handle({action:'patientSearch',query:phone},'admin');assert.equal(search.total,0);assert.deepEqual(search.rows,[]);checks++;
  const trash=await handle({action:'trashList'},'admin');const entry=trash.rows.find(x=>x.action==='patientDelete');assert.ok(entry);await handle({action:'trashRestore',id:entry.id},'admin');checks++;
  const restored=JSON.parse(sql('set role service_role;select payload from public.clinic_state where id=true;'));assert.equal(require(repo+'/server/patient-identity.cjs').idForPhone(restored,phone),patientId);assert.equal(restored.files[phone].n,initial.files[phone].n);assert.ok(restored.attachments[phone].x);assert.equal(sql(`set role service_role;select count(*) from public.clinic_patients where phone=${quote(phone)};`),'1');checks++;
+ // Existing SQL RPCs require explicit persisted grants; no new schema migration is needed.
+ const grant=await handle({action:'secretaryClinicalAccessUpgrade'},'admin');assert.equal(grant.updated,1);
+ const secretary=JSON.parse(sql("set role service_role;select data from public.clinic_roles where uid='sec';"));for(const key of ['patients.read','notes.read','complaints.read','attachments.read'])assert.equal(secretary.permissions[key],true);checks++;
+ const clinical=await handle({action:'patientHistoryPage',phone,kind:'medical'},'sec');assert.ok(clinical.rows.some(x=>x.id==='visit1'));assert.ok(clinical.rows.some(x=>x.id==='medical-current'));assert.equal((await handle({action:'get',path:'files/'+phone},'sec')).n,initial.files[phone].n);checks++;
+ await assert.rejects(handle({action:'patch',updates:{['files/'+phone]:{n:'not allowed',rev:1}}},'sec'),e=>e.status===403);checks++;
+ await handle({action:'userSave',uid:'sec',role:{...secretary,permissions:{...secretary.permissions,'notes.read':false}}},'admin');assert.equal((await handle({action:'secretaryClinicalAccessUpgrade'},'admin')).changed,false);await assert.rejects(handle({action:'get',path:'files/'+phone},'sec'),e=>e.status===403);assert.equal((await handle({action:'patientHistoryPage',phone,kind:'medical'},'sec')).rows.length,0);checks++;
 }
 (async()=>{
  let started=false;
@@ -89,7 +98,7 @@ async function patientDeletionRoundtrip(){
   const startedResult=docker(['run','--rm','-d','--network','none','--name',container,'-e','POSTGRES_HOST_AUTH_METHOD=trust','postgres:17.6-alpine']);assert.equal(startedResult.status,0,startedResult.stderr);started=true;
   let ready=false;for(let i=0;i<40;i++){if(docker(['exec',container,'pg_isready','-h','127.0.0.1','-U','postgres']).status===0){ready=true;break}await new Promise(resolve=>setTimeout(resolve,100));}assert.ok(ready,'Isolated PostgreSQL did not become ready');
   const created=docker(['exec',container,'createdb','-U','postgres',db]);assert.equal(created.status,0,created.stderr);
-  run();await adapterRoundtrip();await patientDeletionRoundtrip();const result={passed:checks,postgres:sql('show server_version;'),projectionTriggerTested:true,migrationsReapplied:true,deploymentBundleTested:process.argv.includes('--deployment-bundle'),adapterRoundtripWithLostResponse:true,patientDeletionAndRestoreThroughGateway:true,deletionProjectionReadback:true,lostDeleteResponseWithoutReplay:true,scope:'isolated real PostgreSQL, not Supabase production'};
+  run();await adapterRoundtrip();await patientDeletionRoundtrip();const result={passed:checks,postgres:sql('show server_version;'),projectionTriggerTested:true,migrationsReapplied:true,deploymentBundleTested:process.argv.includes('--deployment-bundle'),adapterRoundtripWithLostResponse:true,patientDeletionAndRestoreThroughGateway:true,deletionProjectionReadback:true,lostDeleteResponseWithoutReplay:true,secretaryClinicalReadGrantVerified:true,scope:'isolated real PostgreSQL, not Supabase production'};
   const outputIndex=process.argv.indexOf('--output');if(outputIndex>=0){const output=process.argv[outputIndex+1];assert.ok(output,'--output needs a file path');fs.mkdirSync(path.dirname(path.resolve(output)),{recursive:true});fs.writeFileSync(output,JSON.stringify(result,null,2)+'\n');}
   console.log(JSON.stringify(result));
  }finally{if(started)docker(['rm','-f',container]);}

@@ -3,7 +3,7 @@ var clinicReleaseUpdateFlight=null;
 async function ensureClinicReleaseUpdates(){
  if(!AUTH||me?.role!=='admin')return;
  const owner=AUTH;if(clinicReleaseUpdateFlight?.owner===owner)return clinicReleaseUpdateFlight.promise;
- const job={owner};job.promise=(async()=>{let refreshed=false;for(const [action,key]of [['refreshClinicColors','colorSystemVersion'],['nurseRequestAccessUpgrade','nurseRequestAccessVersion']]){if(AUTH!==owner||me?.role!=='admin')return;if(settingsCache?.[key]===1)continue;try{await gateway(action,{},true);refreshed=true}catch(e){notify('تعذر تطبيق تحديث الألوان وصلاحية الطلبات. انشر أحدث خدمة للعيادة ثم أعد المحاولة.')}}if(refreshed&&AUTH===owner){try{await refreshWorkspaceData()}catch(e){notify('تم حفظ تحديث العيادة، لكن تعذر تحميله الآن. أعد تحميل الصفحة عند عودة الاتصال.')}}})().finally(()=>{if(clinicReleaseUpdateFlight===job)clinicReleaseUpdateFlight=null});clinicReleaseUpdateFlight=job;return job.promise;
+ const job={owner};job.promise=(async()=>{let refreshed=false;for(const [action,key]of [['refreshClinicColors','colorSystemVersion'],['nurseRequestAccessUpgrade','nurseRequestAccessVersion'],['secretaryClinicalAccessUpgrade','secretaryClinicalAccessVersion']]){if(AUTH!==owner||me?.role!=='admin')return;if(settingsCache?.[key]===1)continue;try{await gateway(action,{},true);refreshed=true}catch(e){notify('تعذر تطبيق تحديث الألوان أو صلاحيات الطاقم. انشر أحدث خدمة للعيادة ثم أعد المحاولة.')}}if(refreshed&&AUTH===owner){try{await refreshWorkspaceData()}catch(e){notify('تم حفظ تحديث العيادة، لكن تعذر تحميله الآن. أعد تحميل الصفحة عند عودة الاتصال.')}}})().finally(()=>{if(clinicReleaseUpdateFlight===job)clinicReleaseUpdateFlight=null});clinicReleaseUpdateFlight=job;return job.promise;
 }
 var clinicReleaseLogin=login;login=async function(){await clinicReleaseLogin();if(AUTH&&me?.role==='admin'&&adminPage()){const owner=AUTH;await ensureClinicReleaseUpdates();if(AUTH===owner){draw();applySite(SITE)}}};
 /* Fetch fresh account/settings/view in one consolidated request on staff reload. */
@@ -40,3 +40,5 @@ function bootClinicPage(){
  })();clinicBootFlight=run.finally(()=>{clinicBootFlight=null;});return clinicBootFlight;
 }
 window.addEventListener('DOMContentLoaded',bootClinicPage);window.addEventListener('online',()=>{if(ClinicBoot?.loading)bootClinicPage();});
+
+if(typeof ACTION_NAMES!=='undefined')ACTION_NAMES.secretaryClinicalAccessUpgrade='تفعيل قراءة ملف الطبيب للسكرتارية';

@@ -1,4 +1,4 @@
-// Doctor-authored follow-up plans. Reception receives scheduling-only projections.
+// Doctor-authored follow-up plans. Clinical details follow the explicit notes.read permission.
 const core=require('./core.cjs');
 const patientIdentity=require('./patient-identity.cjs');
 const perms=require('./permissions.cjs');
@@ -14,7 +14,7 @@ function records(s){return Object.values(s.bookings||{}).flatMap(rows=>Object.va
 function identity(s,input={}){const indexed=cases.indexPatients(structuredClone(s)),resolved=patientIdentity.resolve(indexed,input),phone=resolved.phone,patient=resolved.patient,patientId=resolved.patientId,bookings=records(s).filter(x=>x.phone===phone||x.patientId&&x.patientId===patientId),latest=bookings.slice().sort((a,b)=>b.date.localeCompare(a.date))[0];return {phone,patientId,patient,name:patient.n||latest?.name||'',bookings};}
 function source(s,r,person,id){if(!id)return null;checkId(id);const row=person.bookings.find(x=>x.id===id);if(!row)core.fail('الحجز السابق غير موجود',404);core.allowed(r,row.b);return row;}
 function access(s,r,person){cases.assertAccess(s,r,person.phone);}
-function canClinical(r){return ['doctor','admin'].includes(r.r)&&perms.can(r,'notes.read');}
+function canClinical(r){return perms.can(r,'notes.read');}
 function planPhone(s,p){if(p.patientId){const pair=Object.entries(s.patients||{}).find(([phone])=>patientIdentity.idForPhone(s,phone)===p.patientId);if(pair)return pair[0];}return p.phone;}
 function derive(s,p,now=core.today()){
  const appointment=records(s).find(x=>x.id===(p.linkedBookingId||p.bookingId)),end=p.sensitive?p.windowTo:p.targetDate;

@@ -14,7 +14,7 @@ function plan(state,uid,core){
   const dataMatches=roles.filter(([,r])=>r.r==='staff'&&r.br===branch&&r.enabled!==false&&!r.archivedAt&&!r.deletePending&&/data/i.test(r.u));
   if(!named&&!matches.length&&dataMatches.length>1)core.fail('يوجد أكثر من حساب داتا للفرع '+registry[branch].name+'؛ راجع الحساب المطلوب أولًا',409);
   const selected=named||matches[0]||dataMatches[0],old=selected?.[1]||{};
-  const role={...old,u:username,r:'sec',br:branch,scope:'branch',enabled:true,displayName:old.displayName||'سكرتارية '+registry[branch].name,permissions:{...old.permissions,...Object.fromEntries(queueGrants.map(key=>[key,true]))}};
+  const role={...old,u:username,r:'sec',br:branch,scope:'branch',enabled:true,displayName:old.displayName||'سكرتارية '+registry[branch].name,permissions:{...old.permissions,...Object.fromEntries([...queueGrants,...perms.secretaryReadGrants].map(key=>[key,true]))}};
   staff.push({before:selected?.[1]||null,uid:selected?.[0]||null,username,create:!selected,role:perms.validateRole(role,core.fail,Object.keys(registry))});
  }
  for(const [id,old]of roles.filter(([,r])=>r.r==='nurse'&&r.enabled!==false&&!r.archivedAt&&!r.deletePending)){

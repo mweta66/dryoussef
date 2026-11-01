@@ -19,3 +19,5 @@ Local verification: the bundled handler was executed with mocked Auth/database s
 Booking family metadata: the updated frontend checks `bookingCapabilities` before submitting spouse data. The updated service saves the booking and patient family fields in one transaction. An older service is detected before creating a partial booking; deploy this regenerated bundle together with the frontend. Existing spouse data cannot be overwritten without patient-edit permission. New registrations can include spouse fields through the secretary's booking permission.
 
 For the patient-deletion fixes in `2026.11.01.2`, see [the action audit and deployment checklist](../docs/action-audit-2026-11-01-ar.md). This fix adds no new SQL migration beyond the earlier clinical-workflow prerequisites; publish the updated gateway and matching frontend.
+
+Release `2026.11.01.3` adds the owner-authorized secretary clinical read permissions. After deploying the matching gateway and frontend, sign in once as administrator to apply the one-time persisted grants. No new SQL migration is required for this change. See [the secretary access notes](../docs/secretary-clinical-read-ar.md).

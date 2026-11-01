@@ -1,3 +1,4 @@
+import * as secretaryAccess from './secretary-access.js';
 import * as consultation from './consultation.js';
 import * as followupPlans from './followup-plans.js';
 import * as patientSearch from './patient-search.js';
@@ -51,6 +52,7 @@ function createService(baseAdapter) {
    if(options.receipt&&!baseAdapter.mutationReceipt){next.mutationReceipts||={};next.mutationReceipts[uid+'_'+options.receipt.key]={...options.receipt,status:'saved',committedAt:new Date().toISOString()};}
    return next;
   },options)};
+  if(action===secretaryAccess.action)return secretaryAccess.handle(adapter,input,uid);
   if(consultation.actions.includes(action))return consultation.handle(adapter,input,uid);
   if(followupPlans.actions.includes(action))return followupPlans.handle(adapter,input,uid);
   if(patientSearch.actions.includes(action))return patientSearch.handle(adapter,input,uid);

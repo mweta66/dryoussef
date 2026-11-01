@@ -496,13 +496,15 @@ __export(permissions_exports, {
   keys: () => keys,
   normalize: () => normalize,
   requirePermission: () => requirePermission,
+  secretaryReadGrants: () => secretaryReadGrants,
   validateRole: () => validateRole
 });
 var keys = ["bookings.read", "bookings.create", "bookings.edit", "bookings.status", "bookings.delete", "patients.read", "patients.edit", "patients.delete", "complaints.read", "complaints.create", "complaints.edit", "complaints.delete", "notes.read", "notes.edit", "notifications.read", "users.manage", "clinic.manage", "site.manage", "data.export", "data.delete"];
 keys.push("patients.print", "display.manage", "data.import", "data.restore", "audit.details", "attachments.read", "attachments.create", "attachments.delete", "attachments.own.delete", "sessions.manage", "queue.configure", "reports.export", "audit.read");
 keys.push("tasks.read", "tasks.manage", "requests.read", "requests.manage", "waitinglist.manage", "day.close", "patients.merge");
 var administrative = ["patients.merge", "display.manage", "data.import", "data.restore", "audit.details", "attachments.own.delete", "users.manage", "clinic.manage", "site.manage", "data.export", "data.delete", "audit.read", "patients.delete"];
-var defaults = { doctor: keys.filter((k) => !administrative.includes(k)), sec: ["tasks.read", "tasks.manage", "requests.read", "requests.manage", "waitinglist.manage", "day.close", "patients.print", "bookings.read", "bookings.create", "bookings.status"], nurse: ["requests.read", "tasks.read", "tasks.manage", "day.close", "bookings.read", "bookings.create", "bookings.status", "patients.print", "patients.read", "complaints.read", "complaints.create", "attachments.read", "attachments.create", "attachments.own.delete"], staff: ["patients.print"] };
+var secretaryReadGrants = ["patients.read", "notes.read", "complaints.read", "attachments.read"];
+var defaults = { doctor: keys.filter((k) => !administrative.includes(k)), sec: [...secretaryReadGrants, "tasks.read", "tasks.manage", "requests.read", "requests.manage", "waitinglist.manage", "day.close", "patients.print", "bookings.read", "bookings.create", "bookings.status"], nurse: ["requests.read", "tasks.read", "tasks.manage", "day.close", "bookings.read", "bookings.create", "bookings.status", "patients.print", "patients.read", "complaints.read", "complaints.create", "attachments.read", "attachments.create", "attachments.own.delete"], staff: ["patients.print"] };
 function can(r, key) {
   if (!keys.includes(key)) return false;
   if (r.r === "admin") return keys.includes(key);
@@ -527,7 +529,7 @@ function validateRole(r, fail5, branches2 = ["dmn", "alex"]) {
   if (r.scope !== void 0 && !["all", "branch"].includes(r.scope)) fail5("\u0646\u0637\u0627\u0642 \u063A\u064A\u0631 \u0635\u062D\u064A\u062D");
   if (r.enabled !== void 0 && typeof r.enabled !== "boolean") fail5("\u062D\u0627\u0644\u0629 \u062D\u0633\u0627\u0628 \u063A\u064A\u0631 \u0635\u062D\u064A\u062D\u0629");
   if (r.permissions !== void 0 && (!r.permissions || Array.isArray(r.permissions) || Object.entries(r.permissions).some(([k, v]) => !keys.includes(k) || typeof v !== "boolean"))) fail5("\u0635\u0644\u0627\u062D\u064A\u0627\u062A \u063A\u064A\u0631 \u0635\u062D\u064A\u062D\u0629");
-  return { r: r.r, u: r.u, br: r.br || branches2[0], scope: r.scope || (["nurse", "doctor"].includes(r.r) ? "all" : "branch"), enabled: r.enabled !== false, displayName: String(r.displayName || r.u).slice(0, 100), permissions: r.permissions || {} };
+  return { r: r.r, u: r.u, br: r.br || branches2[0], scope: r.scope || (["nurse", "doctor"].includes(r.r) ? "all" : "branch"), enabled: r.enabled !== false, displayName: String(r.displayName || r.u).slice(0, 100), permissions: r.r === "sec" ? { ...Object.fromEntries(secretaryReadGrants.map((k) => [k, true])), ...r.permissions || {} } : r.permissions || {} };
 }
 
 // supabase/functions/clinic-api/cases.js
@@ -1080,6 +1082,35 @@ function lookup(state, p, now = today(), clock = Date.now()) {
   return queueTrack(state, Object.values(state.bookings[now] || {}), x, clock);
 }
 
+// supabase/functions/clinic-api/secretary-access.js
+var action = "secretaryClinicalAccessUpgrade";
+var version = 1;
+function upgrade(original, uid) {
+  if (role(original, uid).r !== "admin") fail3("\u062A\u0641\u0639\u064A\u0644 \u0642\u0631\u0627\u0621\u0629 \u0645\u0644\u0641 \u0627\u0644\u0637\u0628\u064A\u0628 \u0644\u0644\u0633\u0643\u0631\u062A\u0627\u0631\u064A\u0629 \u0645\u062A\u0627\u062D \u0644\u0644\u0623\u062F\u0645\u0646 \u0641\u0642\u0637", 403);
+  if (Number(original.settings?.secretaryClinicalAccessVersion) >= version) return { state: original, changed: false, updated: 0 };
+  const state = structuredClone(original), branches2 = new Set(branchIds(state));
+  let updated = 0;
+  for (const role3 of Object.values(state.roles || {})) {
+    if (role3.r !== "sec" || role3.enabled === false || role3.archivedAt || role3.deletePending || !branches2.has(role3.br)) continue;
+    const permissions = { ...role3.permissions, ...Object.fromEntries(secretaryReadGrants.map((key) => [key, true])) };
+    if (JSON.stringify(permissions) !== JSON.stringify(role3.permissions || {})) {
+      role3.permissions = permissions;
+      updated++;
+    }
+  }
+  state.settings ||= {};
+  state.settings.secretaryClinicalAccessVersion = version;
+  return { state, changed: true, updated };
+}
+async function handle(adapter2, input, uid) {
+  let result;
+  await adapter2.mutate((state) => {
+    result = upgrade(state, uid);
+    return result.state;
+  });
+  return { ok: true, changed: result.changed, updated: result.updated, version };
+}
+
 // supabase/functions/clinic-api/consultation.js
 var actions = ["consultationView", "consultationComplete", "consultationUrgentReview", "consultationUrgentResolve", "visitDurationsSave"];
 function scope(s, uid, date2, branch2) {
@@ -1108,6 +1139,7 @@ function find(s, date2, id2) {
 }
 function complete(original, uid, input) {
   const s = structuredClone(original), date2 = date(input.date || today()), old = find(s, date2, input.bookingId), r = role(s, uid);
+  if (!["doctor", "admin"].includes(r.r)) fail3("\u0625\u0646\u0647\u0627\u0621 \u0627\u0644\u0643\u0634\u0641 \u0627\u0644\u0637\u0628\u064A \u0644\u0644\u0637\u0628\u064A\u0628 \u0641\u0642\u0637", 403);
   requirePermission(r, "bookings.status");
   requirePermission(r, "notes.read");
   allowed(r, old.b);
@@ -1161,7 +1193,7 @@ function resolve2(original, uid, input) {
   const next = s.urgentReviews[review2.id] = { ...review2, status: "reviewed", decision: input.decision, note, reviewedBy: r.u, reviewedByUid: uid, reviewedAt: (/* @__PURE__ */ new Date()).toISOString(), rev: review2.rev + 1 };
   return { state: s, summary: { ok: true, review: next } };
 }
-async function handle(adapter2, input, uid) {
+async function handle2(adapter2, input, uid) {
   if (input.action === "consultationView") {
     const fields = ["roles", "settings", "bookings", "patients", "files", "complaints", "checkins", "urgentReviews", "sessions"];
     let state;
@@ -1237,7 +1269,7 @@ function access(s, r, person) {
   assertAccess(s, r, person.phone);
 }
 function canClinical(r) {
-  return ["doctor", "admin"].includes(r.r) && can(r, "notes.read");
+  return can(r, "notes.read");
 }
 function planPhone(s, p) {
   if (p.patientId) {
@@ -1417,7 +1449,7 @@ function guardWindow(before, next) {
   }
   return next;
 }
-async function handle2(adapter2, input, uid) {
+async function handle3(adapter2, input, uid) {
   if (input.action === "followupPlanList") return list(await adapter2.read(), uid, input);
   let result;
   await adapter2.mutate((s) => {
@@ -1490,7 +1522,7 @@ function history(s, uid, input = {}) {
   rows.sort((a, b) => String(b.date || "").localeCompare(String(a.date || "")) || String(b.at || "").localeCompare(String(a.at || "")) || a.kind.localeCompare(b.kind) || a.id.localeCompare(b.id));
   return { phone: phone3, patientId: patient.patientId, patient: { name: patient.patient.n || "" }, page, pageSize, total: rows.length, pages: Math.max(1, Math.ceil(rows.length / pageSize)), hasMore: (page + 1) * pageSize < rows.length, rows: rows.slice(page * pageSize, (page + 1) * pageSize) };
 }
-async function handle3(adapter2, input, uid) {
+async function handle4(adapter2, input, uid) {
   const { page, pageSize } = paging(input), roles = adapter2.readFields ? await adapter2.readFields(["roles"]) : await adapter2.read(), r = role(roles, uid);
   requirePermission(r, "patients.read");
   if (input.action === "patientSearch") {
@@ -1629,7 +1661,7 @@ function apply(original, uid, input) {
   rebuild(s);
   return { state: s, summary: { cutoff: CUTOFF, deleted: plan3.deleted, retained: plan3.retained, deleteCount: plan3.deleteCount, retainCount: plan3.retainCount } };
 }
-async function handle4(adapter2, input, uid) {
+async function handle5(adapter2, input, uid) {
   if (input.action === "trainingCleanupPreview") return preview(await adapter2.read(), uid);
   let summary;
   await adapter2.mutate((s) => {
@@ -1879,7 +1911,7 @@ function purge(original, uid, batch) {
   rebuild(s);
   return { state: s, summary };
 }
-async function handle5(adapter2, input, uid) {
+async function handle6(adapter2, input, uid) {
   if (input.action === "trainingYearPreview") return plan(await adapter2.read(), uid);
   const key = input.action === "trainingYearSeed" ? "SEED_YEAR_END_TRAINING" : "DELETE_YEAR_END_TRAINING";
   if (input.confirmation !== key) fail3("\u0631\u0627\u062C\u0639 \u062A\u0623\u0643\u064A\u062F \u0627\u0644\u0639\u0645\u0644\u064A\u0629 \u0623\u0648\u0644\u064B\u0627");
@@ -1893,7 +1925,7 @@ async function handle5(adapter2, input, uid) {
 }
 
 // supabase/functions/clinic-api/release.js
-var release_default = { "version": "2026.11.01.2", "apiContract": 1, "capabilities": ["pdfReports", "splitBackup", "phoneChangeLookup", "patientRequestAlerts", "globalThemePresets", "patientNotificationCenter", "yearEndTrainingData", "novemberManualDataProtection", "sessionReadback", "emptySessionRecovery", "focusedConsultation", "followupPlans", "nextVisitBooking", "receptionArrival", "visitDurations", "requestAssignment", "bookingConfirmations", "appointmentCalendar", "patientIdentity", "patientPagination", "mutationReceipts", "operationalDeltaWrites", "completeRecoveryBundle", "trainingMetricsSeparation", "safePatientDeletion", "deleteReadback", "legacyArchiveTolerance", "staleRequestRejection"] };
+var release_default = { "version": "2026.11.01.3", "apiContract": 1, "capabilities": ["pdfReports", "splitBackup", "phoneChangeLookup", "patientRequestAlerts", "globalThemePresets", "patientNotificationCenter", "yearEndTrainingData", "novemberManualDataProtection", "sessionReadback", "emptySessionRecovery", "focusedConsultation", "followupPlans", "nextVisitBooking", "receptionArrival", "visitDurations", "requestAssignment", "bookingConfirmations", "appointmentCalendar", "patientIdentity", "patientPagination", "mutationReceipts", "operationalDeltaWrites", "completeRecoveryBundle", "trainingMetricsSeparation", "safePatientDeletion", "deleteReadback", "legacyArchiveTolerance", "staleRequestRejection", "secretaryClinicalRead"] };
 
 // supabase/functions/clinic-api/request-notifications.js
 import { createHash as createHash4 } from "node:crypto";
@@ -1929,7 +1961,7 @@ function list2(state, uid, input) {
   const pending = rows.filter((x) => x.event === "created" && x.status === "pending"), minutes2 = state.settings?.bookingRequests?.requestOverdueMinutes || 60;
   return { latestId: rows[0]?.id || null, items: filtered.slice(currentPage * 30, (currentPage + 1) * 30), total: filtered.length, page: currentPage, pageSize: 30, unread: rows.filter((x) => !x.readAt).length, pending: pending.length, overdue: pending.filter((x) => Date.now() - Date.parse(x.at) >= minutes2 * 6e4).length, newBookings: pending.filter((x) => x.kind === "new").length, reschedule: pending.filter((x) => x.kind === "reschedule").length, cancellations: pending.filter((x) => x.kind === "cancel").length, readAllToken: readAllToken(rows, uid), serverAt: (/* @__PURE__ */ new Date()).toISOString() };
 }
-async function handle6(adapter2, input, uid) {
+async function handle7(adapter2, input, uid) {
   if (input.action === "requestNotifications") return list2(await (adapter2.readRequestNotifications ? adapter2.readRequestNotifications() : adapter2.read()), uid, input);
   if (input.action === "requestNotificationRead" && (typeof input.id !== "string" || input.id.length > 160 || typeof input.read !== "boolean")) fail3("\u0627\u062E\u062A\u0631 \u0625\u0634\u0639\u0627\u0631\u064B\u0627 \u0648\u062D\u0627\u0644\u0629 \u0642\u0631\u0627\u0621\u0629 \u0635\u062D\u064A\u062D\u0629");
   if (input.action === "requestNotificationsReadAll" && typeof input.readAllToken !== "string") fail3("\u062D\u062F\u0651\u062B \u0627\u0644\u0625\u0634\u0639\u0627\u0631\u0627\u062A \u0623\u0648\u0644\u064B\u0627");
@@ -2026,7 +2058,7 @@ function normalize3(input = {}, branches2 = []) {
 // supabase/functions/clinic-api/color-refresh.js
 var light = { background: "#f2f5f6", card: "#ffffff", text: "#243543", primary: "#315468", accent: "#976471", muted: "#536779", line: "#bdcbd4", headerBackground: "#315468", headerText: "#ffffff" };
 var dark = { background: "#151c24", card: "#202b35", text: "#e1e8ed", primary: "#b7c9d4", accent: "#b89ca5", muted: "#adbac5", line: "#50606e", headerBackground: "#202e3a", headerText: "#e1e8ed" };
-async function handle7(adapter2, input, uid) {
+async function handle8(adapter2, input, uid) {
   let changed = false;
   await adapter2.mutate((original) => {
     const r = role(original, uid);
@@ -2389,7 +2421,7 @@ async function handleRecovery(adapter2, input, uid) {
 }
 
 // supabase/functions/clinic-api/backup-rehearsal.js
-async function handle8(adapter2, input, uid) {
+async function handle9(adapter2, input, uid) {
   const s = await adapter2.read();
   if (role(s, uid).r !== "admin") fail3("\u062A\u062C\u0631\u0628\u0629 \u0627\u0644\u0627\u0633\u062A\u0639\u0627\u062F\u0629 \u0645\u062A\u0627\u062D\u0629 \u0644\u0644\u0623\u062F\u0645\u0646 \u0641\u0642\u0637", 403);
   requirePermission(role(s, uid), "data.export");
@@ -2643,9 +2675,9 @@ function draftAccess(s, r, x) {
   if (x.branch) branch(s, r, x.branch);
   if (["complaint", "medical"].includes(x.kind)) access2(s, r, phone(x.entity));
 }
-async function handle9(adapter2, input, uid) {
-  const action = input.action;
-  if (action === "nurseRequestAccessUpgrade") {
+async function handle10(adapter2, input, uid) {
+  const action2 = input.action;
+  if (action2 === "nurseRequestAccessUpgrade") {
     let changed = false;
     await adapter2.mutate((original) => {
       if (role(original, uid).r !== "admin") fail3("\u062A\u062D\u062F\u064A\u062B \u0635\u0644\u0627\u062D\u064A\u0627\u062A \u0627\u0644\u0645\u0645\u0631\u0636\u0629 \u0645\u062A\u0627\u062D \u0644\u0644\u0623\u062F\u0645\u0646 \u0641\u0642\u0637", 403);
@@ -2659,20 +2691,20 @@ async function handle9(adapter2, input, uid) {
     });
     return { ok: true, changed };
   }
-  if (action === "preferencesGet") {
+  if (action2 === "preferencesGet") {
     role(await adapter2.read(), uid);
     return { themePreset: null, customColor: null, mode: "system" };
   }
-  if (action === "preferencesSave") {
+  if (action2 === "preferencesSave") {
     role(await adapter2.read(), uid);
     fail3("\u062A\u0645 \u0625\u0644\u063A\u0627\u0621 \u0627\u0644\u062B\u064A\u0645\u0627\u062A \u0627\u0644\u0634\u062E\u0635\u064A\u0629\u061B \u0625\u0639\u062F\u0627\u062F\u0627\u062A \u0627\u0644\u0623\u0644\u0648\u0627\u0646 \u0645\u0646 \u0644\u0648\u062D\u0629 \u0627\u0644\u0623\u062F\u0645\u0646", 403);
   }
-  if (action === "timeline") {
+  if (action2 === "timeline") {
     const s = await adapter2.read(), r = role(s, uid);
     if (!can(r, "patients.read") && !can(r, "bookings.read")) fail3("\u063A\u064A\u0631 \u0645\u0635\u0631\u062D", 403);
     return timeline(s, r, phone(input.phone));
   }
-  if (action === "workflowList") {
+  if (action2 === "workflowList") {
     const s = await adapter2.read(), r = role(s, uid), d = date(input.date || today()), b = input.branch || r.br || "all";
     if (b !== "all") branch(s, r, b);
     else if (!allBranches(r)) fail3("\u0627\u062E\u062A\u0631 \u0641\u0631\u0639\u0643", 403);
@@ -2692,7 +2724,7 @@ async function handle9(adapter2, input, uid) {
     const users = can(r, "tasks.manage") ? Object.entries(s.roles || {}).filter(([, x]) => x.enabled !== false && (allBranches(r) || allBranches(x) || x.br === r.br)).map(([id2, x]) => ({ id: id2, name: x.displayName || x.u })) : [];
     return { tasks, checkins, requests: online, waiting, drafts, users, openings: can(r, "waitinglist.manage") ? Object.values(s.slotOpenings || {}).filter(own2) : [], closed: s.dayClosures?.[d + "_" + b] || null };
   }
-  if (action === "checkinSet") {
+  if (action2 === "checkinSet") {
     await adapter2.mutate((original) => {
       const s = structuredClone(original), r = role(s, uid);
       requirePermission(r, "bookings.status");
@@ -2706,7 +2738,7 @@ async function handle9(adapter2, input, uid) {
     });
     return { ok: true };
   }
-  if (action === "taskSave") {
+  if (action2 === "taskSave") {
     let saved;
     await adapter2.mutate((original) => {
       const s = structuredClone(original), r = role(s, uid);
@@ -2731,7 +2763,7 @@ async function handle9(adapter2, input, uid) {
     });
     return saved;
   }
-  if (action === "draftSave") {
+  if (action2 === "draftSave") {
     let saved;
     await adapter2.mutate((original) => {
       const s = structuredClone(original), r = role(s, uid);
@@ -2747,13 +2779,13 @@ async function handle9(adapter2, input, uid) {
     });
     return { id: saved.id, updatedAt: saved.updatedAt };
   }
-  if (action === "draftGet") {
+  if (action2 === "draftGet") {
     const s = await adapter2.read(), r = role(s, uid), x = s.drafts?.[uid]?.[input.id];
     if (!x || Date.now() - Date.parse(x.updatedAt) > 7 * 864e5) fail3("\u0627\u0644\u0645\u0633\u0648\u062F\u0629 \u063A\u064A\u0631 \u0645\u0648\u062C\u0648\u062F\u0629", 404);
     draftAccess(s, r, x);
     return x;
   }
-  if (action === "draftDelete") {
+  if (action2 === "draftDelete") {
     await adapter2.mutate((original) => {
       role(original, uid);
       const s = structuredClone(original);
@@ -2762,7 +2794,7 @@ async function handle9(adapter2, input, uid) {
     });
     return { ok: true };
   }
-  if (action === "editingPresence") {
+  if (action2 === "editingPresence") {
     let others;
     await adapter2.mutate((original) => {
       const s = structuredClone(original), r = role(s, uid), p = phone(input.phone);
@@ -2778,7 +2810,7 @@ async function handle9(adapter2, input, uid) {
     });
     return { others };
   }
-  if (action === "daySummary" || action === "dayClose") {
+  if (action2 === "daySummary" || action2 === "dayClose") {
     const build2 = (s) => {
       const r = role(s, uid);
       requirePermission(r, "bookings.read");
@@ -2789,7 +2821,7 @@ async function handle9(adapter2, input, uid) {
       }).filter((x) => Number.isFinite(x));
       return { branch: b, date: d, counts, excludedTraining: filtered.excludedTraining, includesTraining: filtered.includesTraining, averageWaitMinutes: elapsed.length ? Math.round(elapsed.reduce((a, b2) => a + b2, 0) / elapsed.length) : null, generatedAt: stamp2(), pending: rawRows.filter((x) => ["wait", "exam"].includes(x.s)).map((x) => ({ id: x.id, no: x.no, status: x.s })), closed: s.dayClosures?.[d + "_" + b] || null };
     };
-    if (action === "daySummary") return build2(await adapter2.read());
+    if (action2 === "daySummary") return build2(await adapter2.read());
     let summary;
     await adapter2.mutate((original) => {
       const s = structuredClone(original), r = role(s, uid);
@@ -2804,7 +2836,7 @@ async function handle9(adapter2, input, uid) {
     });
     return summary;
   }
-  if (action === "similarPatients") {
+  if (action2 === "similarPatients") {
     const s = await adapter2.read(), r = role(s, uid);
     requirePermission(r, "patients.merge");
     const normalize5 = (x) => String(x || "").replace(/[أإآ]/g, "\u0627").replace(/ى/g, "\u064A").replace(/ة/g, "\u0647").replace(/\s+/g, " ").trim();
@@ -2820,8 +2852,8 @@ async function handle9(adapter2, input, uid) {
     for (const [key, items] of groups) if (items.length > 1) result.push({ reason: key.startsWith("spouse:") ? "\u0645\u0648\u0628\u0627\u064A\u0644 \u0632\u0648\u062C \u0645\u062A\u0637\u0627\u0628\u0642" : "\u0627\u0633\u0645 \u0645\u062A\u0634\u0627\u0628\u0647", patients: items });
     return result.slice(0, 100);
   }
-  if (action === "patientMergePreview") return mergePlan(await adapter2.read(), uid, input);
-  if (action === "patientMergeApply") {
+  if (action2 === "patientMergePreview") return mergePlan(await adapter2.read(), uid, input);
+  if (action2 === "patientMergeApply") {
     let id2;
     await adapter2.mutate((original) => {
       const plan3 = mergePlan(original, uid, input);
@@ -2877,12 +2909,12 @@ async function handle9(adapter2, input, uid) {
     });
     return { ok: true, id: id2 };
   }
-  if (action === "patientMergeList") {
+  if (action2 === "patientMergeList") {
     const s = await adapter2.read();
     requirePermission(role(s, uid), "patients.merge");
     return Object.values(s.patientMerges || {}).map(({ changes, ...x }) => x);
   }
-  if (action === "patientMergeUndo") {
+  if (action2 === "patientMergeUndo") {
     await adapter2.mutate((original) => {
       const s = structuredClone(original), r = role(s, uid);
       requirePermission(r, "patients.merge");
@@ -2998,14 +3030,14 @@ function listContacts(s, uid, input) {
   const rows = Object.entries(s.bookings || {}).filter(([date2]) => date2 >= from && date2 <= to).flatMap(([, bookings]) => Object.values(bookings)).filter((b) => (branch2 === "all" || b.b === branch2) && (allBranches(r) || b.b === r.br) && !["done", "cx", "no"].includes(b.s)).map((b) => ({ bookingId: b.id, date: b.date, branch: b.b, no: b.no, name: b.name, phone: b.phone, type: b.v, bookingStatus: b.s, contact: contactProjection(s, b) })).filter((x) => status === "all" || x.contact.status === status).sort((a, b) => a.date.localeCompare(b.date) || a.branch.localeCompare(b.branch) || a.no - b.no);
   return { rows: rows.slice(page * 100, page * 100 + 100), total: rows.length, page, pageSize: 100 };
 }
-async function handle10(adapter2, input, uid, client) {
-  const action = input.action;
-  if (action === "requestAssignees") {
+async function handle11(adapter2, input, uid, client) {
+  const action2 = input.action;
+  if (action2 === "requestAssignees") {
     const s = await adapter2.read(), r = role(s, uid);
     requirePermission(r, "requests.manage");
     return requestWorkers(s, r, input.branch);
   }
-  if (action === "requestAssign") {
+  if (action2 === "requestAssign") {
     let result;
     await adapter2.mutate((original) => {
       const r = role(original, uid);
@@ -3033,14 +3065,14 @@ async function handle10(adapter2, input, uid, client) {
     });
     return result;
   }
-  if (action === "bookingContactList") return listContacts(await adapter2.read(), uid, input);
-  if (action === "bookingContactGet") {
+  if (action2 === "bookingContactList") return listContacts(await adapter2.read(), uid, input);
+  if (action2 === "bookingContactGet") {
     const s = await adapter2.read(), r = role(s, uid);
     requirePermission(r, "bookings.read");
     const b = schedulingBooking(s, r, input.date, input.bookingId);
     return { bookingId: b.id, date: b.date, branch: b.b, no: b.no, name: b.name, phone: b.phone, type: b.v, bookingStatus: b.s, contact: contactProjection(s, b) };
   }
-  if (action === "bookingContactSet") {
+  if (action2 === "bookingContactSet") {
     let result;
     await adapter2.mutate((original) => {
       const r = role(original, uid);
@@ -3061,14 +3093,14 @@ async function handle10(adapter2, input, uid, client) {
     });
     return result;
   }
-  if (action === "requestSummary") {
+  if (action2 === "requestSummary") {
     const s = await adapter2.read(), r = role(s, uid);
     requirePermission(r, "requests.read");
     const rows = Object.values(s.appointmentRequests || {}).filter((x) => x.status === "pending" && ["new", "reschedule", "cancel"].includes(x.kind) && (allBranches(r) || x.branch === r.br));
     const thresholdMinutes = settings(s).requestOverdueMinutes, overdue = rows.filter((x) => Number.isFinite(Date.parse(x.createdAt)) && Date.now() - Date.parse(x.createdAt) >= thresholdMinutes * 6e4).length;
     return { pending: rows.length, reschedule: rows.filter((x) => x.kind === "reschedule").length, newBookings: rows.filter((x) => x.kind === "new").length, cancellations: rows.filter((x) => x.kind === "cancel").length, overdue, thresholdMinutes, latestAt: rows.map((x) => x.createdAt).filter(Boolean).sort().at(-1) || null, serverAt: time() };
   }
-  if (action === "appointmentChangeOptions") {
+  if (action2 === "appointmentChangeOptions") {
     const p = phone(input.phone);
     if (!/^01[0125]\d{8}$/.test(p)) return [];
     await adapter2.limit?.(client, p);
@@ -3076,12 +3108,12 @@ async function handle10(adapter2, input, uid, client) {
     if (!settings(s).showPatientRequests || !settings(s).changesEnabled) fail3("\u0637\u0644\u0628\u0627\u062A \u062A\u063A\u064A\u064A\u0631 \u0627\u0644\u0645\u0648\u0627\u0639\u064A\u062F \u0645\u062A\u0648\u0642\u0641\u0629\u061B \u062A\u0648\u0627\u0635\u0644 \u0645\u0639 \u0627\u0644\u0633\u0643\u0631\u062A\u0627\u0631\u064A\u0629", 409);
     return Object.entries(s.bookings || {}).filter(([d]) => d >= today()).flatMap(([d, rows]) => Object.values(rows).filter((x) => phone(x.phone) === p && x.s === "wait" && branchIds(s, true).includes(x.b)).map((x) => ({ date: d, b: x.b, no: x.no, canChange: cutoff(s, x) }))).sort((a, b) => a.date.localeCompare(b.date));
   }
-  if (action === "bookingAvailability") {
+  if (action2 === "bookingAvailability") {
     const s = await adapter2.read(), d = validateDate(s, input.date || today());
     await adapter2.limit?.(client, "availability");
     return { date: d, ...settings(s), branches: available2(s, d) };
   }
-  if (action === "appointmentRequest") {
+  if (action2 === "appointmentRequest") {
     const p = phone(input.phone);
     if (!/^01[0125]\d{8}$/.test(p)) fail3("\u0631\u0642\u0645 \u0627\u0644\u0645\u0648\u0628\u0627\u064A\u0644 \u063A\u064A\u0631 \u0635\u062D\u064A\u062D");
     await adapter2.limit?.(client, p);
@@ -3104,7 +3136,7 @@ async function handle10(adapter2, input, uid, client) {
     });
     return { received: true, message: "\u062A\u0645 \u0627\u0633\u062A\u0644\u0627\u0645 \u0627\u0644\u0637\u0644\u0628. \u0627\u0644\u0645\u0648\u0639\u062F \u0644\u0627 \u064A\u062A\u0623\u0643\u062F \u0625\u0644\u0627 \u0628\u0639\u062F \u0645\u0631\u0627\u062C\u0639\u0629 \u0627\u0644\u0633\u0643\u0631\u062A\u0627\u0631\u064A\u0629 \u0648\u0627\u0644\u062A\u0648\u0627\u0635\u0644 \u0645\u0639\u0643." };
   }
-  if (action === "appointmentChangeRequest") {
+  if (action2 === "appointmentChangeRequest") {
     const p = phone(input.phone);
     if (!/^01[0125]\d{8}$/.test(p)) fail3("\u0631\u0642\u0645 \u0627\u0644\u0645\u0648\u0628\u0627\u064A\u0644 \u063A\u064A\u0631 \u0635\u062D\u064A\u062D");
     await adapter2.limit?.(client, p);
@@ -3125,7 +3157,7 @@ async function handle10(adapter2, input, uid, client) {
     });
     return { received: true, message: "\u062A\u0645 \u0627\u0633\u062A\u0644\u0627\u0645 \u0627\u0644\u0637\u0644\u0628 \u0644\u0644\u0645\u0631\u0627\u062C\u0639\u0629. \u064A\u0638\u0644 \u0645\u0648\u0639\u062F\u0643 \u0627\u0644\u062D\u0627\u0644\u064A \u0642\u0627\u0626\u0645\u064B\u0627 \u062D\u062A\u0649 \u062A\u0623\u0643\u064A\u062F \u0627\u0644\u0633\u0643\u0631\u062A\u0627\u0631\u064A\u0629." };
   }
-  if (action === "requestDecide") {
+  if (action2 === "requestDecide") {
     let result;
     await adapter2.mutate((original) => {
       const r = role(original, uid);
@@ -3175,7 +3207,7 @@ async function handle10(adapter2, input, uid, client) {
     });
     return result;
   }
-  if (action === "waitingListSave") {
+  if (action2 === "waitingListSave") {
     let saved;
     await adapter2.mutate((original) => {
       const s = structuredClone(original), r = role(s, uid);
@@ -3207,14 +3239,14 @@ async function handle10(adapter2, input, uid, client) {
     });
     return saved;
   }
-  if (action === "waitingListMatches") {
+  if (action2 === "waitingListMatches") {
     const s = await adapter2.read(), r = role(s, uid);
     requirePermission(r, "waitinglist.manage");
     own(s, r, input.branch);
     const d = date(input.date);
     return Object.values(s.waitingList || {}).filter((x) => x.branch === input.branch && ["waiting", "contacted"].includes(x.status) && x.from <= d && x.to >= d).sort((a, b) => a.createdAt.localeCompare(b.createdAt));
   }
-  if (action === "bookingRequestSettings") {
+  if (action2 === "bookingRequestSettings") {
     await adapter2.mutate((original) => {
       const r = role(original, uid);
       requirePermission(r, "clinic.manage");
@@ -3903,7 +3935,7 @@ function assemble(x) {
     fail3("\u0627\u0644\u0646\u0633\u062E\u0629 \u063A\u064A\u0631 \u0645\u0643\u062A\u0645\u0644\u0629 \u0623\u0648 JSON \u063A\u064A\u0631 \u0635\u062D\u064A\u062D");
   }
 }
-async function handle11(adapter2, input, uid) {
+async function handle12(adapter2, input, uid) {
   if (input.action === "importStageStart") {
     let id2;
     await adapter2.mutate((original) => {
@@ -4585,7 +4617,7 @@ function plan2(state, uid, core) {
     const dataMatches = roles.filter(([, r]) => r.r === "staff" && r.br === branch2 && r.enabled !== false && !r.archivedAt && !r.deletePending && /data/i.test(r.u));
     if (!named && !matches.length && dataMatches.length > 1) core.fail("\u064A\u0648\u062C\u062F \u0623\u0643\u062B\u0631 \u0645\u0646 \u062D\u0633\u0627\u0628 \u062F\u0627\u062A\u0627 \u0644\u0644\u0641\u0631\u0639 " + registry[branch2].name + "\u061B \u0631\u0627\u062C\u0639 \u0627\u0644\u062D\u0633\u0627\u0628 \u0627\u0644\u0645\u0637\u0644\u0648\u0628 \u0623\u0648\u0644\u064B\u0627", 409);
     const selected = named || matches[0] || dataMatches[0], old = selected?.[1] || {};
-    const role3 = { ...old, u: username, r: "sec", br: branch2, scope: "branch", enabled: true, displayName: old.displayName || "\u0633\u0643\u0631\u062A\u0627\u0631\u064A\u0629 " + registry[branch2].name, permissions: { ...old.permissions, ...Object.fromEntries(queueGrants.map((key) => [key, true])) } };
+    const role3 = { ...old, u: username, r: "sec", br: branch2, scope: "branch", enabled: true, displayName: old.displayName || "\u0633\u0643\u0631\u062A\u0627\u0631\u064A\u0629 " + registry[branch2].name, permissions: { ...old.permissions, ...Object.fromEntries([...queueGrants, ...secretaryReadGrants].map((key) => [key, true])) } };
     staff.push({ before: selected?.[1] || null, uid: selected?.[0] || null, username, create: !selected, role: validateRole(role3, core.fail, Object.keys(registry)) });
   }
   for (const [id2, old] of roles.filter(([, r]) => r.r === "nurse" && r.enabled !== false && !r.archivedAt && !r.deletePending)) {
@@ -4650,10 +4682,10 @@ function review(state, branch2, proposed) {
 
 // supabase/functions/clinic-api/service.js
 function createService(baseAdapter) {
-  const dispatch = async function handle13(input, uid, client = "local") {
-    const { action } = input || {};
+  const dispatch = async function handle14(input, uid, client = "local") {
+    const { action: action2 } = input || {};
     const options = mutationOptions(input, uid);
-    if (action === "mutationReceiptGet") {
+    if (action2 === "mutationReceiptGet") {
       const authorized = baseAdapter.readFields ? await baseAdapter.readFields(["roles"]) : await baseAdapter.read();
       role(authorized, uid);
       if (typeof input.operationId !== "string" || !/^[A-Za-z0-9_-]{8,128}$/.test(input.operationId)) fail3("\u0645\u0639\u0631\u0641 \u0627\u0644\u0639\u0645\u0644\u064A\u0629 \u063A\u064A\u0631 \u0635\u062D\u064A\u062D");
@@ -4665,11 +4697,11 @@ function createService(baseAdapter) {
       role(authorized, uid);
       const saved = baseAdapter.mutationReceipt ? await baseAdapter.mutationReceipt(options.receipt.key, uid) : authorized.mutationReceipts?.[uid + "_" + options.receipt.key];
       if (saved?.status === "saved") {
-        if (saved.action !== action || saved.requestHash !== options.receipt.requestHash) fail3("\u0645\u0639\u0631\u0641 \u0627\u0644\u0639\u0645\u0644\u064A\u0629 \u0645\u0633\u062A\u062E\u062F\u0645 \u0644\u0637\u0644\u0628 \u0645\u062E\u062A\u0644\u0641", 409);
+        if (saved.action !== action2 || saved.requestHash !== options.receipt.requestHash) fail3("\u0645\u0639\u0631\u0641 \u0627\u0644\u0639\u0645\u0644\u064A\u0629 \u0645\u0633\u062A\u062E\u062F\u0645 \u0644\u0637\u0644\u0628 \u0645\u062E\u062A\u0644\u0641", 409);
         return { ok: true, reconciled: true, writeStatus: "saved" };
       }
     }
-    if (actions4.includes(action)) return handle6(baseAdapter, input, uid);
+    if (actions4.includes(action2)) return handle7(baseAdapter, input, uid);
     const adapter2 = { ...baseAdapter, mutate: (fn) => baseAdapter.mutate((original) => {
       const before = structuredClone(original);
       if (options.receipt && !baseAdapter.mutationReceipt) {
@@ -4692,23 +4724,24 @@ function createService(baseAdapter) {
       }
       return next;
     }, options) };
-    if (actions.includes(action)) return handle(adapter2, input, uid);
-    if (actions2.includes(action)) return handle2(adapter2, input, uid);
-    if (actions3.includes(action)) return handle3(adapter2, input, uid);
-    if (recoveryActions?.includes(action)) return handleRecovery(adapter2, input, uid);
-    if (["trainingCleanupPreview", "trainingCleanupApply"].includes(action)) return handle4(adapter2, input, uid);
-    if (["trainingYearPreview", "trainingYearSeed", "trainingYearPurge"].includes(action)) return handle5(adapter2, input, uid);
-    if (["backupRehearsal", "backupRehearsalStatus"].includes(action)) return handle8(adapter2, input, uid);
-    if (action === "systemVersion") {
+    if (action2 === action) return handle(adapter2, input, uid);
+    if (actions.includes(action2)) return handle2(adapter2, input, uid);
+    if (actions2.includes(action2)) return handle3(adapter2, input, uid);
+    if (actions3.includes(action2)) return handle4(adapter2, input, uid);
+    if (recoveryActions?.includes(action2)) return handleRecovery(adapter2, input, uid);
+    if (["trainingCleanupPreview", "trainingCleanupApply"].includes(action2)) return handle5(adapter2, input, uid);
+    if (["trainingYearPreview", "trainingYearSeed", "trainingYearPurge"].includes(action2)) return handle6(adapter2, input, uid);
+    if (["backupRehearsal", "backupRehearsalStatus"].includes(action2)) return handle9(adapter2, input, uid);
+    if (action2 === "systemVersion") {
       const s = await adapter2.read();
       if (role(s, uid).r !== "admin") fail3("\u0639\u0631\u0636 \u0625\u0635\u062F\u0627\u0631 \u0627\u0644\u0646\u0638\u0627\u0645 \u0645\u062A\u0627\u062D \u0644\u0644\u0623\u062F\u0645\u0646 \u0641\u0642\u0637", 403);
       return release_default;
     }
-    if (action === "refreshClinicColors") return handle7(adapter2, input, uid);
-    if (actions5.includes(action)) return handle9(adapter2, input, uid);
-    if (actions6.includes(action)) return handle10(adapter2, input, uid, client);
-    if (["importStageStart", "importStagePart", "importStagePreview", "importStageApply", "importStageCancel"].includes(action)) return handle11(adapter2, input, uid);
-    if (action === "normalizeDemoNames") {
+    if (action2 === "refreshClinicColors") return handle8(adapter2, input, uid);
+    if (actions5.includes(action2)) return handle10(adapter2, input, uid);
+    if (actions6.includes(action2)) return handle11(adapter2, input, uid, client);
+    if (["importStageStart", "importStagePart", "importStagePreview", "importStageApply", "importStageCancel"].includes(action2)) return handle12(adapter2, input, uid);
+    if (action2 === "normalizeDemoNames") {
       let summary;
       await adapter2.mutate((s) => {
         const result = normalize2(s, uid);
@@ -4717,12 +4750,12 @@ function createService(baseAdapter) {
       });
       return { ok: true, ...summary, profileMigrationVersion: 1 };
     }
-    if (action === "trashList") return list3(await adapter2.read(), uid, input);
-    if (action === "trashRestore") {
+    if (action2 === "trashList") return list3(await adapter2.read(), uid, input);
+    if (action2 === "trashRestore") {
       await adapter2.mutate((s) => restore(s, uid, input.id));
       return { ok: true };
     }
-    if (action === "auditDetail") {
+    if (action2 === "auditDetail") {
       const s = await adapter2.read();
       admin(s, uid, "audit.details");
       const entry = (s.audit || []).find((x) => x.id === input.id);
@@ -4730,12 +4763,12 @@ function createService(baseAdapter) {
       const changes = s.activityDetails?.[input.id] || [];
       return { ...entry, changes, context: s.activityContext?.[input.id] || context(s, s, changes, entry) };
     }
-    if (action === "attachmentExport") return exportImage(adapter2, input, uid);
-    if (["attachmentList", "attachmentUpload", "attachmentRead", "attachmentDelete"].includes(action)) return handleAttachments(adapter2, input, uid);
+    if (action2 === "attachmentExport") return exportImage(adapter2, input, uid);
+    if (["attachmentList", "attachmentUpload", "attachmentRead", "attachmentDelete"].includes(action2)) return handleAttachments(adapter2, input, uid);
     const readFields = (fields, day = null, entity = null) => adapter2.readFields ? adapter2.readFields(fields, day, entity) : adapter2.read();
-    if (action === "organizeTrainingPreview" || action === "organizeTrainingApply") {
+    if (action2 === "organizeTrainingPreview" || action2 === "organizeTrainingApply") {
       const plan3 = preview3(await adapter2.read(), uid, input.accounts), previewToken = JSON.stringify(plan3);
-      if (action === "organizeTrainingPreview") return { ...plan3, previewToken };
+      if (action2 === "organizeTrainingPreview") return { ...plan3, previewToken };
       if (input.previewToken !== previewToken) fail3("\u062A\u063A\u064A\u0631\u062A \u0627\u0644\u062D\u0633\u0627\u0628\u0627\u062A \u0623\u0648 \u0627\u0644\u062D\u0627\u0644\u0627\u062A\u061B \u0623\u0639\u062F \u0627\u0644\u0645\u0639\u0627\u064A\u0646\u0629", 409);
       if (plan3.missing) fail3("\u0627\u0633\u062A\u0648\u0631\u062F \u0627\u0644\u062D\u0627\u0644\u0627\u062A \u0627\u0644\u062A\u062F\u0631\u064A\u0628\u064A\u0629 \u0627\u0644\u0646\u0627\u0642\u0635\u0629 \u0623\u0648\u0644\u064B\u0627. \u0627\u0644\u0639\u062F\u062F \u0627\u0644\u0646\u0627\u0642\u0635: " + plan3.missing, 409);
       await adapter2.mutate((s) => organize(s, uid));
@@ -4744,7 +4777,7 @@ function createService(baseAdapter) {
         try {
           const current = await adapter2.read();
           if (JSON.stringify(current.roles[item.uid]) !== JSON.stringify(item.before)) fail3("\u062A\u063A\u064A\u0631 \u0627\u0644\u062D\u0633\u0627\u0628 \u0623\u062B\u0646\u0627\u0621 \u0627\u0644\u062A\u0646\u0641\u064A\u0630", 409);
-          await handle13({ action: "userSave", uid: item.uid, role: item.role }, uid, client);
+          await handle14({ action: "userSave", uid: item.uid, role: item.role }, uid, client);
           results.push({ username: item.role.u, ok: true });
         } catch (e) {
           results.push({ username: item.role.u, ok: false, error: e.status ? e.message : "\u062A\u0639\u0630\u0631 \u062A\u062D\u062F\u064A\u062B \u0627\u0644\u062D\u0633\u0627\u0628" });
@@ -4753,9 +4786,9 @@ function createService(baseAdapter) {
       }
       return { ok: results.every((x) => x.ok), dataOrganized: true, counts: plan3.counts, results };
     }
-    if (action === "staffAccessPreview" || action === "staffAccessApply") {
+    if (action2 === "staffAccessPreview" || action2 === "staffAccessApply") {
       const plan3 = plan2(await adapter2.read(), uid, core_exports), previewToken = JSON.stringify(plan3);
-      if (action === "staffAccessPreview") return { ...plan3, previewToken };
+      if (action2 === "staffAccessPreview") return { ...plan3, previewToken };
       if (input.previewToken !== previewToken) fail3("\u062A\u063A\u064A\u0631\u062A \u062D\u0633\u0627\u0628\u0627\u062A \u0627\u0644\u0645\u0633\u062A\u062E\u062F\u0645\u064A\u0646\u061B \u0627\u0641\u062A\u062D \u0636\u0628\u0637 \u0627\u0644\u062D\u0633\u0627\u0628\u0627\u062A \u0645\u0646 \u062C\u062F\u064A\u062F", 409);
       if (typeof input.password !== "string" || input.password.length < 6 || input.password.length > 128) fail3("\u0643\u0644\u0645\u0629 \u0627\u0644\u0633\u0631 \u0645\u0646 6 \u0625\u0644\u0649 128 \u062D\u0631\u0641\u064B\u0627");
       const results = [];
@@ -4766,16 +4799,16 @@ function createService(baseAdapter) {
           if (role(current, uid).r !== "admin") fail3("\u0627\u0646\u062A\u0647\u062A \u0635\u0644\u0627\u062D\u064A\u0629 \u0627\u0644\u0623\u062F\u0645\u0646", 403);
           if (item.uid && JSON.stringify(current.roles[item.uid]) !== JSON.stringify(item.before)) fail3("\u062A\u063A\u064A\u0631 \u0627\u0644\u062D\u0633\u0627\u0628 \u0623\u062B\u0646\u0627\u0621 \u0627\u0644\u062A\u0646\u0641\u064A\u0630", 409);
           if (item.create) {
-            await handle13({ action: "userCreate", u: item.username, p: input.password, role: item.role }, uid, client);
+            await handle14({ action: "userCreate", u: item.username, p: input.password, role: item.role }, uid, client);
           } else {
             if (item.role.r === "sec") {
-              const result = await handle13({ action: "userCredentials", uid: item.uid, username: item.username, password: input.password }, uid, client);
+              const result = await handle14({ action: "userCredentials", uid: item.uid, username: item.username, password: input.password }, uid, client);
               credentialsSaved = true;
               if (result.warning) results.push({ username: item.username, warning: result.warning });
             }
             const latest = await adapter2.read(), expected = credentialsSaved ? { ...item.before, u: item.username } : item.before;
             if (JSON.stringify(latest.roles[item.uid]) !== JSON.stringify(expected)) fail3("\u062A\u063A\u064A\u0631\u062A \u0627\u0644\u0635\u0644\u0627\u062D\u064A\u0627\u062A \u0623\u062B\u0646\u0627\u0621 \u0627\u0644\u062A\u0646\u0641\u064A\u0630\u061B \u0623\u0639\u062F \u0627\u0644\u0645\u0639\u0627\u064A\u0646\u0629", 409);
-            await handle13({ action: "userSave", uid: item.uid, role: item.role }, uid, client);
+            await handle14({ action: "userSave", uid: item.uid, role: item.role }, uid, client);
           }
           results.push({ username: item.username, ok: true });
         } catch (e) {
@@ -4785,20 +4818,20 @@ function createService(baseAdapter) {
       }
       return { ok: results.every((x) => x.ok !== false), results };
     }
-    if (action === "patientPrintData") return build(await readFields(["roles", "patients", "bookings", "settings", "files", "complaints"], null, phone(input.phone)), uid, input.phone);
-    if (action === "displayCapabilities") {
+    if (action2 === "patientPrintData") return build(await readFields(["roles", "patients", "bookings", "settings", "files", "complaints"], null, phone(input.phone)), uid, input.phone);
+    if (action2 === "displayCapabilities") {
       requirePermission(role(await readFields(["roles"]), uid), "display.manage");
       return { noticeAppearanceVersion: 1 };
     }
-    if (action === "bookingCapabilities") {
+    if (action2 === "bookingCapabilities") {
       role(await readFields(["roles"]), uid);
       return { familyMetadata: 1 };
     }
-    if (action === "importPreview") {
+    if (action2 === "importPreview") {
       const plan3 = prepare(await adapter2.read(), uid, input.data, input.options);
       return { summary: plan3.summary, token: plan3.token };
     }
-    if (action === "importApply") {
+    if (action2 === "importApply") {
       if (input.confirmation !== "IMPORT_CLINIC_DATA" || typeof input.previewToken !== "string") fail3("\u0631\u0627\u062C\u0639 \u0627\u0644\u0645\u0639\u0627\u064A\u0646\u0629 \u0648\u0623\u0643\u062F \u0627\u0644\u0627\u0633\u062A\u064A\u0631\u0627\u062F \u0623\u0648\u0644\u064B\u0627");
       let summary;
       await adapter2.mutate((s) => {
@@ -4809,26 +4842,26 @@ function createService(baseAdapter) {
       });
       return { ok: true, summary };
     }
-    if (action === "exportData") {
+    if (action2 === "exportData") {
       const s = await adapter2.read();
       requirePermission(role(s, uid), "data.export");
       return { format: "clinic-backup", schemaVersion: 1, exportedAt: (/* @__PURE__ */ new Date()).toISOString(), bookings: s.bookings || {}, settings: s.settings || {}, roles: s.roles || {}, patients: s.patients || {}, files: s.files || {}, complaints: numberComplaints(structuredClone(s)).complaints || {}, inbox: s.inbox || {}, complaintSequences: numberComplaints(structuredClone(s)).complaintSequences || {}, attachments: s.attachments || {} };
     }
-    if (action === "lookup") {
+    if (action2 === "lookup") {
       const d = input.date === void 0 ? today() : date(input.date), p = phone(input.phone);
       if (!/^01[0125]\d{8}$/.test(p)) return null;
       await adapter2.limit(client, p);
       const state = await (adapter2.readLookup ? adapter2.readLookup(p, d) : adapter2.read()), result = lookup(state, p, d);
       return result && branchIds(state, true).includes(result.b) ? result : null;
     }
-    if (action === "lookupHistory") {
+    if (action2 === "lookupHistory") {
       const p = phone(input.phone);
       if (!/^01[0125]\d{8}$/.test(p)) return [];
       await adapter2.limit(client, p);
       const s = await (adapter2.readHistory ? adapter2.readHistory(p) : adapter2.read());
       return Object.entries(s.bookings || {}).flatMap(([d, rows]) => Object.values(rows).filter((x) => phone(x.phone) === p && branchIds(s, true).includes(x.b)).map((x) => ({ date: d, no: x.no, b: x.b, s: x.s }))).sort((a, b) => b.date.localeCompare(a.date));
     }
-    if (action === "designRestore") {
+    if (action2 === "designRestore") {
       await adapter2.mutate((original) => {
         const s = structuredClone(original);
         requirePermission(role(s, uid), "site.manage");
@@ -4849,7 +4882,7 @@ function createService(baseAdapter) {
       });
       return { ok: true };
     }
-    if (action === "branchDelete") {
+    if (action2 === "branchDelete") {
       let archived = false;
       await adapter2.mutate((original) => {
         let s = structuredClone(original);
@@ -4872,7 +4905,7 @@ function createService(baseAdapter) {
       });
       return { ok: true, archived };
     }
-    if (action === "scheduleTransferDay") {
+    if (action2 === "scheduleTransferDay") {
       let result;
       await adapter2.mutate((s) => {
         requirePermission(role(s, uid), "clinic.manage");
@@ -4884,12 +4917,12 @@ function createService(baseAdapter) {
       });
       return { ok: true, ...result };
     }
-    if (action === "schedulePreview") {
+    if (action2 === "schedulePreview") {
       const state = await adapter2.read();
       requirePermission(role(state, uid), "clinic.manage");
       return { ...review(state, input.branch, input.schedule), ...preview2(state, input.branch, input.schedule) };
     }
-    if (action === "branchDaysSet") {
+    if (action2 === "branchDaysSet") {
       await adapter2.mutate((original) => {
         requirePermission(role(original, uid), "clinic.manage");
         if (!Object.hasOwn(branches(original), input.branch)) fail3("\u0627\u0644\u0641\u0631\u0639 \u063A\u064A\u0631 \u0645\u0648\u062C\u0648\u062F", 404);
@@ -4901,25 +4934,25 @@ function createService(baseAdapter) {
       });
       return { ok: true };
     }
-    if (action === "branchSave") {
+    if (action2 === "branchSave") {
       await adapter2.mutate((s) => save(s, uid, input, core_exports, permissions_exports));
       return { ok: true };
     }
-    if (action === "publicQueue") {
+    if (action2 === "publicQueue") {
       const d = date(input.date || today());
       if (!validId2(input.branch)) fail3("\u0627\u062E\u062A\u0631 \u0627\u0644\u0641\u0631\u0639");
       await adapter2.limit?.(client, "display:" + input.branch);
       return publicQueue(await (adapter2.readDay ? adapter2.readDay(d) : adapter2.read()), input.branch, d);
     }
-    if (action === "followups" || action === "followupContact") fail3("\u062A\u0645 \u0625\u0644\u063A\u0627\u0621 \u0645\u0648\u0627\u0639\u064A\u062F \u0627\u0644\u0645\u062A\u0627\u0628\u0639\u0629", 410);
-    if (action === "retryAttachmentCleanup") {
+    if (action2 === "followups" || action2 === "followupContact") fail3("\u062A\u0645 \u0625\u0644\u063A\u0627\u0621 \u0645\u0648\u0627\u0639\u064A\u062F \u0627\u0644\u0645\u062A\u0627\u0628\u0639\u0629", 410);
+    if (action2 === "retryAttachmentCleanup") {
       requirePermission(role(await adapter2.read(), uid), "data.delete");
       return { cleanupPending: await drain(adapter2) };
     }
-    if (action === "systemHealth" || action === "backupDownload") {
+    if (action2 === "systemHealth" || action2 === "backupDownload") {
       const s = await readFields(["roles"]);
       requirePermission(role(s, uid), "data.export");
-      if (action === "systemHealth") {
+      if (action2 === "systemHealth") {
         const health = adapter2.systemHealth ? await adapter2.systemHealth() : { lastBackup: null, retentionDays: 14, errors: [] };
         const current = await adapter2.read();
         return { ...health, lastSuccessfulReadAt: (/* @__PURE__ */ new Date()).toISOString(), lastConfirmedWriteAt: current.audit?.at(-1)?.at || null, frontCompatibleVersion: release_default.version, operationalWrites: adapter2.operationalCapabilities?.() || { deltaWrites: false }, restoreRehearsal: current.backupRehearsal || null, cleanupPending: Object.keys(current.attachmentGarbage || {}).length };
@@ -4928,7 +4961,7 @@ function createService(baseAdapter) {
       if (!backup) fail3("\u0644\u0627 \u062A\u0648\u062C\u062F \u0646\u0633\u062E\u0629 \u0622\u0644\u064A\u0629 \u0628\u0639\u062F", 404);
       return backup;
     }
-    if (action === "workspace") {
+    if (action2 === "workspace") {
       const d = input.date ? date(input.date) : null, fields = ["roles", "settings", "sessions", "inbox", "bookings"];
       if (input.tab === "audit") fields.push("audit");
       if (input.tab === "deleted") fields.push("deletedBookings");
@@ -4941,7 +4974,7 @@ function createService(baseAdapter) {
       }
       if (input.tab === "users" && can(r, "users.manage")) result.roles = read2(s, uid, "roles");
       if (input.tab === "cases" && can(r, "patients.read")) {
-        result.patientPage = await handle3(adapter2, { action: "patientSearch", query: input.patientQuery || input.query || "", page: input.patientPage || input.page || 0, pageSize: input.patientPageSize || input.pageSize || 20, branch: input.branch }, uid);
+        result.patientPage = await handle4(adapter2, { action: "patientSearch", query: input.patientQuery || input.query || "", page: input.patientPage || input.page || 0, pageSize: input.patientPageSize || input.pageSize || 20, branch: input.branch }, uid);
         result.patients = Object.fromEntries(result.patientPage.rows.map((x) => [x.phone, { n: x.name, d: x.registeredDate, patientId: x.patientId, spouseName: x.spouseName, spouseJob: x.spouseJob, spousePhone: x.spousePhone }]));
       }
       if (can(r, "notifications.read")) result.inbox = read2(s, uid, "inbox");
@@ -4949,7 +4982,7 @@ function createService(baseAdapter) {
       if (input.tab === "deleted" && can(r, "bookings.delete")) result.deletedBookings = read2(s, uid, "deletedBookings");
       return result;
     }
-    if (action === "presenceSet") {
+    if (action2 === "presenceSet") {
       await adapter2.mutate((original) => {
         const s = structuredClone(original), r = role(s, uid);
         requirePermission(r, "sessions.manage");
@@ -4963,7 +4996,7 @@ function createService(baseAdapter) {
       });
       return { ok: true };
     }
-    if (action === "sessionSet") {
+    if (action2 === "sessionSet") {
       await adapter2.mutate((original) => {
         const s = structuredClone(original), r = role(s, uid);
         requirePermission(r, "sessions.manage");
@@ -5004,7 +5037,7 @@ function createService(baseAdapter) {
       });
       return { ok: true };
     }
-    if (action === "bookingRestore") {
+    if (action2 === "bookingRestore") {
       await adapter2.mutate((original) => {
         const s = structuredClone(original), r = role(s, uid);
         requirePermission(r, "bookings.delete");
@@ -5031,7 +5064,7 @@ function createService(baseAdapter) {
       });
       return { ok: true };
     }
-    if (action === "reportData") {
+    if (action2 === "reportData") {
       const s = numberComplaints(structuredClone(await adapter2.read())), r = role(s, uid);
       requirePermission(r, "reports.export");
       const from = date(input.from), to = date(input.to), b = input.branch;
@@ -5042,11 +5075,11 @@ function createService(baseAdapter) {
       const phones = new Set(bookings.map((x) => x.phone));
       return { from, to, branch: b, excludedTraining: filtered.excludedTraining, includesTraining: filtered.includesTraining, generatedAt: (/* @__PURE__ */ new Date()).toISOString(), site: { ...s.settings?.site, branches: branches(s) }, avg: s.settings?.avg || 15, bookings, files: can(r, "notes.read") ? Object.fromEntries(Object.entries(s.files || {}).filter(([p]) => phones.has(p))) : {}, complaints: can(r, "complaints.read") ? Object.fromEntries(Object.entries(s.complaints || {}).filter(([p]) => phones.has(p))) : {} };
     }
-    if (action === "get") {
+    if (action2 === "get") {
       const root = String(input.path || "").split("/")[0], entity = ["files", "complaints"].includes(root) ? input.path.split("/")[1] || null : null, fields = root === "settings" ? ["settings"] : ["patients", "files", "complaints", "inbox"].includes(root) ? ["roles", "patients", "bookings", root] : ["roles", root], d = root === "bookings" && input.path.split("/")[1] ? date(input.path.split("/")[1]) : null;
       return read2(await readFields(fields, d, entity), uid, input.path);
     }
-    if (action === "commit") {
+    if (action2 === "commit") {
       let result;
       await adapter2.mutate((state) => {
         result = commit(state, uid, input.puts, input.dels);
@@ -5054,11 +5087,11 @@ function createService(baseAdapter) {
       });
       return { ok: true };
     }
-    if (action === "patch") {
+    if (action2 === "patch") {
       await adapter2.mutate((s) => patch2(s, uid, input.updates));
       return { ok: true };
     }
-    if (action === "purgeDemo") {
+    if (action2 === "purgeDemo") {
       await adapter2.mutate((original) => {
         requirePermission(role(original, uid), "data.delete");
         const state = structuredClone(original), phones = /* @__PURE__ */ new Set();
@@ -5085,19 +5118,19 @@ function createService(baseAdapter) {
       });
       return { ok: true };
     }
-    if (action === "userSave") {
+    if (action2 === "userSave") {
       const state = await adapter2.read(), old = state.roles?.[input.uid];
       mutate(state, uid, { ...input, role: { ...input.role, u: old?.u } }, core_exports);
       const next = validateRole(input.role, fail3, branchIds(state));
-      if (next.u !== old.u) await handle13({ action: "userCredentials", uid: input.uid, username: next.u }, uid, client);
+      if (next.u !== old.u) await handle14({ action: "userCredentials", uid: input.uid, username: next.u }, uid, client);
       await adapter2.mutate((s) => mutate(s, uid, { ...input, role: next }, core_exports));
       return { ok: true, username: next.u };
     }
-    if (["watermarkSave", "aboutSave", "displaySave", "headerSave", "siteContentSave", "siteSave", "siteThemeSave", "patientSave", "patientDelete", "dataClear"].includes(action)) {
+    if (["watermarkSave", "aboutSave", "displaySave", "headerSave", "siteContentSave", "siteSave", "siteThemeSave", "patientSave", "patientDelete", "dataClear"].includes(action2)) {
       await adapter2.mutate((s) => mutate(s, uid, input, core_exports));
-      return { ok: true, ...["patientDelete", "dataClear"].includes(action) ? { cleanupPending: await drain(adapter2) } : {} };
+      return { ok: true, ...["patientDelete", "dataClear"].includes(action2) ? { cleanupPending: await drain(adapter2) } : {} };
     }
-    if (action === "userRevokeSessions") {
+    if (action2 === "userRevokeSessions") {
       const state = await adapter2.read();
       requirePermission(role(state, uid), "users.manage");
       if (!state.roles?.[input.uid]) fail3("\u0627\u0644\u0645\u0633\u062A\u062E\u062F\u0645 \u063A\u064A\u0631 \u0645\u0648\u062C\u0648\u062F", 404);
@@ -5105,7 +5138,7 @@ function createService(baseAdapter) {
       await adapter2.mutate((s) => structuredClone(s));
       return { ok: true };
     }
-    if (action === "userPassword") {
+    if (action2 === "userPassword") {
       const state = await adapter2.read();
       requirePermission(role(state, uid), "users.manage");
       if (!input.uid || typeof input.password !== "string" || input.password.length < 6 || input.password.length > 128) fail3("\u0643\u0644\u0645\u0629 \u0627\u0644\u0633\u0631 \u0645\u0646 6 \u0625\u0644\u0649 128 \u062D\u0631\u0641\u0627\u064B");
@@ -5126,7 +5159,7 @@ function createService(baseAdapter) {
       await adapter2.mutate((s) => structuredClone(s));
       return { ok: true, username: target.u, enabled: target.enabled !== false, warning };
     }
-    if (action === "userCredentials") {
+    if (action2 === "userCredentials") {
       const state = await adapter2.read();
       requirePermission(role(state, uid), "users.manage");
       const old = state.roles?.[input.uid];
@@ -5171,7 +5204,7 @@ function createService(baseAdapter) {
       }
       return { ok: true, username, warning };
     }
-    if (action === "userDelete") {
+    if (action2 === "userDelete") {
       await adapter2.mutate((original) => {
         const s = structuredClone(original);
         requirePermission(role(s, uid), "users.manage");
@@ -5184,7 +5217,7 @@ function createService(baseAdapter) {
       });
       return { ok: true, archived: true };
     }
-    if (action === "userRestore") {
+    if (action2 === "userRestore") {
       await adapter2.mutate((original) => {
         admin(original, uid);
         const s = structuredClone(original), r = s.roles?.[input.uid];
@@ -5196,7 +5229,7 @@ function createService(baseAdapter) {
       });
       return { ok: true };
     }
-    if (action === "userCreate") {
+    if (action2 === "userCreate") {
       requirePermission(role(await adapter2.read(), uid), "users.manage");
       if (!/^[a-z0-9._-]{3,64}$/.test(input.u || "")) fail3("\u0627\u0633\u0645 \u0627\u0644\u062F\u062E\u0648\u0644 \u0645\u0646 3 \u0625\u0644\u0649 64 \u062D\u0631\u0641\u064B\u0627: \u062D\u0631\u0648\u0641 \u0625\u0646\u062C\u0644\u064A\u0632\u064A\u0629 \u0635\u063A\u064A\u0631\u0629 \u0648\u0623\u0631\u0642\u0627\u0645 \u0648\u0646\u0642\u0637\u0629 \u0648\u0634\u0631\u0637\u0629 \u0648\u0634\u0631\u0637\u0629 \u0633\u0641\u0644\u064A\u0629 \u0641\u0642\u0637");
       if (typeof input.p !== "string" || input.p.length < 6 || input.p.length > 128) fail3("\u0643\u0644\u0645\u0629 \u0627\u0644\u0633\u0631 \u0645\u0646 6 \u0625\u0644\u0649 128 \u062D\u0631\u0641\u064B\u0627");
@@ -5233,13 +5266,13 @@ function createService(baseAdapter) {
 
 // supabase/functions/clinic-api/index.js
 var adapter = supabaseAdapter(Deno.env.get("SUPABASE_URL"), Deno.env.get("SUPABASE_SERVICE_ROLE_KEY"));
-var handle12 = createService(adapter);
+var handle13 = createService(adapter);
 var headers = { "Access-Control-Allow-Origin": "*", "Access-Control-Allow-Headers": "authorization,apikey,content-type,x-client-info,x-request-id", "Access-Control-Expose-Headers": "x-request-id", "Access-Control-Allow-Methods": "POST,OPTIONS", "Content-Type": "application/json; charset=utf-8", "Cache-Control": "no-store" };
 Deno.serve((req) => {
   const requestId = crypto.randomUUID();
   return withRequestContext(requestId, async () => {
     const started = Date.now(), responseHeaders = { ...headers, "x-request-id": requestId };
-    let action = "unknown";
+    let action2 = "unknown";
     if (req.method === "OPTIONS") return new Response(null, { headers, status: 204 });
     if (req.method !== "POST") return new Response(JSON.stringify({ error: "POST required" }), { headers, status: 405 });
     try {
@@ -5249,7 +5282,7 @@ Deno.serve((req) => {
       if (new TextEncoder().encode(text4).length > 7e6) return new Response(JSON.stringify({ error: "Payload too large" }), { headers, status: 413 });
       const input = JSON.parse(text4);
       if (input.action !== "attachmentUpload" && new TextEncoder().encode(text4).length > 9e5) return new Response(JSON.stringify({ error: "Payload too large" }), { headers, status: 413 });
-      action = /^[A-Za-z]{1,40}$/.test(input.action) ? input.action : "unknown";
+      action2 = /^[A-Za-z]{1,40}$/.test(input.action) ? input.action : "unknown";
       const isPublic = ["bookingAvailability", "appointmentRequest", "appointmentChangeRequest", "appointmentChangeOptions"].includes(input.action) || input.action === "lookupHistory" || input.action === "lookup" || input.action === "publicQueue" || input.action === "get" && input.path === "settings";
       let uid = null;
       if (!isPublic) {
@@ -5258,14 +5291,14 @@ Deno.serve((req) => {
         uid = await adapter.verify(token);
       }
       const client = req.headers.get("x-forwarded-for")?.split(",")[0].trim() || "unknown";
-      const data = await handle12(input, uid, client);
-      console.info(JSON.stringify({ event: "clinic_request", requestId, action, status: 200, durationMs: Date.now() - started }));
+      const data = await handle13(input, uid, client);
+      console.info(JSON.stringify({ event: "clinic_request", requestId, action: action2, status: 200, durationMs: Date.now() - started }));
       return new Response(JSON.stringify({ data }), { headers: responseHeaders });
     } catch (e) {
       const status = Number.isInteger(e.status) && e.status >= 400 && e.status <= 599 ? e.status : 500;
-      console.error(JSON.stringify({ event: "clinic_error", requestId, action, status, durationMs: Date.now() - started }));
+      console.error(JSON.stringify({ event: "clinic_error", requestId, action: action2, status, durationMs: Date.now() - started }));
       if (status >= 500) {
-        const task = adapter.recordError({ request_id: requestId, action, status, duration_ms: Date.now() - started }).catch(() => {
+        const task = adapter.recordError({ request_id: requestId, action: action2, status, duration_ms: Date.now() - started }).catch(() => {
         });
         if (typeof EdgeRuntime !== "undefined") EdgeRuntime.waitUntil(task);
       }

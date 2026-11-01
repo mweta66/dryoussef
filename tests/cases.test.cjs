@@ -6,7 +6,7 @@ test('nurse can search patients, read complaints and bookings but cannot read pr
  assert.ok(core.read(s,'demo_nurse','patients')[p]);assert.deepEqual(core.read(s,'demo_nurse','complaints/'+p),{});
  assert.ok(core.read(s,'demo_nurse','bookings/'+core.today()));
  for(const path of ['files/'+p,'files','complaints','inbox','roles'])assert.throws(()=>core.read(s,'demo_nurse',path),{status:403});
- assert.throws(()=>core.read(s,'demo_dmn','patients'),{status:403});
+ assert.ok(Object.keys(core.read(s,'demo_dmn','patients')).length);s.roles.demo_dmn.permissions={'patients.read':false};assert.throws(()=>core.read(s,'demo_dmn','patients'),{status:403});
 });
 test('nurse complaints generate a trusted notification and cannot be overwritten or deleted by a nurse',()=>{
  let s=fixture(),p=Object.values(s.bookings[core.today()])[0].phone,path='complaints/'+p+'/new_note';

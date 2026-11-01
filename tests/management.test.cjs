@@ -32,8 +32,8 @@ test('patient edits move all related records and deletion removes history withou
  assert.equal(s.bookings[x.date][x.id].phone,to);assert.equal(s.files[p],undefined);assert.equal(s.files[to].n,'Private');assert.equal(s.inbox.note.p,to);assert.equal(s.track[x.date][p],undefined);
  s=management.mutate(s,'demo_admin',{action:'patientDelete',phone:to},core);assert.equal(s.bookings[x.date][x.id],undefined);assert.equal(s.files[to],undefined);assert.equal(core.read(s,'demo_admin','patients')[to],undefined);
 });
-test('private booking notes are hidden from staff and preserved during allowed status updates',()=>{
- let s=fixture(),original=Object.values(s.bookings[core.today()]).find(x=>x.b==='dmn');original.nt='private medical note';const x=core.read(s,'demo_dmn','bookings/'+core.today())[original.id];assert.equal(x.nt,'');
+test('revoked private booking notes are hidden from staff and preserved during allowed status updates',()=>{
+ let s=fixture();s.roles.demo_dmn.permissions={'notes.read':false};let original=Object.values(s.bookings[core.today()]).find(x=>x.b==='dmn');original.nt='private medical note';const x=core.read(s,'demo_dmn','bookings/'+core.today())[original.id];assert.equal(x.nt,'');
  s=core.commit(s,'demo_dmn',[{n:{...x,s:x.s==='done'?'wait':'done'},o:x}],[]).state;assert.equal(s.bookings[x.date][x.id].nt,'private medical note');
 });
 test('bulk data deletion keeps accounts, website settings and monotonic ticket counters',()=>{
