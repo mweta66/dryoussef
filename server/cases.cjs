@@ -1,3 +1,4 @@
+const patientIdentity=require('./patient-identity.cjs');
 const perms=require('./permissions.cjs');
 const fail=(m,s=400)=>{const e=new Error(m);e.status=s;throw e};
 const validPhone=p=>/^01[0125]\d{8}$/.test(p);
@@ -7,7 +8,7 @@ function indexPatients(state){
  for(const rows of Object.values(state.bookings||{}))for(const x of Object.values(rows||{})){
   if(validPhone(x.phone)&&(!state.patients[x.phone]||state.patients[x.phone].d<=x.date))state.patients[x.phone]={...state.patients[x.phone],n:x.name,d:x.date};
  }
- return state;
+ patientIdentity.ensure(state);return state;
 }
 function allPatients(r){return perms.allBranches(r)||(r.r==='nurse'&&!r.scope&&!r.br);}
 function canAccess(state,r,phone){return allPatients(r)||state.patients?.[phone]?.br===r.br&&!!r.br||Object.values(state.bookings||{}).some(rows=>Object.values(rows).some(x=>x.phone===phone&&x.b===r.br));}
@@ -56,7 +57,7 @@ function patch(state,r,updates,core){
    core.date(value?.date);if(value.date>core.today()||typeof value.text!=='string'||!value.text.trim()||value.text.length>2000||typeof value.tx!=='string'||value.tx.length>1000)fail('راجع الشكوى والتاريخ والعلاج');
    if(value.reason!==undefined&&(typeof value.reason!=='string'||value.reason.length>2000))fail('سبب الشكوى حتى 2000 حرف');
    const no=old?.no||((state.complaintSequences[ph]||0)+1);state.complaintSequences[ph]=Math.max(state.complaintSequences[ph]||0,no);
-   rows[key]={id:key,no,date:value.date,reason:typeof value.reason==='string'?value.reason.trim():old?.reason||'',text:value.text.trim(),tx:value.tx,by:old?.by||r.u,at:old?.at||new Date().toISOString(),...(old?{editedAt:new Date().toISOString(),editedBy:r.u}:{})};
+   rows[key]={id:key,no,date:value.date,reason:typeof value.reason==='string'?value.reason.trim():old?.reason||'',text:value.text.trim(),tx:value.tx,by:old?.by||r.u,at:old?.at||new Date().toISOString(),...(old?{editedAt:new Date().toISOString(),editedBy:r.u}:{}),...(old?.trainingBatch?{trainingBatch:old.trainingBatch}:{})};
    if(!old){const note=rows[key];state.inbox[key]={p:ph,n:state.patients[ph].n,by:note.by,at:note.at,d:note.date};}continue;
   }
   fail('مسار كتابة غير مسموح',403);

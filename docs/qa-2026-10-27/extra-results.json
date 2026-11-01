@@ -1,0 +1,42 @@
+[
+  {
+    "action": "patient-empty-invalid-phone-disables-lookup",
+    "pass": true
+  },
+  {
+    "action": "patient-new-request-real-form",
+    "pass": true
+  },
+  {
+    "action": "patient-reschedule-by-phone-only",
+    "pass": true
+  },
+  {
+    "action": "secretary-notifications-new-and-cancel-requests",
+    "pass": true
+  },
+  {
+    "action": "request-approval-requires-contact-and-preserves-existing-ticket-on-cancel",
+    "pass": true
+  },
+  {
+    "action": "nurse-invalid-report-does-not-save",
+    "pass": true
+  },
+  {
+    "action": "nurse-upload-view-zoom-delete-own-report",
+    "pass": true
+  },
+  {
+    "action": "session-lost-response-read-verification-no-duplicate-write",
+    "pass": true
+  },
+  {
+    "action": "browser-back-forward-restores-section",
+    "pass": true
+  },
+  {
+    "action": "failed-read-keeps-authentication-and-shows-retry-message",
+    "pass": true
+  }
+]

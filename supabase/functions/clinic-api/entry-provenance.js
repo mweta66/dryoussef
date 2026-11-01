@@ -1,8 +1,8 @@
 import * as core from './core.js';
 // Trusted, server-side provenance. Appointment/complaint dates never establish entry time.
-const ROOTS=['patients','files','complaints','attachments','bookings','inbox','followups','deletedBookings','tasks','checkins','appointmentRequests','waitingList','slotOpenings','dayClosures','patientMerges'];
+const ROOTS=['patients','files','complaints','attachments','bookings','inbox','followups','deletedBookings','tasks','checkins','appointmentRequests','waitingList','slotOpenings','dayClosures','patientMerges','followupPlans','bookingContacts','urgentReviews','clinicalVisits'];
 const NESTED=new Set(['complaints','attachments','bookings']);
-const MANUAL=new Set(['commit','patch','patientSave','attachmentUpload','checkinSet','taskSave','appointmentRequest','appointmentChangeRequest','requestDecide','waitingListSave','dayClose']);
+const MANUAL=new Set(['commit','patch','patientSave','attachmentUpload','checkinSet','taskSave','appointmentRequest','appointmentChangeRequest','requestDecide','waitingListSave','dayClose','followupPlanSave','followupPlanBook','consultationComplete','consultationUrgentReview','consultationUrgentResolve','bookingContactSet']);
 function entries(s){const out=[];for(const root of ROOTS)for(const [a,x]of Object.entries(s[root]||{})){
  if(NESTED.has(root)){for(const [b,row]of Object.entries(x||{}))if(row&&typeof row==='object')out.push({key:root+'/'+(root==='bookings'?b:a+'/'+b),path:[root,a,b],row,phone:root==='bookings'?row.phone:a});}
  else if(x&&typeof x==='object')out.push({key:root+'/'+a,path:[root,a],row:x,phone:['patients','files','followups'].includes(root)?a:x.phone||x.p||x.booking?.phone});
@@ -12,6 +12,7 @@ function directlyWritten(item,input,before){
  if(input.action==='patch')return Object.keys(input.updates||{}).some(path=>{const target=item.path.join('/');return path===target||path.startsWith(target+'/')});
  if(input.action==='commit')return item.path[0]==='bookings'&&(input.puts||[]).some(x=>x.n?.id===item.row.id)||item.path[0]==='patients'&&(input.puts||[]).some(x=>corePhone(x.n?.phone)===item.phone);
  if(input.action==='patientSave')return item.path[0]==='patients'&&[corePhone(input.phone),corePhone(input.newPhone)].includes(item.phone);
+ if(['followupPlanSave','followupPlanBook','consultationComplete','consultationUrgentReview','consultationUrgentResolve','bookingContactSet'].includes(input.action))return true;
  if(input.action==='requestDecide')return item.phone===before.appointmentRequests?.[input.id]?.phone;
  const roots={attachmentUpload:'attachments',checkinSet:'checkins',taskSave:'tasks',appointmentRequest:'appointmentRequests',appointmentChangeRequest:'appointmentRequests',waitingListSave:'waitingList',dayClose:'dayClosures'};
  return item.path[0]===roots[input.action];

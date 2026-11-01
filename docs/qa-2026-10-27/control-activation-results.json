@@ -1,0 +1,527 @@
+[
+  {
+    "screen": "dash",
+    "action": "F.d=today();render()",
+    "label": "اليوم",
+    "status": "activated-or-confirmation-cancelled",
+    "errors": []
+  },
+  {
+    "screen": "dash",
+    "action": "F.d='';render()",
+    "label": "كل الأيام",
+    "status": "activated-or-confirmation-cancelled",
+    "errors": []
+  },
+  {
+    "screen": "dash",
+    "action": "newBk()",
+    "label": "حجز جديد",
+    "status": "activated-or-confirmation-cancelled",
+    "errors": []
+  },
+  {
+    "screen": "dash",
+    "action": "setS(\"qa_booking_33\",\"exam\")",
+    "label": "جاري الكشف",
+    "status": "activated-or-confirmation-cancelled",
+    "errors": []
+  },
+  {
+    "screen": "dash",
+    "action": "editBk(\"qa_booking_33\")",
+    "label": "تعديل",
+    "status": "activated-or-confirmation-cancelled",
+    "errors": []
+  },
+  {
+    "screen": "dash",
+    "action": "delBk(\"qa_booking_33\")",
+    "label": "حذف",
+    "status": "activated-or-confirmation-cancelled",
+    "errors": []
+  },
+  {
+    "screen": "dash",
+    "action": "prioritizeEmergency(\"qa_booking_33\")",
+    "label": "تقديم كطوارئ",
+    "status": "activated-or-confirmation-cancelled",
+    "errors": []
+  },
+  {
+    "screen": "dash",
+    "action": "printPatientData(\"01000070033\")",
+    "label": "طباعة الحالة PDF",
+    "status": "activated-or-confirmation-cancelled",
+    "errors": []
+  },
+  {
+    "screen": "dash",
+    "action": "showPatientTimeline('01000070033')",
+    "label": "سجل الحالة",
+    "status": "activated-or-confirmation-cancelled",
+    "errors": []
+  },
+  {
+    "screen": "dash",
+    "action": "setPatientArrival('qa_booking_33','arrived')",
+    "label": "تسجيل الوصول",
+    "status": "activated-or-confirmation-cancelled",
+    "errors": []
+  },
+  {
+    "screen": "cases",
+    "action": "caseListPage++;qRes()",
+    "label": "التالي",
+    "status": "activated-or-confirmation-cancelled",
+    "errors": []
+  },
+  {
+    "screen": "cases",
+    "action": "newPatient()",
+    "label": "حالة جديدة",
+    "status": "activated-or-confirmation-cancelled",
+    "errors": []
+  },
+  {
+    "screen": "cases",
+    "action": "clearClinicData()",
+    "label": "حذف جميع الحالات وبياناتهم",
+    "status": "activated-or-confirmation-cancelled",
+    "errors": []
+  },
+  {
+    "screen": "users",
+    "action": "editingUser='qa_admin';render()",
+    "label": "الدور والصلاحيات",
+    "status": "activated-or-confirmation-cancelled",
+    "errors": []
+  },
+  {
+    "screen": "users",
+    "action": "resetUserPassword('qa_admin')",
+    "label": "كلمة السر",
+    "status": "activated-or-confirmation-cancelled",
+    "errors": []
+  },
+  {
+    "screen": "users",
+    "action": "editUserCredentials('qa_admin')",
+    "label": "اسم الدخول وكلمة السر",
+    "status": "activated-or-confirmation-cancelled",
+    "errors": []
+  },
+  {
+    "screen": "users",
+    "action": "revokeUserSessions('qa_admin')",
+    "label": "إنهاء الجلسات",
+    "status": "activated-or-confirmation-cancelled",
+    "errors": []
+  },
+  {
+    "screen": "users",
+    "action": "deleteUserAccount('qa_admin')",
+    "label": "حذف الحساب",
+    "status": "activated-or-confirmation-cancelled",
+    "errors": []
+  },
+  {
+    "screen": "users",
+    "action": "editingUser='qa_doctor';render()",
+    "label": "الدور والصلاحيات",
+    "status": "activated-or-confirmation-cancelled",
+    "errors": []
+  },
+  {
+    "screen": "users",
+    "action": "editingUser='qa_nurse';render()",
+    "label": "الدور والصلاحيات",
+    "status": "activated-or-confirmation-cancelled",
+    "errors": []
+  },
+  {
+    "screen": "users",
+    "action": "editingUser='qa_alex_sec';render()",
+    "label": "الدور والصلاحيات",
+    "status": "activated-or-confirmation-cancelled",
+    "errors": []
+  },
+  {
+    "screen": "users",
+    "action": "editingUser='qa_matrouh_sec';render()",
+    "label": "الدور والصلاحيات",
+    "status": "activated-or-confirmation-cancelled",
+    "errors": []
+  },
+  {
+    "screen": "users",
+    "action": "editingUser='qa_dmn_sec';render()",
+    "label": "الدور والصلاحيات",
+    "status": "activated-or-confirmation-cancelled",
+    "errors": []
+  },
+  {
+    "screen": "users",
+    "action": "editingUser='qa_libya_sec';render()",
+    "label": "الدور والصلاحيات",
+    "status": "activated-or-confirmation-cancelled",
+    "errors": []
+  },
+  {
+    "screen": "users",
+    "action": "editingUser='qa_data_entry';render()",
+    "label": "الدور والصلاحيات",
+    "status": "activated-or-confirmation-cancelled",
+    "errors": []
+  },
+  {
+    "screen": "users",
+    "action": "createUserAccount()",
+    "label": "مستخدم جديد",
+    "status": "activated-or-confirmation-cancelled",
+    "errors": []
+  },
+  {
+    "screen": "users",
+    "action": "setupStaffAccess()",
+    "label": "ضبط حسابات السكرتارية والممرضة",
+    "status": "activated-or-confirmation-cancelled",
+    "errors": []
+  },
+  {
+    "screen": "users",
+    "action": "setupTrainingAccounts()",
+    "label": "تنظيم الحالات وحسابَي داتا",
+    "status": "activated-or-confirmation-cancelled",
+    "errors": []
+  },
+  {
+    "screen": "sched",
+    "action": "transferBranchDay()",
+    "label": "نقل يوم العمل والحجوزات",
+    "status": "activated-or-confirmation-cancelled",
+    "errors": []
+  },
+  {
+    "screen": "sched",
+    "action": "saveBranchDays('alex')",
+    "label": "حفظ الأيام بدون ساعات",
+    "status": "activated-or-confirmation-cancelled",
+    "errors": []
+  },
+  {
+    "screen": "sched",
+    "action": "delete branchDayDrafts['alex'];render()",
+    "label": "إلغاء تغيير الأيام",
+    "status": "activated-or-confirmation-cancelled",
+    "errors": []
+  },
+  {
+    "screen": "sched",
+    "action": "editClinicBranch('alex')",
+    "label": "العنوان والتليفون",
+    "status": "activated-or-confirmation-cancelled",
+    "errors": []
+  },
+  {
+    "screen": "sched",
+    "action": "editSched('alex')",
+    "label": "الساعات والاستثناءات",
+    "status": "activated-or-confirmation-cancelled",
+    "errors": []
+  },
+  {
+    "screen": "sched",
+    "action": "deleteClinicBranch('alex')",
+    "label": "حذف / أرشفة الفرع",
+    "status": "activated-or-confirmation-cancelled",
+    "errors": []
+  },
+  {
+    "screen": "sched",
+    "action": "delete branchDayDrafts['matrouh'];render()",
+    "label": "إلغاء تغيير الأيام",
+    "status": "activated-or-confirmation-cancelled",
+    "errors": []
+  },
+  {
+    "screen": "sched",
+    "action": "delete branchDayDrafts['dmn'];render()",
+    "label": "إلغاء تغيير الأيام",
+    "status": "activated-or-confirmation-cancelled",
+    "errors": []
+  },
+  {
+    "screen": "sched",
+    "action": "delete branchDayDrafts['libya'];render()",
+    "label": "إلغاء تغيير الأيام",
+    "status": "activated-or-confirmation-cancelled",
+    "errors": []
+  },
+  {
+    "screen": "about",
+    "action": "saveClinicAbout()",
+    "label": "حفظ النبذة والمظهر للمرضى",
+    "status": "activated-or-confirmation-cancelled",
+    "errors": []
+  },
+  {
+    "screen": "clinic",
+    "action": "saveSiteContent()",
+    "label": "حفظ بيانات العيادة",
+    "status": "activated-or-confirmation-cancelled",
+    "errors": []
+  },
+  {
+    "screen": "clinic",
+    "action": "addClinicSection()",
+    "label": "إضافة قسم جديد",
+    "status": "activated-or-confirmation-cancelled",
+    "errors": []
+  },
+  {
+    "screen": "clinic",
+    "action": "saveClinicSections()",
+    "label": "حفظ الأقسام وإعدادات ظهورها",
+    "status": "activated-or-confirmation-cancelled",
+    "errors": []
+  },
+  {
+    "screen": "header",
+    "action": "pendingImages['logo']='';adminDirtyTab=tab;document.getElementById('image_status_logo').textContent='ستتم إزالة الصورة عند الحفظ'",
+    "label": "إزالة الشعار",
+    "status": "activated-or-confirmation-cancelled",
+    "errors": []
+  },
+  {
+    "screen": "header",
+    "action": "pendingImages['doctorPhoto']='';adminDirtyTab=tab;document.getElementById('image_status_doctorPhoto').textContent='ستتم إزالة الصورة عند الحفظ'",
+    "label": "إزالة صورة الدكتور",
+    "status": "activated-or-confirmation-cancelled",
+    "errors": []
+  },
+  {
+    "screen": "header",
+    "action": "saveClinicHeader()",
+    "label": "حفظ الهيدر لكل الصفحات",
+    "status": "activated-or-confirmation-cancelled",
+    "errors": []
+  },
+  {
+    "screen": "header",
+    "action": "previewClinicHeader()",
+    "label": "معاينة بدون حفظ",
+    "status": "activated-or-confirmation-cancelled",
+    "errors": []
+  },
+  {
+    "screen": "header",
+    "action": "applySite(SITE)",
+    "label": "إلغاء المعاينة",
+    "status": "activated-or-confirmation-cancelled",
+    "errors": []
+  },
+  {
+    "screen": "design",
+    "action": "selectClinicTheme(0)",
+    "label": "أزرق هادئ ووردينهاريعيادة الطبيبحجز موعدليليعيادة الطبيبحجز موعد",
+    "status": "activated-or-confirmation-cancelled",
+    "errors": []
+  },
+  {
+    "screen": "design",
+    "action": "removeSiteImage('logo')",
+    "label": "إزالة شعار العيادة",
+    "status": "activated-or-confirmation-cancelled",
+    "errors": []
+  },
+  {
+    "screen": "design",
+    "action": "saveDesign()",
+    "label": "حفظ التصميم والصور",
+    "status": "activated-or-confirmation-cancelled",
+    "errors": []
+  },
+  {
+    "screen": "design",
+    "action": "resetDesign()",
+    "label": "استعادة التصميم الأصلي",
+    "status": "activated-or-confirmation-cancelled",
+    "errors": []
+  },
+  {
+    "screen": "design",
+    "action": "previewClinicTheme('light')",
+    "label": "معاينة النهاري",
+    "status": "activated-or-confirmation-cancelled",
+    "errors": []
+  },
+  {
+    "screen": "design",
+    "action": "cancelClinicThemePreview()",
+    "label": "إلغاء المعاينة",
+    "status": "activated-or-confirmation-cancelled",
+    "errors": []
+  },
+  {
+    "screen": "design",
+    "action": "restorePreviousDesign()",
+    "label": "استرجاع التصميم السابق",
+    "status": "activated-or-confirmation-cancelled",
+    "errors": []
+  },
+  {
+    "screen": "session",
+    "action": "changeSession('alex','running')",
+    "label": "بدء الكشف",
+    "status": "activated-or-confirmation-cancelled",
+    "errors": []
+  },
+  {
+    "screen": "reports",
+    "action": "openClinicReport()",
+    "label": "تجهيز التقرير للطباعة / الحفظ PDF",
+    "status": "activated-or-confirmation-cancelled",
+    "errors": []
+  },
+  {
+    "screen": "reports",
+    "action": "previewClinicReport()",
+    "label": "معاينة عدد الحالات",
+    "status": "activated-or-confirmation-cancelled",
+    "errors": []
+  },
+  {
+    "screen": "reports",
+    "action": "exportReportCsv()",
+    "label": "تصدير جدول CSV",
+    "status": "activated-or-confirmation-cancelled",
+    "errors": []
+  },
+  {
+    "screen": "audit",
+    "action": "showClinicAudit('bfa8469e-053e-4187-a6dc-80a52e6ea1c5')",
+    "label": "ما الذي تغيّر؟",
+    "status": "activated-or-confirmation-cancelled",
+    "errors": []
+  },
+  {
+    "screen": "set",
+    "action": "editPw()",
+    "label": "تغيير كلمة سر حسابي",
+    "status": "activated-or-confirmation-cancelled",
+    "errors": []
+  },
+  {
+    "screen": "set",
+    "action": "downloadCompleteBackup()",
+    "label": "نسخة كاملة تشمل صور التقارير",
+    "status": "activated-or-confirmation-cancelled",
+    "errors": []
+  },
+  {
+    "screen": "set",
+    "action": "exportAdminData()",
+    "label": "تنزيل نسخة من بيانات العيادة",
+    "status": "activated-or-confirmation-cancelled",
+    "errors": []
+  },
+  {
+    "screen": "set",
+    "action": "openClinicImport()",
+    "label": "استيراد بيانات العيادة",
+    "status": "activated-or-confirmation-cancelled",
+    "errors": []
+  },
+  {
+    "screen": "set",
+    "action": "reindex()",
+    "label": "فهرسة المرضى من الحجوزات",
+    "status": "activated-or-confirmation-cancelled",
+    "errors": []
+  },
+  {
+    "screen": "set",
+    "action": "purgeDemo()",
+    "label": "حذف البيانات التجريبية فقط",
+    "status": "activated-or-confirmation-cancelled",
+    "errors": []
+  },
+  {
+    "screen": "set",
+    "action": "openYearTraining()",
+    "label": "إضافة بيانات التدريب حتى نهاية العام",
+    "status": "activated-or-confirmation-cancelled",
+    "errors": []
+  },
+  {
+    "screen": "set",
+    "action": "openNovemberCleanup()",
+    "label": "حذف البيانات القديمة والافتراضية",
+    "status": "activated-or-confirmation-cancelled",
+    "errors": []
+  },
+  {
+    "screen": "set",
+    "action": "normalizeExistingDemoNames()",
+    "label": "تحديث بيانات الحالات الافتراضية القديمة",
+    "status": "activated-or-confirmation-cancelled",
+    "errors": []
+  },
+  {
+    "screen": "set",
+    "action": "editBookingRequestRules()",
+    "label": "ظهور قسم طلبات المرضى وقواعده",
+    "status": "activated-or-confirmation-cancelled",
+    "errors": []
+  },
+  {
+    "screen": "health",
+    "action": "loadReleaseStatus(true)",
+    "label": "التحقق من التوافق",
+    "status": "activated-or-confirmation-cancelled",
+    "errors": []
+  },
+  {
+    "screen": "health",
+    "action": "downloadLatestBackup()",
+    "label": "تنزيل آخر نسخة آلية",
+    "status": "activated-or-confirmation-cancelled",
+    "errors": []
+  },
+  {
+    "screen": "health",
+    "action": "runBackupRehearsal()",
+    "label": "تجربة استعادة معزولة لآخر نسخة آلية",
+    "status": "activated-or-confirmation-cancelled",
+    "errors": []
+  },
+  {
+    "screen": "display",
+    "action": "saveQueueAppearance()",
+    "label": "حفظ شاشة الدور",
+    "status": "activated-or-confirmation-cancelled",
+    "errors": []
+  },
+  {
+    "screen": "watermark",
+    "action": "watermarkImageDraft='';watermarkPreviewChanged()",
+    "label": "استخدام اللوجو الافتراضي الجديد",
+    "status": "activated-or-confirmation-cancelled",
+    "errors": []
+  },
+  {
+    "screen": "watermark",
+    "action": "saveClinicWatermark()",
+    "label": "حفظ لوجو الخلفية لكل الصفحات",
+    "status": "activated-or-confirmation-cancelled",
+    "errors": []
+  },
+  {
+    "screen": "work",
+    "action": "loadWorkflow(true)",
+    "label": "تحديث الطلبات",
+    "status": "activated-or-confirmation-cancelled",
+    "errors": []
+  }
+]

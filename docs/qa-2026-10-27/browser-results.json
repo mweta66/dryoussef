@@ -1,0 +1,6813 @@
+[
+  {
+    "role": "admin",
+    "screen": "login",
+    "pass": true
+  },
+  {
+    "role": "admin",
+    "screen": "dash",
+    "label": "الحجوزات والطابور",
+    "pass": true,
+    "overflow": false,
+    "buttons": [
+      {
+        "text": "الحجوزات والطابور",
+        "disabled": false,
+        "action": "tab='dash';render()"
+      },
+      {
+        "text": "الحالات والشكاوى",
+        "disabled": false,
+        "action": "tab='cases';render()"
+      },
+      {
+        "text": "المستخدمون",
+        "disabled": false,
+        "action": "tab='users';render()"
+      },
+      {
+        "text": "المواعيد",
+        "disabled": false,
+        "action": "tab='sched';render()"
+      },
+      {
+        "text": "نبذة العيادة",
+        "disabled": false,
+        "action": "tab='about';render()"
+      },
+      {
+        "text": "بيانات العيادة",
+        "disabled": false,
+        "action": "tab='clinic';render()"
+      },
+      {
+        "text": "الهيدر",
+        "disabled": false,
+        "action": "tab='header';render()"
+      },
+      {
+        "text": "التصميم والصور",
+        "disabled": false,
+        "action": "tab='design';render()"
+      },
+      {
+        "text": "جلسة الكشف",
+        "disabled": false,
+        "action": "tab='session';render()"
+      },
+      {
+        "text": "التقارير PDF",
+        "disabled": false,
+        "action": "tab='reports';render()"
+      },
+      {
+        "text": "سجل العمليات",
+        "disabled": false,
+        "action": "tab='audit';render()"
+      },
+      {
+        "text": "سلة المحذوفات",
+        "disabled": false,
+        "action": "tab='deleted';render()"
+      },
+      {
+        "text": "إعدادات حسابي",
+        "disabled": false,
+        "action": "tab='set';render()"
+      },
+      {
+        "text": "شاشة الدور",
+        "disabled": false,
+        "action": "tab='waiting';render()"
+      },
+      {
+        "text": "الاتصال والنسخ الاحتياطي",
+        "disabled": false,
+        "action": "tab='health';render()"
+      },
+      {
+        "text": "إعدادات شاشة الدور",
+        "disabled": false,
+        "action": "tab='display';render()"
+      },
+      {
+        "text": "لوجو الخلفية",
+        "disabled": false,
+        "action": "tab='watermark';render()"
+      },
+      {
+        "text": "طلبات المرضى",
+        "disabled": false,
+        "action": "tab='work';render()"
+      },
+      {
+        "text": "اليوم",
+        "disabled": false,
+        "action": "F.d=today();render()"
+      },
+      {
+        "text": "كل الأيام",
+        "disabled": false,
+        "action": "F.d='';render()"
+      },
+      {
+        "text": "حجز جديد",
+        "disabled": false,
+        "action": "newBk()"
+      },
+      {
+        "text": "حجز طوارئ - أولوية",
+        "disabled": false,
+        "action": "newBk('emergency')"
+      },
+      {
+        "text": "جاري الكشف",
+        "disabled": false,
+        "action": "setS(\"qa_booking_33\",\"exam\")"
+      },
+      {
+        "text": "تم الكشف",
+        "disabled": false,
+        "action": "setS(\"qa_booking_33\",\"done\")"
+      },
+      {
+        "text": "لم يحضر",
+        "disabled": false,
+        "action": "setS(\"qa_booking_33\",\"no\")"
+      },
+      {
+        "text": "ملغي",
+        "disabled": false,
+        "action": "setS(\"qa_booking_33\",\"cx\")"
+      },
+      {
+        "text": "تعديل",
+        "disabled": false,
+        "action": "editBk(\"qa_booking_33\")"
+      },
+      {
+        "text": "حذف",
+        "disabled": false,
+        "action": "delBk(\"qa_booking_33\")"
+      },
+      {
+        "text": "تقديم كطوارئ",
+        "disabled": false,
+        "action": "prioritizeEmergency(\"qa_booking_33\")"
+      },
+      {
+        "text": "طباعة الحالة PDF",
+        "disabled": false,
+        "action": "printPatientData(\"01000070033\")"
+      },
+      {
+        "text": "سجل الحالة",
+        "disabled": false,
+        "action": "showPatientTimeline('01000070033')"
+      },
+      {
+        "text": "تسجيل الوصول",
+        "disabled": false,
+        "action": "setPatientArrival('qa_booking_33','arrived')"
+      },
+      {
+        "text": "إلغاء الوصول",
+        "disabled": false,
+        "action": "setPatientArrival('qa_booking_33','not_arrived')"
+      },
+      {
+        "text": "جاري الكشف",
+        "disabled": false,
+        "action": "setS(\"qa_booking_34\",\"exam\")"
+      },
+      {
+        "text": "تم الكشف",
+        "disabled": false,
+        "action": "setS(\"qa_booking_34\",\"done\")"
+      },
+      {
+        "text": "لم يحضر",
+        "disabled": false,
+        "action": "setS(\"qa_booking_34\",\"no\")"
+      },
+      {
+        "text": "ملغي",
+        "disabled": false,
+        "action": "setS(\"qa_booking_34\",\"cx\")"
+      },
+      {
+        "text": "تعديل",
+        "disabled": false,
+        "action": "editBk(\"qa_booking_34\")"
+      },
+      {
+        "text": "حذف",
+        "disabled": false,
+        "action": "delBk(\"qa_booking_34\")"
+      },
+      {
+        "text": "تقديم كطوارئ",
+        "disabled": false,
+        "action": "prioritizeEmergency(\"qa_booking_34\")"
+      },
+      {
+        "text": "طباعة الحالة PDF",
+        "disabled": false,
+        "action": "printPatientData(\"01000070034\")"
+      },
+      {
+        "text": "سجل الحالة",
+        "disabled": false,
+        "action": "showPatientTimeline('01000070034')"
+      },
+      {
+        "text": "تسجيل الوصول",
+        "disabled": false,
+        "action": "setPatientArrival('qa_booking_34','arrived')"
+      },
+      {
+        "text": "إلغاء الوصول",
+        "disabled": false,
+        "action": "setPatientArrival('qa_booking_34','not_arrived')"
+      },
+      {
+        "text": "جاري الكشف",
+        "disabled": false,
+        "action": "setS(\"qa_booking_35\",\"exam\")"
+      },
+      {
+        "text": "تم الكشف",
+        "disabled": false,
+        "action": "setS(\"qa_booking_35\",\"done\")"
+      },
+      {
+        "text": "لم يحضر",
+        "disabled": false,
+        "action": "setS(\"qa_booking_35\",\"no\")"
+      },
+      {
+        "text": "ملغي",
+        "disabled": false,
+        "action": "setS(\"qa_booking_35\",\"cx\")"
+      },
+      {
+        "text": "تعديل",
+        "disabled": false,
+        "action": "editBk(\"qa_booking_35\")"
+      },
+      {
+        "text": "حذف",
+        "disabled": false,
+        "action": "delBk(\"qa_booking_35\")"
+      },
+      {
+        "text": "تقديم كطوارئ",
+        "disabled": false,
+        "action": "prioritizeEmergency(\"qa_booking_35\")"
+      },
+      {
+        "text": "طباعة الحالة PDF",
+        "disabled": false,
+        "action": "printPatientData(\"01000070035\")"
+      },
+      {
+        "text": "سجل الحالة",
+        "disabled": false,
+        "action": "showPatientTimeline('01000070035')"
+      },
+      {
+        "text": "تسجيل الوصول",
+        "disabled": false,
+        "action": "setPatientArrival('qa_booking_35','arrived')"
+      },
+      {
+        "text": "إلغاء الوصول",
+        "disabled": false,
+        "action": "setPatientArrival('qa_booking_35','not_arrived')"
+      },
+      {
+        "text": "جاري الكشف",
+        "disabled": false,
+        "action": "setS(\"qa_booking_36\",\"exam\")"
+      },
+      {
+        "text": "تم الكشف",
+        "disabled": false,
+        "action": "setS(\"qa_booking_36\",\"done\")"
+      },
+      {
+        "text": "لم يحضر",
+        "disabled": false,
+        "action": "setS(\"qa_booking_36\",\"no\")"
+      },
+      {
+        "text": "ملغي",
+        "disabled": false,
+        "action": "setS(\"qa_booking_36\",\"cx\")"
+      },
+      {
+        "text": "تعديل",
+        "disabled": false,
+        "action": "editBk(\"qa_booking_36\")"
+      },
+      {
+        "text": "حذف",
+        "disabled": false,
+        "action": "delBk(\"qa_booking_36\")"
+      },
+      {
+        "text": "طباعة الحالة PDF",
+        "disabled": false,
+        "action": "printPatientData(\"01000070036\")"
+      },
+      {
+        "text": "سجل الحالة",
+        "disabled": false,
+        "action": "showPatientTimeline('01000070036')"
+      },
+      {
+        "text": "تسجيل الوصول",
+        "disabled": false,
+        "action": "setPatientArrival('qa_booking_36','arrived')"
+      },
+      {
+        "text": "إلغاء الوصول",
+        "disabled": false,
+        "action": "setPatientArrival('qa_booking_36','not_arrived')"
+      }
+    ]
+  },
+  {
+    "role": "admin",
+    "screen": "five-date-ranges",
+    "pass": true,
+    "counts": [
+      {
+        "date": "2026-09-22",
+        "count": 16
+      },
+      {
+        "date": "2026-10-26",
+        "count": 16
+      },
+      {
+        "date": "2026-10-27",
+        "count": 16
+      },
+      {
+        "date": "2026-10-28",
+        "count": 16
+      },
+      {
+        "date": "2026-12-01",
+        "count": 16
+      }
+    ]
+  },
+  {
+    "role": "admin",
+    "screen": "cases",
+    "label": "الحالات والشكاوى",
+    "pass": true,
+    "overflow": false,
+    "buttons": [
+      {
+        "text": "الحجوزات والطابور",
+        "disabled": false,
+        "action": "tab='dash';render()"
+      },
+      {
+        "text": "الحالات والشكاوى",
+        "disabled": false,
+        "action": "tab='cases';render()"
+      },
+      {
+        "text": "المستخدمون",
+        "disabled": false,
+        "action": "tab='users';render()"
+      },
+      {
+        "text": "المواعيد",
+        "disabled": false,
+        "action": "tab='sched';render()"
+      },
+      {
+        "text": "نبذة العيادة",
+        "disabled": false,
+        "action": "tab='about';render()"
+      },
+      {
+        "text": "بيانات العيادة",
+        "disabled": false,
+        "action": "tab='clinic';render()"
+      },
+      {
+        "text": "الهيدر",
+        "disabled": false,
+        "action": "tab='header';render()"
+      },
+      {
+        "text": "التصميم والصور",
+        "disabled": false,
+        "action": "tab='design';render()"
+      },
+      {
+        "text": "جلسة الكشف",
+        "disabled": false,
+        "action": "tab='session';render()"
+      },
+      {
+        "text": "التقارير PDF",
+        "disabled": false,
+        "action": "tab='reports';render()"
+      },
+      {
+        "text": "سجل العمليات",
+        "disabled": false,
+        "action": "tab='audit';render()"
+      },
+      {
+        "text": "سلة المحذوفات",
+        "disabled": false,
+        "action": "tab='deleted';render()"
+      },
+      {
+        "text": "إعدادات حسابي",
+        "disabled": false,
+        "action": "tab='set';render()"
+      },
+      {
+        "text": "شاشة الدور",
+        "disabled": false,
+        "action": "tab='waiting';render()"
+      },
+      {
+        "text": "الاتصال والنسخ الاحتياطي",
+        "disabled": false,
+        "action": "tab='health';render()"
+      },
+      {
+        "text": "إعدادات شاشة الدور",
+        "disabled": false,
+        "action": "tab='display';render()"
+      },
+      {
+        "text": "لوجو الخلفية",
+        "disabled": false,
+        "action": "tab='watermark';render()"
+      },
+      {
+        "text": "طلبات المرضى",
+        "disabled": false,
+        "action": "tab='work';render()"
+      },
+      {
+        "text": "ملف الحالة",
+        "disabled": false,
+        "action": null
+      },
+      {
+        "text": "طباعة الحالة PDF",
+        "disabled": false,
+        "action": "printPatientData(\"01000070001\")"
+      },
+      {
+        "text": "ملف الحالة",
+        "disabled": false,
+        "action": null
+      },
+      {
+        "text": "طباعة الحالة PDF",
+        "disabled": false,
+        "action": "printPatientData(\"01000070002\")"
+      },
+      {
+        "text": "ملف الحالة",
+        "disabled": false,
+        "action": null
+      },
+      {
+        "text": "طباعة الحالة PDF",
+        "disabled": false,
+        "action": "printPatientData(\"01000070003\")"
+      },
+      {
+        "text": "ملف الحالة",
+        "disabled": false,
+        "action": null
+      },
+      {
+        "text": "طباعة الحالة PDF",
+        "disabled": false,
+        "action": "printPatientData(\"01000070004\")"
+      },
+      {
+        "text": "ملف الحالة",
+        "disabled": false,
+        "action": null
+      },
+      {
+        "text": "طباعة الحالة PDF",
+        "disabled": false,
+        "action": "printPatientData(\"01000070005\")"
+      },
+      {
+        "text": "ملف الحالة",
+        "disabled": false,
+        "action": null
+      },
+      {
+        "text": "طباعة الحالة PDF",
+        "disabled": false,
+        "action": "printPatientData(\"01000070006\")"
+      },
+      {
+        "text": "ملف الحالة",
+        "disabled": false,
+        "action": null
+      },
+      {
+        "text": "طباعة الحالة PDF",
+        "disabled": false,
+        "action": "printPatientData(\"01000070007\")"
+      },
+      {
+        "text": "ملف الحالة",
+        "disabled": false,
+        "action": null
+      },
+      {
+        "text": "طباعة الحالة PDF",
+        "disabled": false,
+        "action": "printPatientData(\"01000070008\")"
+      },
+      {
+        "text": "ملف الحالة",
+        "disabled": false,
+        "action": null
+      },
+      {
+        "text": "طباعة الحالة PDF",
+        "disabled": false,
+        "action": "printPatientData(\"01000070009\")"
+      },
+      {
+        "text": "ملف الحالة",
+        "disabled": false,
+        "action": null
+      },
+      {
+        "text": "طباعة الحالة PDF",
+        "disabled": false,
+        "action": "printPatientData(\"01000070010\")"
+      },
+      {
+        "text": "ملف الحالة",
+        "disabled": false,
+        "action": null
+      },
+      {
+        "text": "طباعة الحالة PDF",
+        "disabled": false,
+        "action": "printPatientData(\"01000070011\")"
+      },
+      {
+        "text": "ملف الحالة",
+        "disabled": false,
+        "action": null
+      },
+      {
+        "text": "طباعة الحالة PDF",
+        "disabled": false,
+        "action": "printPatientData(\"01000070012\")"
+      },
+      {
+        "text": "ملف الحالة",
+        "disabled": false,
+        "action": null
+      },
+      {
+        "text": "طباعة الحالة PDF",
+        "disabled": false,
+        "action": "printPatientData(\"01000070013\")"
+      },
+      {
+        "text": "ملف الحالة",
+        "disabled": false,
+        "action": null
+      },
+      {
+        "text": "طباعة الحالة PDF",
+        "disabled": false,
+        "action": "printPatientData(\"01000070014\")"
+      },
+      {
+        "text": "ملف الحالة",
+        "disabled": false,
+        "action": null
+      },
+      {
+        "text": "طباعة الحالة PDF",
+        "disabled": false,
+        "action": "printPatientData(\"01000070015\")"
+      },
+      {
+        "text": "ملف الحالة",
+        "disabled": false,
+        "action": null
+      },
+      {
+        "text": "طباعة الحالة PDF",
+        "disabled": false,
+        "action": "printPatientData(\"01000070016\")"
+      },
+      {
+        "text": "ملف الحالة",
+        "disabled": false,
+        "action": null
+      },
+      {
+        "text": "طباعة الحالة PDF",
+        "disabled": false,
+        "action": "printPatientData(\"01000070017\")"
+      },
+      {
+        "text": "ملف الحالة",
+        "disabled": false,
+        "action": null
+      },
+      {
+        "text": "طباعة الحالة PDF",
+        "disabled": false,
+        "action": "printPatientData(\"01000070018\")"
+      },
+      {
+        "text": "ملف الحالة",
+        "disabled": false,
+        "action": null
+      },
+      {
+        "text": "طباعة الحالة PDF",
+        "disabled": false,
+        "action": "printPatientData(\"01000070019\")"
+      },
+      {
+        "text": "ملف الحالة",
+        "disabled": false,
+        "action": null
+      },
+      {
+        "text": "طباعة الحالة PDF",
+        "disabled": false,
+        "action": "printPatientData(\"01000070020\")"
+      },
+      {
+        "text": "ملف الحالة",
+        "disabled": false,
+        "action": null
+      },
+      {
+        "text": "طباعة الحالة PDF",
+        "disabled": false,
+        "action": "printPatientData(\"01000070021\")"
+      },
+      {
+        "text": "ملف الحالة",
+        "disabled": false,
+        "action": null
+      },
+      {
+        "text": "طباعة الحالة PDF",
+        "disabled": false,
+        "action": "printPatientData(\"01000070022\")"
+      },
+      {
+        "text": "ملف الحالة",
+        "disabled": false,
+        "action": null
+      },
+      {
+        "text": "طباعة الحالة PDF",
+        "disabled": false,
+        "action": "printPatientData(\"01000070023\")"
+      },
+      {
+        "text": "ملف الحالة",
+        "disabled": false,
+        "action": null
+      },
+      {
+        "text": "طباعة الحالة PDF",
+        "disabled": false,
+        "action": "printPatientData(\"01000070024\")"
+      },
+      {
+        "text": "ملف الحالة",
+        "disabled": false,
+        "action": null
+      },
+      {
+        "text": "طباعة الحالة PDF",
+        "disabled": false,
+        "action": "printPatientData(\"01000070025\")"
+      },
+      {
+        "text": "ملف الحالة",
+        "disabled": false,
+        "action": null
+      },
+      {
+        "text": "طباعة الحالة PDF",
+        "disabled": false,
+        "action": "printPatientData(\"01000070026\")"
+      },
+      {
+        "text": "ملف الحالة",
+        "disabled": false,
+        "action": null
+      },
+      {
+        "text": "طباعة الحالة PDF",
+        "disabled": false,
+        "action": "printPatientData(\"01000070027\")"
+      },
+      {
+        "text": "ملف الحالة",
+        "disabled": false,
+        "action": null
+      },
+      {
+        "text": "طباعة الحالة PDF",
+        "disabled": false,
+        "action": "printPatientData(\"01000070028\")"
+      },
+      {
+        "text": "ملف الحالة",
+        "disabled": false,
+        "action": null
+      },
+      {
+        "text": "طباعة الحالة PDF",
+        "disabled": false,
+        "action": "printPatientData(\"01000070029\")"
+      },
+      {
+        "text": "ملف الحالة",
+        "disabled": false,
+        "action": null
+      },
+      {
+        "text": "طباعة الحالة PDF",
+        "disabled": false,
+        "action": "printPatientData(\"01000070030\")"
+      },
+      {
+        "text": "السابق",
+        "disabled": true,
+        "action": "caseListPage--;qRes()"
+      },
+      {
+        "text": "التالي",
+        "disabled": false,
+        "action": "caseListPage++;qRes()"
+      },
+      {
+        "text": "حالة جديدة",
+        "disabled": false,
+        "action": "newPatient()"
+      },
+      {
+        "text": "حذف جميع الحالات وبياناتهم",
+        "disabled": false,
+        "action": "clearClinicData()"
+      }
+    ]
+  },
+  {
+    "role": "admin",
+    "screen": "case-search",
+    "pass": true
+  },
+  {
+    "role": "admin",
+    "screen": "users",
+    "label": "المستخدمون",
+    "pass": true,
+    "overflow": false,
+    "buttons": [
+      {
+        "text": "الحجوزات والطابور",
+        "disabled": false,
+        "action": "tab='dash';render()"
+      },
+      {
+        "text": "الحالات والشكاوى",
+        "disabled": false,
+        "action": "tab='cases';render()"
+      },
+      {
+        "text": "المستخدمون",
+        "disabled": false,
+        "action": "tab='users';render()"
+      },
+      {
+        "text": "المواعيد",
+        "disabled": false,
+        "action": "tab='sched';render()"
+      },
+      {
+        "text": "نبذة العيادة",
+        "disabled": false,
+        "action": "tab='about';render()"
+      },
+      {
+        "text": "بيانات العيادة",
+        "disabled": false,
+        "action": "tab='clinic';render()"
+      },
+      {
+        "text": "الهيدر",
+        "disabled": false,
+        "action": "tab='header';render()"
+      },
+      {
+        "text": "التصميم والصور",
+        "disabled": false,
+        "action": "tab='design';render()"
+      },
+      {
+        "text": "جلسة الكشف",
+        "disabled": false,
+        "action": "tab='session';render()"
+      },
+      {
+        "text": "التقارير PDF",
+        "disabled": false,
+        "action": "tab='reports';render()"
+      },
+      {
+        "text": "سجل العمليات",
+        "disabled": false,
+        "action": "tab='audit';render()"
+      },
+      {
+        "text": "سلة المحذوفات",
+        "disabled": false,
+        "action": "tab='deleted';render()"
+      },
+      {
+        "text": "إعدادات حسابي",
+        "disabled": false,
+        "action": "tab='set';render()"
+      },
+      {
+        "text": "شاشة الدور",
+        "disabled": false,
+        "action": "tab='waiting';render()"
+      },
+      {
+        "text": "الاتصال والنسخ الاحتياطي",
+        "disabled": false,
+        "action": "tab='health';render()"
+      },
+      {
+        "text": "إعدادات شاشة الدور",
+        "disabled": false,
+        "action": "tab='display';render()"
+      },
+      {
+        "text": "لوجو الخلفية",
+        "disabled": false,
+        "action": "tab='watermark';render()"
+      },
+      {
+        "text": "طلبات المرضى",
+        "disabled": false,
+        "action": "tab='work';render()"
+      },
+      {
+        "text": "الدور والصلاحيات",
+        "disabled": false,
+        "action": "editingUser='qa_admin';render()"
+      },
+      {
+        "text": "كلمة السر",
+        "disabled": false,
+        "action": "resetUserPassword('qa_admin')"
+      },
+      {
+        "text": "اسم الدخول وكلمة السر",
+        "disabled": false,
+        "action": "editUserCredentials('qa_admin')"
+      },
+      {
+        "text": "إنهاء الجلسات",
+        "disabled": false,
+        "action": "revokeUserSessions('qa_admin')"
+      },
+      {
+        "text": "حذف الحساب",
+        "disabled": false,
+        "action": "deleteUserAccount('qa_admin')"
+      },
+      {
+        "text": "الدور والصلاحيات",
+        "disabled": false,
+        "action": "editingUser='qa_doctor';render()"
+      },
+      {
+        "text": "كلمة السر",
+        "disabled": false,
+        "action": "resetUserPassword('qa_doctor')"
+      },
+      {
+        "text": "اسم الدخول وكلمة السر",
+        "disabled": false,
+        "action": "editUserCredentials('qa_doctor')"
+      },
+      {
+        "text": "إنهاء الجلسات",
+        "disabled": false,
+        "action": "revokeUserSessions('qa_doctor')"
+      },
+      {
+        "text": "حذف الحساب",
+        "disabled": false,
+        "action": "deleteUserAccount('qa_doctor')"
+      },
+      {
+        "text": "الدور والصلاحيات",
+        "disabled": false,
+        "action": "editingUser='qa_nurse';render()"
+      },
+      {
+        "text": "كلمة السر",
+        "disabled": false,
+        "action": "resetUserPassword('qa_nurse')"
+      },
+      {
+        "text": "اسم الدخول وكلمة السر",
+        "disabled": false,
+        "action": "editUserCredentials('qa_nurse')"
+      },
+      {
+        "text": "إنهاء الجلسات",
+        "disabled": false,
+        "action": "revokeUserSessions('qa_nurse')"
+      },
+      {
+        "text": "حذف الحساب",
+        "disabled": false,
+        "action": "deleteUserAccount('qa_nurse')"
+      },
+      {
+        "text": "الدور والصلاحيات",
+        "disabled": false,
+        "action": "editingUser='qa_alex_sec';render()"
+      },
+      {
+        "text": "كلمة السر",
+        "disabled": false,
+        "action": "resetUserPassword('qa_alex_sec')"
+      },
+      {
+        "text": "اسم الدخول وكلمة السر",
+        "disabled": false,
+        "action": "editUserCredentials('qa_alex_sec')"
+      },
+      {
+        "text": "إنهاء الجلسات",
+        "disabled": false,
+        "action": "revokeUserSessions('qa_alex_sec')"
+      },
+      {
+        "text": "حذف الحساب",
+        "disabled": false,
+        "action": "deleteUserAccount('qa_alex_sec')"
+      },
+      {
+        "text": "الدور والصلاحيات",
+        "disabled": false,
+        "action": "editingUser='qa_matrouh_sec';render()"
+      },
+      {
+        "text": "كلمة السر",
+        "disabled": false,
+        "action": "resetUserPassword('qa_matrouh_sec')"
+      },
+      {
+        "text": "اسم الدخول وكلمة السر",
+        "disabled": false,
+        "action": "editUserCredentials('qa_matrouh_sec')"
+      },
+      {
+        "text": "إنهاء الجلسات",
+        "disabled": false,
+        "action": "revokeUserSessions('qa_matrouh_sec')"
+      },
+      {
+        "text": "حذف الحساب",
+        "disabled": false,
+        "action": "deleteUserAccount('qa_matrouh_sec')"
+      },
+      {
+        "text": "الدور والصلاحيات",
+        "disabled": false,
+        "action": "editingUser='qa_dmn_sec';render()"
+      },
+      {
+        "text": "كلمة السر",
+        "disabled": false,
+        "action": "resetUserPassword('qa_dmn_sec')"
+      },
+      {
+        "text": "اسم الدخول وكلمة السر",
+        "disabled": false,
+        "action": "editUserCredentials('qa_dmn_sec')"
+      },
+      {
+        "text": "إنهاء الجلسات",
+        "disabled": false,
+        "action": "revokeUserSessions('qa_dmn_sec')"
+      },
+      {
+        "text": "حذف الحساب",
+        "disabled": false,
+        "action": "deleteUserAccount('qa_dmn_sec')"
+      },
+      {
+        "text": "الدور والصلاحيات",
+        "disabled": false,
+        "action": "editingUser='qa_libya_sec';render()"
+      },
+      {
+        "text": "كلمة السر",
+        "disabled": false,
+        "action": "resetUserPassword('qa_libya_sec')"
+      },
+      {
+        "text": "اسم الدخول وكلمة السر",
+        "disabled": false,
+        "action": "editUserCredentials('qa_libya_sec')"
+      },
+      {
+        "text": "إنهاء الجلسات",
+        "disabled": false,
+        "action": "revokeUserSessions('qa_libya_sec')"
+      },
+      {
+        "text": "حذف الحساب",
+        "disabled": false,
+        "action": "deleteUserAccount('qa_libya_sec')"
+      },
+      {
+        "text": "الدور والصلاحيات",
+        "disabled": false,
+        "action": "editingUser='qa_data_entry';render()"
+      },
+      {
+        "text": "كلمة السر",
+        "disabled": false,
+        "action": "resetUserPassword('qa_data_entry')"
+      },
+      {
+        "text": "اسم الدخول وكلمة السر",
+        "disabled": false,
+        "action": "editUserCredentials('qa_data_entry')"
+      },
+      {
+        "text": "إنهاء الجلسات",
+        "disabled": false,
+        "action": "revokeUserSessions('qa_data_entry')"
+      },
+      {
+        "text": "حذف الحساب",
+        "disabled": false,
+        "action": "deleteUserAccount('qa_data_entry')"
+      },
+      {
+        "text": "مستخدم جديد",
+        "disabled": false,
+        "action": "createUserAccount()"
+      },
+      {
+        "text": "ضبط حسابات السكرتارية والممرضة",
+        "disabled": false,
+        "action": "setupStaffAccess()"
+      },
+      {
+        "text": "تنظيم الحالات وحسابَي داتا",
+        "disabled": false,
+        "action": "setupTrainingAccounts()"
+      }
+    ]
+  },
+  {
+    "role": "admin",
+    "screen": "sched",
+    "label": "المواعيد",
+    "pass": true,
+    "overflow": false,
+    "buttons": [
+      {
+        "text": "الحجوزات والطابور",
+        "disabled": false,
+        "action": "tab='dash';render()"
+      },
+      {
+        "text": "الحالات والشكاوى",
+        "disabled": false,
+        "action": "tab='cases';render()"
+      },
+      {
+        "text": "المستخدمون",
+        "disabled": false,
+        "action": "tab='users';render()"
+      },
+      {
+        "text": "المواعيد",
+        "disabled": false,
+        "action": "tab='sched';render()"
+      },
+      {
+        "text": "نبذة العيادة",
+        "disabled": false,
+        "action": "tab='about';render()"
+      },
+      {
+        "text": "بيانات العيادة",
+        "disabled": false,
+        "action": "tab='clinic';render()"
+      },
+      {
+        "text": "الهيدر",
+        "disabled": false,
+        "action": "tab='header';render()"
+      },
+      {
+        "text": "التصميم والصور",
+        "disabled": false,
+        "action": "tab='design';render()"
+      },
+      {
+        "text": "جلسة الكشف",
+        "disabled": false,
+        "action": "tab='session';render()"
+      },
+      {
+        "text": "التقارير PDF",
+        "disabled": false,
+        "action": "tab='reports';render()"
+      },
+      {
+        "text": "سجل العمليات",
+        "disabled": false,
+        "action": "tab='audit';render()"
+      },
+      {
+        "text": "سلة المحذوفات",
+        "disabled": false,
+        "action": "tab='deleted';render()"
+      },
+      {
+        "text": "إعدادات حسابي",
+        "disabled": false,
+        "action": "tab='set';render()"
+      },
+      {
+        "text": "شاشة الدور",
+        "disabled": false,
+        "action": "tab='waiting';render()"
+      },
+      {
+        "text": "الاتصال والنسخ الاحتياطي",
+        "disabled": false,
+        "action": "tab='health';render()"
+      },
+      {
+        "text": "إعدادات شاشة الدور",
+        "disabled": false,
+        "action": "tab='display';render()"
+      },
+      {
+        "text": "لوجو الخلفية",
+        "disabled": false,
+        "action": "tab='watermark';render()"
+      },
+      {
+        "text": "طلبات المرضى",
+        "disabled": false,
+        "action": "tab='work';render()"
+      },
+      {
+        "text": "نقل يوم العمل والحجوزات",
+        "disabled": false,
+        "action": "transferBranchDay()"
+      },
+      {
+        "text": "حفظ الأيام بدون ساعات",
+        "disabled": false,
+        "action": "saveBranchDays('alex')"
+      },
+      {
+        "text": "إلغاء تغيير الأيام",
+        "disabled": false,
+        "action": "delete branchDayDrafts['alex'];render()"
+      },
+      {
+        "text": "العنوان والتليفون",
+        "disabled": false,
+        "action": "editClinicBranch('alex')"
+      },
+      {
+        "text": "الساعات والاستثناءات",
+        "disabled": false,
+        "action": "editSched('alex')"
+      },
+      {
+        "text": "حذف / أرشفة الفرع",
+        "disabled": false,
+        "action": "deleteClinicBranch('alex')"
+      },
+      {
+        "text": "حفظ الأيام بدون ساعات",
+        "disabled": false,
+        "action": "saveBranchDays('matrouh')"
+      },
+      {
+        "text": "إلغاء تغيير الأيام",
+        "disabled": false,
+        "action": "delete branchDayDrafts['matrouh'];render()"
+      },
+      {
+        "text": "العنوان والتليفون",
+        "disabled": false,
+        "action": "editClinicBranch('matrouh')"
+      },
+      {
+        "text": "الساعات والاستثناءات",
+        "disabled": false,
+        "action": "editSched('matrouh')"
+      },
+      {
+        "text": "حذف / أرشفة الفرع",
+        "disabled": false,
+        "action": "deleteClinicBranch('matrouh')"
+      },
+      {
+        "text": "حفظ الأيام بدون ساعات",
+        "disabled": false,
+        "action": "saveBranchDays('dmn')"
+      },
+      {
+        "text": "إلغاء تغيير الأيام",
+        "disabled": false,
+        "action": "delete branchDayDrafts['dmn'];render()"
+      },
+      {
+        "text": "العنوان والتليفون",
+        "disabled": false,
+        "action": "editClinicBranch('dmn')"
+      },
+      {
+        "text": "الساعات والاستثناءات",
+        "disabled": false,
+        "action": "editSched('dmn')"
+      },
+      {
+        "text": "حذف / أرشفة الفرع",
+        "disabled": false,
+        "action": "deleteClinicBranch('dmn')"
+      },
+      {
+        "text": "حفظ الأيام بدون ساعات",
+        "disabled": false,
+        "action": "saveBranchDays('libya')"
+      },
+      {
+        "text": "إلغاء تغيير الأيام",
+        "disabled": false,
+        "action": "delete branchDayDrafts['libya'];render()"
+      },
+      {
+        "text": "العنوان والتليفون",
+        "disabled": false,
+        "action": "editClinicBranch('libya')"
+      },
+      {
+        "text": "الساعات والاستثناءات",
+        "disabled": false,
+        "action": "editSched('libya')"
+      },
+      {
+        "text": "حذف / أرشفة الفرع",
+        "disabled": false,
+        "action": "deleteClinicBranch('libya')"
+      },
+      {
+        "text": "إضافة فرع",
+        "disabled": false,
+        "action": "editClinicBranch()"
+      }
+    ]
+  },
+  {
+    "role": "admin",
+    "screen": "about",
+    "label": "نبذة العيادة",
+    "pass": true,
+    "overflow": false,
+    "buttons": [
+      {
+        "text": "الحجوزات والطابور",
+        "disabled": false,
+        "action": "tab='dash';render()"
+      },
+      {
+        "text": "الحالات والشكاوى",
+        "disabled": false,
+        "action": "tab='cases';render()"
+      },
+      {
+        "text": "المستخدمون",
+        "disabled": false,
+        "action": "tab='users';render()"
+      },
+      {
+        "text": "المواعيد",
+        "disabled": false,
+        "action": "tab='sched';render()"
+      },
+      {
+        "text": "نبذة العيادة",
+        "disabled": false,
+        "action": "tab='about';render()"
+      },
+      {
+        "text": "بيانات العيادة",
+        "disabled": false,
+        "action": "tab='clinic';render()"
+      },
+      {
+        "text": "الهيدر",
+        "disabled": false,
+        "action": "tab='header';render()"
+      },
+      {
+        "text": "التصميم والصور",
+        "disabled": false,
+        "action": "tab='design';render()"
+      },
+      {
+        "text": "جلسة الكشف",
+        "disabled": false,
+        "action": "tab='session';render()"
+      },
+      {
+        "text": "التقارير PDF",
+        "disabled": false,
+        "action": "tab='reports';render()"
+      },
+      {
+        "text": "سجل العمليات",
+        "disabled": false,
+        "action": "tab='audit';render()"
+      },
+      {
+        "text": "سلة المحذوفات",
+        "disabled": false,
+        "action": "tab='deleted';render()"
+      },
+      {
+        "text": "إعدادات حسابي",
+        "disabled": false,
+        "action": "tab='set';render()"
+      },
+      {
+        "text": "شاشة الدور",
+        "disabled": false,
+        "action": "tab='waiting';render()"
+      },
+      {
+        "text": "الاتصال والنسخ الاحتياطي",
+        "disabled": false,
+        "action": "tab='health';render()"
+      },
+      {
+        "text": "إعدادات شاشة الدور",
+        "disabled": false,
+        "action": "tab='display';render()"
+      },
+      {
+        "text": "لوجو الخلفية",
+        "disabled": false,
+        "action": "tab='watermark';render()"
+      },
+      {
+        "text": "طلبات المرضى",
+        "disabled": false,
+        "action": "tab='work';render()"
+      },
+      {
+        "text": "حفظ النبذة والمظهر للمرضى",
+        "disabled": false,
+        "action": "saveClinicAbout()"
+      },
+      {
+        "text": "إلغاء التعديلات",
+        "disabled": false,
+        "action": "render()"
+      }
+    ]
+  },
+  {
+    "role": "admin",
+    "screen": "clinic",
+    "label": "بيانات العيادة",
+    "pass": true,
+    "overflow": false,
+    "buttons": [
+      {
+        "text": "الحجوزات والطابور",
+        "disabled": false,
+        "action": "tab='dash';render()"
+      },
+      {
+        "text": "الحالات والشكاوى",
+        "disabled": false,
+        "action": "tab='cases';render()"
+      },
+      {
+        "text": "المستخدمون",
+        "disabled": false,
+        "action": "tab='users';render()"
+      },
+      {
+        "text": "المواعيد",
+        "disabled": false,
+        "action": "tab='sched';render()"
+      },
+      {
+        "text": "نبذة العيادة",
+        "disabled": false,
+        "action": "tab='about';render()"
+      },
+      {
+        "text": "بيانات العيادة",
+        "disabled": false,
+        "action": "tab='clinic';render()"
+      },
+      {
+        "text": "الهيدر",
+        "disabled": false,
+        "action": "tab='header';render()"
+      },
+      {
+        "text": "التصميم والصور",
+        "disabled": false,
+        "action": "tab='design';render()"
+      },
+      {
+        "text": "جلسة الكشف",
+        "disabled": false,
+        "action": "tab='session';render()"
+      },
+      {
+        "text": "التقارير PDF",
+        "disabled": false,
+        "action": "tab='reports';render()"
+      },
+      {
+        "text": "سجل العمليات",
+        "disabled": false,
+        "action": "tab='audit';render()"
+      },
+      {
+        "text": "سلة المحذوفات",
+        "disabled": false,
+        "action": "tab='deleted';render()"
+      },
+      {
+        "text": "إعدادات حسابي",
+        "disabled": false,
+        "action": "tab='set';render()"
+      },
+      {
+        "text": "شاشة الدور",
+        "disabled": false,
+        "action": "tab='waiting';render()"
+      },
+      {
+        "text": "الاتصال والنسخ الاحتياطي",
+        "disabled": false,
+        "action": "tab='health';render()"
+      },
+      {
+        "text": "إعدادات شاشة الدور",
+        "disabled": false,
+        "action": "tab='display';render()"
+      },
+      {
+        "text": "لوجو الخلفية",
+        "disabled": false,
+        "action": "tab='watermark';render()"
+      },
+      {
+        "text": "طلبات المرضى",
+        "disabled": false,
+        "action": "tab='work';render()"
+      },
+      {
+        "text": "حفظ بيانات العيادة",
+        "disabled": false,
+        "action": "saveSiteContent()"
+      },
+      {
+        "text": "حفظ النصوص وبيانات العيادة",
+        "disabled": false,
+        "action": "saveSiteContent()"
+      },
+      {
+        "text": "إضافة قسم جديد",
+        "disabled": false,
+        "action": "addClinicSection()"
+      },
+      {
+        "text": "حفظ الأقسام وإعدادات ظهورها",
+        "disabled": false,
+        "action": "saveClinicSections()"
+      }
+    ]
+  },
+  {
+    "role": "admin",
+    "screen": "header",
+    "label": "الهيدر",
+    "pass": true,
+    "overflow": false,
+    "buttons": [
+      {
+        "text": "الحجوزات والطابور",
+        "disabled": false,
+        "action": "tab='dash';render()"
+      },
+      {
+        "text": "الحالات والشكاوى",
+        "disabled": false,
+        "action": "tab='cases';render()"
+      },
+      {
+        "text": "المستخدمون",
+        "disabled": false,
+        "action": "tab='users';render()"
+      },
+      {
+        "text": "المواعيد",
+        "disabled": false,
+        "action": "tab='sched';render()"
+      },
+      {
+        "text": "نبذة العيادة",
+        "disabled": false,
+        "action": "tab='about';render()"
+      },
+      {
+        "text": "بيانات العيادة",
+        "disabled": false,
+        "action": "tab='clinic';render()"
+      },
+      {
+        "text": "الهيدر",
+        "disabled": false,
+        "action": "tab='header';render()"
+      },
+      {
+        "text": "التصميم والصور",
+        "disabled": false,
+        "action": "tab='design';render()"
+      },
+      {
+        "text": "جلسة الكشف",
+        "disabled": false,
+        "action": "tab='session';render()"
+      },
+      {
+        "text": "التقارير PDF",
+        "disabled": false,
+        "action": "tab='reports';render()"
+      },
+      {
+        "text": "سجل العمليات",
+        "disabled": false,
+        "action": "tab='audit';render()"
+      },
+      {
+        "text": "سلة المحذوفات",
+        "disabled": false,
+        "action": "tab='deleted';render()"
+      },
+      {
+        "text": "إعدادات حسابي",
+        "disabled": false,
+        "action": "tab='set';render()"
+      },
+      {
+        "text": "شاشة الدور",
+        "disabled": false,
+        "action": "tab='waiting';render()"
+      },
+      {
+        "text": "الاتصال والنسخ الاحتياطي",
+        "disabled": false,
+        "action": "tab='health';render()"
+      },
+      {
+        "text": "إعدادات شاشة الدور",
+        "disabled": false,
+        "action": "tab='display';render()"
+      },
+      {
+        "text": "لوجو الخلفية",
+        "disabled": false,
+        "action": "tab='watermark';render()"
+      },
+      {
+        "text": "طلبات المرضى",
+        "disabled": false,
+        "action": "tab='work';render()"
+      },
+      {
+        "text": "إزالة الشعار",
+        "disabled": false,
+        "action": "pendingImages['logo']='';adminDirtyTab=tab;document.getElementById('image_status_logo').textContent='ستتم إزالة الصورة عند الحفظ'"
+      },
+      {
+        "text": "إزالة صورة الدكتور",
+        "disabled": false,
+        "action": "pendingImages['doctorPhoto']='';adminDirtyTab=tab;document.getElementById('image_status_doctorPhoto').textContent='ستتم إزالة الصورة عند الحفظ'"
+      },
+      {
+        "text": "حفظ الهيدر لكل الصفحات",
+        "disabled": false,
+        "action": "saveClinicHeader()"
+      },
+      {
+        "text": "معاينة بدون حفظ",
+        "disabled": false,
+        "action": "previewClinicHeader()"
+      },
+      {
+        "text": "إلغاء المعاينة",
+        "disabled": false,
+        "action": "applySite(SITE)"
+      }
+    ]
+  },
+  {
+    "role": "admin",
+    "screen": "design",
+    "label": "التصميم والصور",
+    "pass": true,
+    "overflow": false,
+    "buttons": [
+      {
+        "text": "الحجوزات والطابور",
+        "disabled": false,
+        "action": "tab='dash';render()"
+      },
+      {
+        "text": "الحالات والشكاوى",
+        "disabled": false,
+        "action": "tab='cases';render()"
+      },
+      {
+        "text": "المستخدمون",
+        "disabled": false,
+        "action": "tab='users';render()"
+      },
+      {
+        "text": "المواعيد",
+        "disabled": false,
+        "action": "tab='sched';render()"
+      },
+      {
+        "text": "نبذة العيادة",
+        "disabled": false,
+        "action": "tab='about';render()"
+      },
+      {
+        "text": "بيانات العيادة",
+        "disabled": false,
+        "action": "tab='clinic';render()"
+      },
+      {
+        "text": "الهيدر",
+        "disabled": false,
+        "action": "tab='header';render()"
+      },
+      {
+        "text": "التصميم والصور",
+        "disabled": false,
+        "action": "tab='design';render()"
+      },
+      {
+        "text": "جلسة الكشف",
+        "disabled": false,
+        "action": "tab='session';render()"
+      },
+      {
+        "text": "التقارير PDF",
+        "disabled": false,
+        "action": "tab='reports';render()"
+      },
+      {
+        "text": "سجل العمليات",
+        "disabled": false,
+        "action": "tab='audit';render()"
+      },
+      {
+        "text": "سلة المحذوفات",
+        "disabled": false,
+        "action": "tab='deleted';render()"
+      },
+      {
+        "text": "إعدادات حسابي",
+        "disabled": false,
+        "action": "tab='set';render()"
+      },
+      {
+        "text": "شاشة الدور",
+        "disabled": false,
+        "action": "tab='waiting';render()"
+      },
+      {
+        "text": "الاتصال والنسخ الاحتياطي",
+        "disabled": false,
+        "action": "tab='health';render()"
+      },
+      {
+        "text": "إعدادات شاشة الدور",
+        "disabled": false,
+        "action": "tab='display';render()"
+      },
+      {
+        "text": "لوجو الخلفية",
+        "disabled": false,
+        "action": "tab='watermark';render()"
+      },
+      {
+        "text": "طلبات المرضى",
+        "disabled": false,
+        "action": "tab='work';render()"
+      },
+      {
+        "text": "أزرق هادئ ووردينهاريعيادة الطبيبحجز موعدليليعيادة الطبيبحجز موعد",
+        "disabled": false,
+        "action": "selectClinicTheme(0)"
+      },
+      {
+        "text": "أزرق طبينهاريعيادة الطبيبحجز موعدليليعيادة الطبيبحجز موعد",
+        "disabled": false,
+        "action": "selectClinicTheme(1)"
+      },
+      {
+        "text": "زمردينهاريعيادة الطبيبحجز موعدليليعيادة الطبيبحجز موعد",
+        "disabled": false,
+        "action": "selectClinicTheme(2)"
+      },
+      {
+        "text": "تركوازينهاريعيادة الطبيبحجز موعدليليعيادة الطبيبحجز موعد",
+        "disabled": false,
+        "action": "selectClinicTheme(3)"
+      },
+      {
+        "text": "بنفسجينهاريعيادة الطبيبحجز موعدليليعيادة الطبيبحجز موعد",
+        "disabled": false,
+        "action": "selectClinicTheme(4)"
+      },
+      {
+        "text": "بترولينهاريعيادة الطبيبحجز موعدليليعيادة الطبيبحجز موعد",
+        "disabled": false,
+        "action": "selectClinicTheme(5)"
+      },
+      {
+        "text": "زيتونينهاريعيادة الطبيبحجز موعدليليعيادة الطبيبحجز موعد",
+        "disabled": false,
+        "action": "selectClinicTheme(6)"
+      },
+      {
+        "text": "رمادينهاريعيادة الطبيبحجز موعدليليعيادة الطبيبحجز موعد",
+        "disabled": false,
+        "action": "selectClinicTheme(7)"
+      },
+      {
+        "text": "خمرينهاريعيادة الطبيبحجز موعدليليعيادة الطبيبحجز موعد",
+        "disabled": false,
+        "action": "selectClinicTheme(8)"
+      },
+      {
+        "text": "بيج دافئنهاريعيادة الطبيبحجز موعدليليعيادة الطبيبحجز موعد",
+        "disabled": false,
+        "action": "selectClinicTheme(9)"
+      },
+      {
+        "text": "إزالة شعار العيادة",
+        "disabled": false,
+        "action": "removeSiteImage('logo')"
+      },
+      {
+        "text": "إزالة صورة الدكتور",
+        "disabled": false,
+        "action": "removeSiteImage('doctorPhoto')"
+      },
+      {
+        "text": "حفظ التصميم والصور",
+        "disabled": false,
+        "action": "saveDesign()"
+      },
+      {
+        "text": "استعادة التصميم الأصلي",
+        "disabled": false,
+        "action": "resetDesign()"
+      },
+      {
+        "text": "معاينة النهاري",
+        "disabled": false,
+        "action": "previewClinicTheme('light')"
+      },
+      {
+        "text": "معاينة الليلي",
+        "disabled": false,
+        "action": "previewClinicTheme('dark')"
+      },
+      {
+        "text": "إلغاء المعاينة",
+        "disabled": false,
+        "action": "cancelClinicThemePreview()"
+      },
+      {
+        "text": "استرجاع التصميم السابق",
+        "disabled": false,
+        "action": "restorePreviousDesign()"
+      }
+    ]
+  },
+  {
+    "role": "admin",
+    "screen": "session",
+    "label": "جلسة الكشف",
+    "pass": true,
+    "overflow": false,
+    "buttons": [
+      {
+        "text": "الحجوزات والطابور",
+        "disabled": false,
+        "action": "tab='dash';render()"
+      },
+      {
+        "text": "الحالات والشكاوى",
+        "disabled": false,
+        "action": "tab='cases';render()"
+      },
+      {
+        "text": "المستخدمون",
+        "disabled": false,
+        "action": "tab='users';render()"
+      },
+      {
+        "text": "المواعيد",
+        "disabled": false,
+        "action": "tab='sched';render()"
+      },
+      {
+        "text": "نبذة العيادة",
+        "disabled": false,
+        "action": "tab='about';render()"
+      },
+      {
+        "text": "بيانات العيادة",
+        "disabled": false,
+        "action": "tab='clinic';render()"
+      },
+      {
+        "text": "الهيدر",
+        "disabled": false,
+        "action": "tab='header';render()"
+      },
+      {
+        "text": "التصميم والصور",
+        "disabled": false,
+        "action": "tab='design';render()"
+      },
+      {
+        "text": "جلسة الكشف",
+        "disabled": false,
+        "action": "tab='session';render()"
+      },
+      {
+        "text": "التقارير PDF",
+        "disabled": false,
+        "action": "tab='reports';render()"
+      },
+      {
+        "text": "سجل العمليات",
+        "disabled": false,
+        "action": "tab='audit';render()"
+      },
+      {
+        "text": "سلة المحذوفات",
+        "disabled": false,
+        "action": "tab='deleted';render()"
+      },
+      {
+        "text": "إعدادات حسابي",
+        "disabled": false,
+        "action": "tab='set';render()"
+      },
+      {
+        "text": "شاشة الدور",
+        "disabled": false,
+        "action": "tab='waiting';render()"
+      },
+      {
+        "text": "الاتصال والنسخ الاحتياطي",
+        "disabled": false,
+        "action": "tab='health';render()"
+      },
+      {
+        "text": "إعدادات شاشة الدور",
+        "disabled": false,
+        "action": "tab='display';render()"
+      },
+      {
+        "text": "لوجو الخلفية",
+        "disabled": false,
+        "action": "tab='watermark';render()"
+      },
+      {
+        "text": "طلبات المرضى",
+        "disabled": false,
+        "action": "tab='work';render()"
+      },
+      {
+        "text": "بدء الكشف",
+        "disabled": false,
+        "action": "changeSession('alex','running')"
+      },
+      {
+        "text": "إيقاف مؤقت",
+        "disabled": false,
+        "action": "changeSession('alex','paused')"
+      },
+      {
+        "text": "إنهاء العيادة",
+        "disabled": false,
+        "action": "changeSession('alex','ended')"
+      },
+      {
+        "text": "بدء الكشف",
+        "disabled": false,
+        "action": "changeSession('matrouh','running')"
+      },
+      {
+        "text": "إيقاف مؤقت",
+        "disabled": false,
+        "action": "changeSession('matrouh','paused')"
+      },
+      {
+        "text": "إنهاء العيادة",
+        "disabled": false,
+        "action": "changeSession('matrouh','ended')"
+      },
+      {
+        "text": "بدء الكشف",
+        "disabled": false,
+        "action": "changeSession('dmn','running')"
+      },
+      {
+        "text": "إيقاف مؤقت",
+        "disabled": false,
+        "action": "changeSession('dmn','paused')"
+      },
+      {
+        "text": "إنهاء العيادة",
+        "disabled": false,
+        "action": "changeSession('dmn','ended')"
+      },
+      {
+        "text": "بدء الكشف",
+        "disabled": false,
+        "action": "changeSession('libya','running')"
+      },
+      {
+        "text": "إيقاف مؤقت",
+        "disabled": false,
+        "action": "changeSession('libya','paused')"
+      },
+      {
+        "text": "إنهاء العيادة",
+        "disabled": false,
+        "action": "changeSession('libya','ended')"
+      }
+    ]
+  },
+  {
+    "role": "admin",
+    "screen": "reports",
+    "label": "التقارير PDF",
+    "pass": true,
+    "overflow": false,
+    "buttons": [
+      {
+        "text": "الحجوزات والطابور",
+        "disabled": false,
+        "action": "tab='dash';render()"
+      },
+      {
+        "text": "الحالات والشكاوى",
+        "disabled": false,
+        "action": "tab='cases';render()"
+      },
+      {
+        "text": "المستخدمون",
+        "disabled": false,
+        "action": "tab='users';render()"
+      },
+      {
+        "text": "المواعيد",
+        "disabled": false,
+        "action": "tab='sched';render()"
+      },
+      {
+        "text": "نبذة العيادة",
+        "disabled": false,
+        "action": "tab='about';render()"
+      },
+      {
+        "text": "بيانات العيادة",
+        "disabled": false,
+        "action": "tab='clinic';render()"
+      },
+      {
+        "text": "الهيدر",
+        "disabled": false,
+        "action": "tab='header';render()"
+      },
+      {
+        "text": "التصميم والصور",
+        "disabled": false,
+        "action": "tab='design';render()"
+      },
+      {
+        "text": "جلسة الكشف",
+        "disabled": false,
+        "action": "tab='session';render()"
+      },
+      {
+        "text": "التقارير PDF",
+        "disabled": false,
+        "action": "tab='reports';render()"
+      },
+      {
+        "text": "سجل العمليات",
+        "disabled": false,
+        "action": "tab='audit';render()"
+      },
+      {
+        "text": "سلة المحذوفات",
+        "disabled": false,
+        "action": "tab='deleted';render()"
+      },
+      {
+        "text": "إعدادات حسابي",
+        "disabled": false,
+        "action": "tab='set';render()"
+      },
+      {
+        "text": "شاشة الدور",
+        "disabled": false,
+        "action": "tab='waiting';render()"
+      },
+      {
+        "text": "الاتصال والنسخ الاحتياطي",
+        "disabled": false,
+        "action": "tab='health';render()"
+      },
+      {
+        "text": "إعدادات شاشة الدور",
+        "disabled": false,
+        "action": "tab='display';render()"
+      },
+      {
+        "text": "لوجو الخلفية",
+        "disabled": false,
+        "action": "tab='watermark';render()"
+      },
+      {
+        "text": "طلبات المرضى",
+        "disabled": false,
+        "action": "tab='work';render()"
+      },
+      {
+        "text": "تجهيز التقرير للطباعة / الحفظ PDF",
+        "disabled": false,
+        "action": "openClinicReport()"
+      },
+      {
+        "text": "معاينة عدد الحالات",
+        "disabled": false,
+        "action": "previewClinicReport()"
+      },
+      {
+        "text": "تصدير جدول CSV",
+        "disabled": false,
+        "action": "exportReportCsv()"
+      }
+    ]
+  },
+  {
+    "role": "admin",
+    "screen": "audit",
+    "label": "سجل العمليات",
+    "pass": true,
+    "overflow": false,
+    "buttons": [
+      {
+        "text": "الحجوزات والطابور",
+        "disabled": false,
+        "action": "tab='dash';render()"
+      },
+      {
+        "text": "الحالات والشكاوى",
+        "disabled": false,
+        "action": "tab='cases';render()"
+      },
+      {
+        "text": "المستخدمون",
+        "disabled": false,
+        "action": "tab='users';render()"
+      },
+      {
+        "text": "المواعيد",
+        "disabled": false,
+        "action": "tab='sched';render()"
+      },
+      {
+        "text": "نبذة العيادة",
+        "disabled": false,
+        "action": "tab='about';render()"
+      },
+      {
+        "text": "بيانات العيادة",
+        "disabled": false,
+        "action": "tab='clinic';render()"
+      },
+      {
+        "text": "الهيدر",
+        "disabled": false,
+        "action": "tab='header';render()"
+      },
+      {
+        "text": "التصميم والصور",
+        "disabled": false,
+        "action": "tab='design';render()"
+      },
+      {
+        "text": "جلسة الكشف",
+        "disabled": false,
+        "action": "tab='session';render()"
+      },
+      {
+        "text": "التقارير PDF",
+        "disabled": false,
+        "action": "tab='reports';render()"
+      },
+      {
+        "text": "سجل العمليات",
+        "disabled": false,
+        "action": "tab='audit';render()"
+      },
+      {
+        "text": "سلة المحذوفات",
+        "disabled": false,
+        "action": "tab='deleted';render()"
+      },
+      {
+        "text": "إعدادات حسابي",
+        "disabled": false,
+        "action": "tab='set';render()"
+      },
+      {
+        "text": "شاشة الدور",
+        "disabled": false,
+        "action": "tab='waiting';render()"
+      },
+      {
+        "text": "الاتصال والنسخ الاحتياطي",
+        "disabled": false,
+        "action": "tab='health';render()"
+      },
+      {
+        "text": "إعدادات شاشة الدور",
+        "disabled": false,
+        "action": "tab='display';render()"
+      },
+      {
+        "text": "لوجو الخلفية",
+        "disabled": false,
+        "action": "tab='watermark';render()"
+      },
+      {
+        "text": "طلبات المرضى",
+        "disabled": false,
+        "action": "tab='work';render()"
+      },
+      {
+        "text": "ما الذي تغيّر؟",
+        "disabled": false,
+        "action": "showClinicAudit('8e840ce3-432a-4327-83b8-68a3ef0176f9')"
+      },
+      {
+        "text": "ما الذي تغيّر؟",
+        "disabled": false,
+        "action": "showClinicAudit('5bdd8c69-9328-43d0-ab42-a9d1c5effe4d')"
+      },
+      {
+        "text": "السابق",
+        "disabled": true,
+        "action": "historyPage--;render()"
+      },
+      {
+        "text": "التالي",
+        "disabled": true,
+        "action": "historyPage++;render()"
+      }
+    ]
+  },
+  {
+    "role": "admin",
+    "screen": "deleted",
+    "label": "سلة المحذوفات",
+    "pass": true,
+    "overflow": false,
+    "buttons": [
+      {
+        "text": "الحجوزات والطابور",
+        "disabled": false,
+        "action": "tab='dash';render()"
+      },
+      {
+        "text": "الحالات والشكاوى",
+        "disabled": false,
+        "action": "tab='cases';render()"
+      },
+      {
+        "text": "المستخدمون",
+        "disabled": false,
+        "action": "tab='users';render()"
+      },
+      {
+        "text": "المواعيد",
+        "disabled": false,
+        "action": "tab='sched';render()"
+      },
+      {
+        "text": "نبذة العيادة",
+        "disabled": false,
+        "action": "tab='about';render()"
+      },
+      {
+        "text": "بيانات العيادة",
+        "disabled": false,
+        "action": "tab='clinic';render()"
+      },
+      {
+        "text": "الهيدر",
+        "disabled": false,
+        "action": "tab='header';render()"
+      },
+      {
+        "text": "التصميم والصور",
+        "disabled": false,
+        "action": "tab='design';render()"
+      },
+      {
+        "text": "جلسة الكشف",
+        "disabled": false,
+        "action": "tab='session';render()"
+      },
+      {
+        "text": "التقارير PDF",
+        "disabled": false,
+        "action": "tab='reports';render()"
+      },
+      {
+        "text": "سجل العمليات",
+        "disabled": false,
+        "action": "tab='audit';render()"
+      },
+      {
+        "text": "سلة المحذوفات",
+        "disabled": false,
+        "action": "tab='deleted';render()"
+      },
+      {
+        "text": "إعدادات حسابي",
+        "disabled": false,
+        "action": "tab='set';render()"
+      },
+      {
+        "text": "شاشة الدور",
+        "disabled": false,
+        "action": "tab='waiting';render()"
+      },
+      {
+        "text": "الاتصال والنسخ الاحتياطي",
+        "disabled": false,
+        "action": "tab='health';render()"
+      },
+      {
+        "text": "إعدادات شاشة الدور",
+        "disabled": false,
+        "action": "tab='display';render()"
+      },
+      {
+        "text": "لوجو الخلفية",
+        "disabled": false,
+        "action": "tab='watermark';render()"
+      },
+      {
+        "text": "طلبات المرضى",
+        "disabled": false,
+        "action": "tab='work';render()"
+      },
+      {
+        "text": "السابق",
+        "disabled": true,
+        "action": "loadClinicTrash(-1)"
+      },
+      {
+        "text": "التالي",
+        "disabled": true,
+        "action": "loadClinicTrash(1)"
+      }
+    ]
+  },
+  {
+    "role": "admin",
+    "screen": "set",
+    "label": "إعدادات حسابي",
+    "pass": true,
+    "overflow": false,
+    "buttons": [
+      {
+        "text": "الحجوزات والطابور",
+        "disabled": false,
+        "action": "tab='dash';render()"
+      },
+      {
+        "text": "الحالات والشكاوى",
+        "disabled": false,
+        "action": "tab='cases';render()"
+      },
+      {
+        "text": "المستخدمون",
+        "disabled": false,
+        "action": "tab='users';render()"
+      },
+      {
+        "text": "المواعيد",
+        "disabled": false,
+        "action": "tab='sched';render()"
+      },
+      {
+        "text": "نبذة العيادة",
+        "disabled": false,
+        "action": "tab='about';render()"
+      },
+      {
+        "text": "بيانات العيادة",
+        "disabled": false,
+        "action": "tab='clinic';render()"
+      },
+      {
+        "text": "الهيدر",
+        "disabled": false,
+        "action": "tab='header';render()"
+      },
+      {
+        "text": "التصميم والصور",
+        "disabled": false,
+        "action": "tab='design';render()"
+      },
+      {
+        "text": "جلسة الكشف",
+        "disabled": false,
+        "action": "tab='session';render()"
+      },
+      {
+        "text": "التقارير PDF",
+        "disabled": false,
+        "action": "tab='reports';render()"
+      },
+      {
+        "text": "سجل العمليات",
+        "disabled": false,
+        "action": "tab='audit';render()"
+      },
+      {
+        "text": "سلة المحذوفات",
+        "disabled": false,
+        "action": "tab='deleted';render()"
+      },
+      {
+        "text": "إعدادات حسابي",
+        "disabled": false,
+        "action": "tab='set';render()"
+      },
+      {
+        "text": "شاشة الدور",
+        "disabled": false,
+        "action": "tab='waiting';render()"
+      },
+      {
+        "text": "الاتصال والنسخ الاحتياطي",
+        "disabled": false,
+        "action": "tab='health';render()"
+      },
+      {
+        "text": "إعدادات شاشة الدور",
+        "disabled": false,
+        "action": "tab='display';render()"
+      },
+      {
+        "text": "لوجو الخلفية",
+        "disabled": false,
+        "action": "tab='watermark';render()"
+      },
+      {
+        "text": "طلبات المرضى",
+        "disabled": false,
+        "action": "tab='work';render()"
+      },
+      {
+        "text": "تغيير كلمة سر حسابي",
+        "disabled": false,
+        "action": "editPw()"
+      },
+      {
+        "text": "نسخة كاملة تشمل صور التقارير",
+        "disabled": false,
+        "action": "downloadCompleteBackup()"
+      },
+      {
+        "text": "تنزيل نسخة من بيانات العيادة",
+        "disabled": false,
+        "action": "exportAdminData()"
+      },
+      {
+        "text": "استيراد بيانات العيادة",
+        "disabled": false,
+        "action": "openClinicImport()"
+      },
+      {
+        "text": "فهرسة المرضى من الحجوزات",
+        "disabled": false,
+        "action": "reindex()"
+      },
+      {
+        "text": "حذف البيانات التجريبية فقط",
+        "disabled": false,
+        "action": "purgeDemo()"
+      },
+      {
+        "text": "حذف جميع الحجوزات وملفات الحالات",
+        "disabled": false,
+        "action": "clearClinicData()"
+      },
+      {
+        "text": "إضافة بيانات التدريب حتى نهاية العام",
+        "disabled": false,
+        "action": "openYearTraining()"
+      },
+      {
+        "text": "حذف البيانات القديمة والافتراضية",
+        "disabled": false,
+        "action": "openNovemberCleanup()"
+      },
+      {
+        "text": "تحديث بيانات الحالات الافتراضية القديمة",
+        "disabled": false,
+        "action": "normalizeExistingDemoNames()"
+      },
+      {
+        "text": "ظهور قسم طلبات المرضى وقواعده",
+        "disabled": false,
+        "action": "editBookingRequestRules()"
+      }
+    ]
+  },
+  {
+    "role": "admin",
+    "screen": "waiting",
+    "label": "شاشة الدور",
+    "pass": true,
+    "overflow": false,
+    "buttons": [
+      {
+        "text": "الحجوزات والطابور",
+        "disabled": false,
+        "action": "tab='dash';render()"
+      },
+      {
+        "text": "الحالات والشكاوى",
+        "disabled": false,
+        "action": "tab='cases';render()"
+      },
+      {
+        "text": "المستخدمون",
+        "disabled": false,
+        "action": "tab='users';render()"
+      },
+      {
+        "text": "المواعيد",
+        "disabled": false,
+        "action": "tab='sched';render()"
+      },
+      {
+        "text": "نبذة العيادة",
+        "disabled": false,
+        "action": "tab='about';render()"
+      },
+      {
+        "text": "بيانات العيادة",
+        "disabled": false,
+        "action": "tab='clinic';render()"
+      },
+      {
+        "text": "الهيدر",
+        "disabled": false,
+        "action": "tab='header';render()"
+      },
+      {
+        "text": "التصميم والصور",
+        "disabled": false,
+        "action": "tab='design';render()"
+      },
+      {
+        "text": "جلسة الكشف",
+        "disabled": false,
+        "action": "tab='session';render()"
+      },
+      {
+        "text": "التقارير PDF",
+        "disabled": false,
+        "action": "tab='reports';render()"
+      },
+      {
+        "text": "سجل العمليات",
+        "disabled": false,
+        "action": "tab='audit';render()"
+      },
+      {
+        "text": "سلة المحذوفات",
+        "disabled": false,
+        "action": "tab='deleted';render()"
+      },
+      {
+        "text": "إعدادات حسابي",
+        "disabled": false,
+        "action": "tab='set';render()"
+      },
+      {
+        "text": "شاشة الدور",
+        "disabled": false,
+        "action": "tab='waiting';render()"
+      },
+      {
+        "text": "الاتصال والنسخ الاحتياطي",
+        "disabled": false,
+        "action": "tab='health';render()"
+      },
+      {
+        "text": "إعدادات شاشة الدور",
+        "disabled": false,
+        "action": "tab='display';render()"
+      },
+      {
+        "text": "لوجو الخلفية",
+        "disabled": false,
+        "action": "tab='watermark';render()"
+      },
+      {
+        "text": "طلبات المرضى",
+        "disabled": false,
+        "action": "tab='work';render()"
+      }
+    ]
+  },
+  {
+    "role": "admin",
+    "screen": "health",
+    "label": "الاتصال والنسخ الاحتياطي",
+    "pass": true,
+    "overflow": false,
+    "buttons": [
+      {
+        "text": "الحجوزات والطابور",
+        "disabled": false,
+        "action": "tab='dash';render()"
+      },
+      {
+        "text": "الحالات والشكاوى",
+        "disabled": false,
+        "action": "tab='cases';render()"
+      },
+      {
+        "text": "المستخدمون",
+        "disabled": false,
+        "action": "tab='users';render()"
+      },
+      {
+        "text": "المواعيد",
+        "disabled": false,
+        "action": "tab='sched';render()"
+      },
+      {
+        "text": "نبذة العيادة",
+        "disabled": false,
+        "action": "tab='about';render()"
+      },
+      {
+        "text": "بيانات العيادة",
+        "disabled": false,
+        "action": "tab='clinic';render()"
+      },
+      {
+        "text": "الهيدر",
+        "disabled": false,
+        "action": "tab='header';render()"
+      },
+      {
+        "text": "التصميم والصور",
+        "disabled": false,
+        "action": "tab='design';render()"
+      },
+      {
+        "text": "جلسة الكشف",
+        "disabled": false,
+        "action": "tab='session';render()"
+      },
+      {
+        "text": "التقارير PDF",
+        "disabled": false,
+        "action": "tab='reports';render()"
+      },
+      {
+        "text": "سجل العمليات",
+        "disabled": false,
+        "action": "tab='audit';render()"
+      },
+      {
+        "text": "سلة المحذوفات",
+        "disabled": false,
+        "action": "tab='deleted';render()"
+      },
+      {
+        "text": "إعدادات حسابي",
+        "disabled": false,
+        "action": "tab='set';render()"
+      },
+      {
+        "text": "شاشة الدور",
+        "disabled": false,
+        "action": "tab='waiting';render()"
+      },
+      {
+        "text": "الاتصال والنسخ الاحتياطي",
+        "disabled": false,
+        "action": "tab='health';render()"
+      },
+      {
+        "text": "إعدادات شاشة الدور",
+        "disabled": false,
+        "action": "tab='display';render()"
+      },
+      {
+        "text": "لوجو الخلفية",
+        "disabled": false,
+        "action": "tab='watermark';render()"
+      },
+      {
+        "text": "طلبات المرضى",
+        "disabled": false,
+        "action": "tab='work';render()"
+      },
+      {
+        "text": "التحقق من التوافق",
+        "disabled": false,
+        "action": "loadReleaseStatus(true)"
+      },
+      {
+        "text": "تنزيل آخر نسخة آلية",
+        "disabled": false,
+        "action": "downloadLatestBackup()"
+      },
+      {
+        "text": "تنزيل بيانات JSON بدون الصور",
+        "disabled": false,
+        "action": "exportAdminData()"
+      },
+      {
+        "text": "نسخة كاملة تشمل صور التقارير",
+        "disabled": false,
+        "action": "downloadCompleteBackup()"
+      },
+      {
+        "text": "تنزيل نسخة مشفرة على جهازك",
+        "disabled": false,
+        "action": "downloadCompleteBackup(true)"
+      },
+      {
+        "text": "تجربة استعادة معزولة لآخر نسخة آلية",
+        "disabled": false,
+        "action": "runBackupRehearsal()"
+      },
+      {
+        "text": "نسخة مشفرة مقسمة بالمرفقات",
+        "disabled": false,
+        "action": "downloadCompleteBackup(true,true)"
+      }
+    ]
+  },
+  {
+    "role": "admin",
+    "screen": "display",
+    "label": "إعدادات شاشة الدور",
+    "pass": true,
+    "overflow": false,
+    "buttons": [
+      {
+        "text": "الحجوزات والطابور",
+        "disabled": false,
+        "action": "tab='dash';render()"
+      },
+      {
+        "text": "الحالات والشكاوى",
+        "disabled": false,
+        "action": "tab='cases';render()"
+      },
+      {
+        "text": "المستخدمون",
+        "disabled": false,
+        "action": "tab='users';render()"
+      },
+      {
+        "text": "المواعيد",
+        "disabled": false,
+        "action": "tab='sched';render()"
+      },
+      {
+        "text": "نبذة العيادة",
+        "disabled": false,
+        "action": "tab='about';render()"
+      },
+      {
+        "text": "بيانات العيادة",
+        "disabled": false,
+        "action": "tab='clinic';render()"
+      },
+      {
+        "text": "الهيدر",
+        "disabled": false,
+        "action": "tab='header';render()"
+      },
+      {
+        "text": "التصميم والصور",
+        "disabled": false,
+        "action": "tab='design';render()"
+      },
+      {
+        "text": "جلسة الكشف",
+        "disabled": false,
+        "action": "tab='session';render()"
+      },
+      {
+        "text": "التقارير PDF",
+        "disabled": false,
+        "action": "tab='reports';render()"
+      },
+      {
+        "text": "سجل العمليات",
+        "disabled": false,
+        "action": "tab='audit';render()"
+      },
+      {
+        "text": "سلة المحذوفات",
+        "disabled": false,
+        "action": "tab='deleted';render()"
+      },
+      {
+        "text": "إعدادات حسابي",
+        "disabled": false,
+        "action": "tab='set';render()"
+      },
+      {
+        "text": "شاشة الدور",
+        "disabled": false,
+        "action": "tab='waiting';render()"
+      },
+      {
+        "text": "الاتصال والنسخ الاحتياطي",
+        "disabled": false,
+        "action": "tab='health';render()"
+      },
+      {
+        "text": "إعدادات شاشة الدور",
+        "disabled": false,
+        "action": "tab='display';render()"
+      },
+      {
+        "text": "لوجو الخلفية",
+        "disabled": false,
+        "action": "tab='watermark';render()"
+      },
+      {
+        "text": "طلبات المرضى",
+        "disabled": false,
+        "action": "tab='work';render()"
+      },
+      {
+        "text": "حفظ شاشة الدور",
+        "disabled": false,
+        "action": "saveQueueAppearance()"
+      }
+    ]
+  },
+  {
+    "role": "admin",
+    "screen": "watermark",
+    "label": "لوجو الخلفية",
+    "pass": true,
+    "overflow": false,
+    "buttons": [
+      {
+        "text": "الحجوزات والطابور",
+        "disabled": false,
+        "action": "tab='dash';render()"
+      },
+      {
+        "text": "الحالات والشكاوى",
+        "disabled": false,
+        "action": "tab='cases';render()"
+      },
+      {
+        "text": "المستخدمون",
+        "disabled": false,
+        "action": "tab='users';render()"
+      },
+      {
+        "text": "المواعيد",
+        "disabled": false,
+        "action": "tab='sched';render()"
+      },
+      {
+        "text": "نبذة العيادة",
+        "disabled": false,
+        "action": "tab='about';render()"
+      },
+      {
+        "text": "بيانات العيادة",
+        "disabled": false,
+        "action": "tab='clinic';render()"
+      },
+      {
+        "text": "الهيدر",
+        "disabled": false,
+        "action": "tab='header';render()"
+      },
+      {
+        "text": "التصميم والصور",
+        "disabled": false,
+        "action": "tab='design';render()"
+      },
+      {
+        "text": "جلسة الكشف",
+        "disabled": false,
+        "action": "tab='session';render()"
+      },
+      {
+        "text": "التقارير PDF",
+        "disabled": false,
+        "action": "tab='reports';render()"
+      },
+      {
+        "text": "سجل العمليات",
+        "disabled": false,
+        "action": "tab='audit';render()"
+      },
+      {
+        "text": "سلة المحذوفات",
+        "disabled": false,
+        "action": "tab='deleted';render()"
+      },
+      {
+        "text": "إعدادات حسابي",
+        "disabled": false,
+        "action": "tab='set';render()"
+      },
+      {
+        "text": "شاشة الدور",
+        "disabled": false,
+        "action": "tab='waiting';render()"
+      },
+      {
+        "text": "الاتصال والنسخ الاحتياطي",
+        "disabled": false,
+        "action": "tab='health';render()"
+      },
+      {
+        "text": "إعدادات شاشة الدور",
+        "disabled": false,
+        "action": "tab='display';render()"
+      },
+      {
+        "text": "لوجو الخلفية",
+        "disabled": false,
+        "action": "tab='watermark';render()"
+      },
+      {
+        "text": "طلبات المرضى",
+        "disabled": false,
+        "action": "tab='work';render()"
+      },
+      {
+        "text": "استخدام اللوجو الافتراضي الجديد",
+        "disabled": false,
+        "action": "watermarkImageDraft='';watermarkPreviewChanged()"
+      },
+      {
+        "text": "حفظ لوجو الخلفية لكل الصفحات",
+        "disabled": false,
+        "action": "saveClinicWatermark()"
+      },
+      {
+        "text": "إلغاء التعديلات",
+        "disabled": false,
+        "action": "render()"
+      }
+    ]
+  },
+  {
+    "role": "admin",
+    "screen": "work",
+    "label": "طلبات المرضى",
+    "pass": true,
+    "overflow": false,
+    "buttons": [
+      {
+        "text": "الحجوزات والطابور",
+        "disabled": false,
+        "action": "tab='dash';render()"
+      },
+      {
+        "text": "الحالات والشكاوى",
+        "disabled": false,
+        "action": "tab='cases';render()"
+      },
+      {
+        "text": "المستخدمون",
+        "disabled": false,
+        "action": "tab='users';render()"
+      },
+      {
+        "text": "المواعيد",
+        "disabled": false,
+        "action": "tab='sched';render()"
+      },
+      {
+        "text": "نبذة العيادة",
+        "disabled": false,
+        "action": "tab='about';render()"
+      },
+      {
+        "text": "بيانات العيادة",
+        "disabled": false,
+        "action": "tab='clinic';render()"
+      },
+      {
+        "text": "الهيدر",
+        "disabled": false,
+        "action": "tab='header';render()"
+      },
+      {
+        "text": "التصميم والصور",
+        "disabled": false,
+        "action": "tab='design';render()"
+      },
+      {
+        "text": "جلسة الكشف",
+        "disabled": false,
+        "action": "tab='session';render()"
+      },
+      {
+        "text": "التقارير PDF",
+        "disabled": false,
+        "action": "tab='reports';render()"
+      },
+      {
+        "text": "سجل العمليات",
+        "disabled": false,
+        "action": "tab='audit';render()"
+      },
+      {
+        "text": "سلة المحذوفات",
+        "disabled": false,
+        "action": "tab='deleted';render()"
+      },
+      {
+        "text": "إعدادات حسابي",
+        "disabled": false,
+        "action": "tab='set';render()"
+      },
+      {
+        "text": "شاشة الدور",
+        "disabled": false,
+        "action": "tab='waiting';render()"
+      },
+      {
+        "text": "الاتصال والنسخ الاحتياطي",
+        "disabled": false,
+        "action": "tab='health';render()"
+      },
+      {
+        "text": "إعدادات شاشة الدور",
+        "disabled": false,
+        "action": "tab='display';render()"
+      },
+      {
+        "text": "لوجو الخلفية",
+        "disabled": false,
+        "action": "tab='watermark';render()"
+      },
+      {
+        "text": "طلبات المرضى",
+        "disabled": false,
+        "action": "tab='work';render()"
+      },
+      {
+        "text": "تحديث الطلبات",
+        "disabled": false,
+        "action": "loadWorkflow(true)"
+      }
+    ]
+  },
+  {
+    "role": "admin",
+    "screen": "console-and-server-errors",
+    "pass": true,
+    "errors": [],
+    "serverErrors": []
+  },
+  {
+    "role": "doctor",
+    "screen": "login",
+    "pass": true
+  },
+  {
+    "role": "doctor",
+    "screen": "dash",
+    "label": "الحجوزات والطابور",
+    "pass": true,
+    "overflow": false,
+    "buttons": [
+      {
+        "text": "الحجوزات والطابور",
+        "disabled": false,
+        "action": "tab='dash';render()"
+      },
+      {
+        "text": "الحالات والشكاوى",
+        "disabled": false,
+        "action": "tab='cases';render()"
+      },
+      {
+        "text": "جلسة الكشف",
+        "disabled": false,
+        "action": "tab='session';render()"
+      },
+      {
+        "text": "التقارير PDF",
+        "disabled": false,
+        "action": "tab='reports';render()"
+      },
+      {
+        "text": "الحجوزات المحذوفة",
+        "disabled": false,
+        "action": "tab='deleted';render()"
+      },
+      {
+        "text": "إعدادات حسابي",
+        "disabled": false,
+        "action": "tab='set';render()"
+      },
+      {
+        "text": "شاشة الدور",
+        "disabled": false,
+        "action": "tab='waiting';render()"
+      },
+      {
+        "text": "طلبات المرضى",
+        "disabled": false,
+        "action": "tab='work';render()"
+      },
+      {
+        "text": "اليوم",
+        "disabled": false,
+        "action": "F.d=today();render()"
+      },
+      {
+        "text": "كل الأيام",
+        "disabled": false,
+        "action": "F.d='';render()"
+      },
+      {
+        "text": "حجز جديد",
+        "disabled": false,
+        "action": "newBk()"
+      },
+      {
+        "text": "حجز طوارئ - أولوية",
+        "disabled": false,
+        "action": "newBk('emergency')"
+      },
+      {
+        "text": "جاري الكشف",
+        "disabled": false,
+        "action": "setS(\"qa_booking_33\",\"exam\")"
+      },
+      {
+        "text": "تم الكشف",
+        "disabled": false,
+        "action": "setS(\"qa_booking_33\",\"done\")"
+      },
+      {
+        "text": "لم يحضر",
+        "disabled": false,
+        "action": "setS(\"qa_booking_33\",\"no\")"
+      },
+      {
+        "text": "ملغي",
+        "disabled": false,
+        "action": "setS(\"qa_booking_33\",\"cx\")"
+      },
+      {
+        "text": "تعديل",
+        "disabled": false,
+        "action": "editBk(\"qa_booking_33\")"
+      },
+      {
+        "text": "حذف",
+        "disabled": false,
+        "action": "delBk(\"qa_booking_33\")"
+      },
+      {
+        "text": "تقديم كطوارئ",
+        "disabled": false,
+        "action": "prioritizeEmergency(\"qa_booking_33\")"
+      },
+      {
+        "text": "طباعة الحالة PDF",
+        "disabled": false,
+        "action": "printPatientData(\"01000070033\")"
+      },
+      {
+        "text": "سجل الحالة",
+        "disabled": false,
+        "action": "showPatientTimeline('01000070033')"
+      },
+      {
+        "text": "تسجيل الوصول",
+        "disabled": false,
+        "action": "setPatientArrival('qa_booking_33','arrived')"
+      },
+      {
+        "text": "إلغاء الوصول",
+        "disabled": false,
+        "action": "setPatientArrival('qa_booking_33','not_arrived')"
+      },
+      {
+        "text": "جاري الكشف",
+        "disabled": false,
+        "action": "setS(\"qa_booking_34\",\"exam\")"
+      },
+      {
+        "text": "تم الكشف",
+        "disabled": false,
+        "action": "setS(\"qa_booking_34\",\"done\")"
+      },
+      {
+        "text": "لم يحضر",
+        "disabled": false,
+        "action": "setS(\"qa_booking_34\",\"no\")"
+      },
+      {
+        "text": "ملغي",
+        "disabled": false,
+        "action": "setS(\"qa_booking_34\",\"cx\")"
+      },
+      {
+        "text": "تعديل",
+        "disabled": false,
+        "action": "editBk(\"qa_booking_34\")"
+      },
+      {
+        "text": "حذف",
+        "disabled": false,
+        "action": "delBk(\"qa_booking_34\")"
+      },
+      {
+        "text": "تقديم كطوارئ",
+        "disabled": false,
+        "action": "prioritizeEmergency(\"qa_booking_34\")"
+      },
+      {
+        "text": "طباعة الحالة PDF",
+        "disabled": false,
+        "action": "printPatientData(\"01000070034\")"
+      },
+      {
+        "text": "سجل الحالة",
+        "disabled": false,
+        "action": "showPatientTimeline('01000070034')"
+      },
+      {
+        "text": "تسجيل الوصول",
+        "disabled": false,
+        "action": "setPatientArrival('qa_booking_34','arrived')"
+      },
+      {
+        "text": "إلغاء الوصول",
+        "disabled": false,
+        "action": "setPatientArrival('qa_booking_34','not_arrived')"
+      },
+      {
+        "text": "جاري الكشف",
+        "disabled": false,
+        "action": "setS(\"qa_booking_35\",\"exam\")"
+      },
+      {
+        "text": "تم الكشف",
+        "disabled": false,
+        "action": "setS(\"qa_booking_35\",\"done\")"
+      },
+      {
+        "text": "لم يحضر",
+        "disabled": false,
+        "action": "setS(\"qa_booking_35\",\"no\")"
+      },
+      {
+        "text": "ملغي",
+        "disabled": false,
+        "action": "setS(\"qa_booking_35\",\"cx\")"
+      },
+      {
+        "text": "تعديل",
+        "disabled": false,
+        "action": "editBk(\"qa_booking_35\")"
+      },
+      {
+        "text": "حذف",
+        "disabled": false,
+        "action": "delBk(\"qa_booking_35\")"
+      },
+      {
+        "text": "تقديم كطوارئ",
+        "disabled": false,
+        "action": "prioritizeEmergency(\"qa_booking_35\")"
+      },
+      {
+        "text": "طباعة الحالة PDF",
+        "disabled": false,
+        "action": "printPatientData(\"01000070035\")"
+      },
+      {
+        "text": "سجل الحالة",
+        "disabled": false,
+        "action": "showPatientTimeline('01000070035')"
+      },
+      {
+        "text": "تسجيل الوصول",
+        "disabled": false,
+        "action": "setPatientArrival('qa_booking_35','arrived')"
+      },
+      {
+        "text": "إلغاء الوصول",
+        "disabled": false,
+        "action": "setPatientArrival('qa_booking_35','not_arrived')"
+      },
+      {
+        "text": "جاري الكشف",
+        "disabled": false,
+        "action": "setS(\"qa_booking_36\",\"exam\")"
+      },
+      {
+        "text": "تم الكشف",
+        "disabled": false,
+        "action": "setS(\"qa_booking_36\",\"done\")"
+      },
+      {
+        "text": "لم يحضر",
+        "disabled": false,
+        "action": "setS(\"qa_booking_36\",\"no\")"
+      },
+      {
+        "text": "ملغي",
+        "disabled": false,
+        "action": "setS(\"qa_booking_36\",\"cx\")"
+      },
+      {
+        "text": "تعديل",
+        "disabled": false,
+        "action": "editBk(\"qa_booking_36\")"
+      },
+      {
+        "text": "حذف",
+        "disabled": false,
+        "action": "delBk(\"qa_booking_36\")"
+      },
+      {
+        "text": "طباعة الحالة PDF",
+        "disabled": false,
+        "action": "printPatientData(\"01000070036\")"
+      },
+      {
+        "text": "سجل الحالة",
+        "disabled": false,
+        "action": "showPatientTimeline('01000070036')"
+      },
+      {
+        "text": "تسجيل الوصول",
+        "disabled": false,
+        "action": "setPatientArrival('qa_booking_36','arrived')"
+      },
+      {
+        "text": "إلغاء الوصول",
+        "disabled": false,
+        "action": "setPatientArrival('qa_booking_36','not_arrived')"
+      }
+    ]
+  },
+  {
+    "role": "doctor",
+    "screen": "five-date-ranges",
+    "pass": true,
+    "counts": [
+      {
+        "date": "2026-09-22",
+        "count": 16
+      },
+      {
+        "date": "2026-10-26",
+        "count": 16
+      },
+      {
+        "date": "2026-10-27",
+        "count": 16
+      },
+      {
+        "date": "2026-10-28",
+        "count": 16
+      },
+      {
+        "date": "2026-12-01",
+        "count": 16
+      }
+    ]
+  },
+  {
+    "role": "doctor",
+    "screen": "cases",
+    "label": "الحالات والشكاوى",
+    "pass": true,
+    "overflow": false,
+    "buttons": [
+      {
+        "text": "الحجوزات والطابور",
+        "disabled": false,
+        "action": "tab='dash';render()"
+      },
+      {
+        "text": "الحالات والشكاوى",
+        "disabled": false,
+        "action": "tab='cases';render()"
+      },
+      {
+        "text": "جلسة الكشف",
+        "disabled": false,
+        "action": "tab='session';render()"
+      },
+      {
+        "text": "التقارير PDF",
+        "disabled": false,
+        "action": "tab='reports';render()"
+      },
+      {
+        "text": "الحجوزات المحذوفة",
+        "disabled": false,
+        "action": "tab='deleted';render()"
+      },
+      {
+        "text": "إعدادات حسابي",
+        "disabled": false,
+        "action": "tab='set';render()"
+      },
+      {
+        "text": "شاشة الدور",
+        "disabled": false,
+        "action": "tab='waiting';render()"
+      },
+      {
+        "text": "طلبات المرضى",
+        "disabled": false,
+        "action": "tab='work';render()"
+      },
+      {
+        "text": "ملف الحالة",
+        "disabled": false,
+        "action": null
+      },
+      {
+        "text": "طباعة الحالة PDF",
+        "disabled": false,
+        "action": "printPatientData(\"01000070001\")"
+      },
+      {
+        "text": "ملف الحالة",
+        "disabled": false,
+        "action": null
+      },
+      {
+        "text": "طباعة الحالة PDF",
+        "disabled": false,
+        "action": "printPatientData(\"01000070002\")"
+      },
+      {
+        "text": "ملف الحالة",
+        "disabled": false,
+        "action": null
+      },
+      {
+        "text": "طباعة الحالة PDF",
+        "disabled": false,
+        "action": "printPatientData(\"01000070003\")"
+      },
+      {
+        "text": "ملف الحالة",
+        "disabled": false,
+        "action": null
+      },
+      {
+        "text": "طباعة الحالة PDF",
+        "disabled": false,
+        "action": "printPatientData(\"01000070004\")"
+      },
+      {
+        "text": "ملف الحالة",
+        "disabled": false,
+        "action": null
+      },
+      {
+        "text": "طباعة الحالة PDF",
+        "disabled": false,
+        "action": "printPatientData(\"01000070005\")"
+      },
+      {
+        "text": "ملف الحالة",
+        "disabled": false,
+        "action": null
+      },
+      {
+        "text": "طباعة الحالة PDF",
+        "disabled": false,
+        "action": "printPatientData(\"01000070006\")"
+      },
+      {
+        "text": "ملف الحالة",
+        "disabled": false,
+        "action": null
+      },
+      {
+        "text": "طباعة الحالة PDF",
+        "disabled": false,
+        "action": "printPatientData(\"01000070007\")"
+      },
+      {
+        "text": "ملف الحالة",
+        "disabled": false,
+        "action": null
+      },
+      {
+        "text": "طباعة الحالة PDF",
+        "disabled": false,
+        "action": "printPatientData(\"01000070008\")"
+      },
+      {
+        "text": "ملف الحالة",
+        "disabled": false,
+        "action": null
+      },
+      {
+        "text": "طباعة الحالة PDF",
+        "disabled": false,
+        "action": "printPatientData(\"01000070009\")"
+      },
+      {
+        "text": "ملف الحالة",
+        "disabled": false,
+        "action": null
+      },
+      {
+        "text": "طباعة الحالة PDF",
+        "disabled": false,
+        "action": "printPatientData(\"01000070010\")"
+      },
+      {
+        "text": "ملف الحالة",
+        "disabled": false,
+        "action": null
+      },
+      {
+        "text": "طباعة الحالة PDF",
+        "disabled": false,
+        "action": "printPatientData(\"01000070011\")"
+      },
+      {
+        "text": "ملف الحالة",
+        "disabled": false,
+        "action": null
+      },
+      {
+        "text": "طباعة الحالة PDF",
+        "disabled": false,
+        "action": "printPatientData(\"01000070012\")"
+      },
+      {
+        "text": "ملف الحالة",
+        "disabled": false,
+        "action": null
+      },
+      {
+        "text": "طباعة الحالة PDF",
+        "disabled": false,
+        "action": "printPatientData(\"01000070013\")"
+      },
+      {
+        "text": "ملف الحالة",
+        "disabled": false,
+        "action": null
+      },
+      {
+        "text": "طباعة الحالة PDF",
+        "disabled": false,
+        "action": "printPatientData(\"01000070014\")"
+      },
+      {
+        "text": "ملف الحالة",
+        "disabled": false,
+        "action": null
+      },
+      {
+        "text": "طباعة الحالة PDF",
+        "disabled": false,
+        "action": "printPatientData(\"01000070015\")"
+      },
+      {
+        "text": "ملف الحالة",
+        "disabled": false,
+        "action": null
+      },
+      {
+        "text": "طباعة الحالة PDF",
+        "disabled": false,
+        "action": "printPatientData(\"01000070016\")"
+      },
+      {
+        "text": "ملف الحالة",
+        "disabled": false,
+        "action": null
+      },
+      {
+        "text": "طباعة الحالة PDF",
+        "disabled": false,
+        "action": "printPatientData(\"01000070017\")"
+      },
+      {
+        "text": "ملف الحالة",
+        "disabled": false,
+        "action": null
+      },
+      {
+        "text": "طباعة الحالة PDF",
+        "disabled": false,
+        "action": "printPatientData(\"01000070018\")"
+      },
+      {
+        "text": "ملف الحالة",
+        "disabled": false,
+        "action": null
+      },
+      {
+        "text": "طباعة الحالة PDF",
+        "disabled": false,
+        "action": "printPatientData(\"01000070019\")"
+      },
+      {
+        "text": "ملف الحالة",
+        "disabled": false,
+        "action": null
+      },
+      {
+        "text": "طباعة الحالة PDF",
+        "disabled": false,
+        "action": "printPatientData(\"01000070020\")"
+      },
+      {
+        "text": "ملف الحالة",
+        "disabled": false,
+        "action": null
+      },
+      {
+        "text": "طباعة الحالة PDF",
+        "disabled": false,
+        "action": "printPatientData(\"01000070021\")"
+      },
+      {
+        "text": "ملف الحالة",
+        "disabled": false,
+        "action": null
+      },
+      {
+        "text": "طباعة الحالة PDF",
+        "disabled": false,
+        "action": "printPatientData(\"01000070022\")"
+      },
+      {
+        "text": "ملف الحالة",
+        "disabled": false,
+        "action": null
+      },
+      {
+        "text": "طباعة الحالة PDF",
+        "disabled": false,
+        "action": "printPatientData(\"01000070023\")"
+      },
+      {
+        "text": "ملف الحالة",
+        "disabled": false,
+        "action": null
+      },
+      {
+        "text": "طباعة الحالة PDF",
+        "disabled": false,
+        "action": "printPatientData(\"01000070024\")"
+      },
+      {
+        "text": "ملف الحالة",
+        "disabled": false,
+        "action": null
+      },
+      {
+        "text": "طباعة الحالة PDF",
+        "disabled": false,
+        "action": "printPatientData(\"01000070025\")"
+      },
+      {
+        "text": "ملف الحالة",
+        "disabled": false,
+        "action": null
+      },
+      {
+        "text": "طباعة الحالة PDF",
+        "disabled": false,
+        "action": "printPatientData(\"01000070026\")"
+      },
+      {
+        "text": "ملف الحالة",
+        "disabled": false,
+        "action": null
+      },
+      {
+        "text": "طباعة الحالة PDF",
+        "disabled": false,
+        "action": "printPatientData(\"01000070027\")"
+      },
+      {
+        "text": "ملف الحالة",
+        "disabled": false,
+        "action": null
+      },
+      {
+        "text": "طباعة الحالة PDF",
+        "disabled": false,
+        "action": "printPatientData(\"01000070028\")"
+      },
+      {
+        "text": "ملف الحالة",
+        "disabled": false,
+        "action": null
+      },
+      {
+        "text": "طباعة الحالة PDF",
+        "disabled": false,
+        "action": "printPatientData(\"01000070029\")"
+      },
+      {
+        "text": "ملف الحالة",
+        "disabled": false,
+        "action": null
+      },
+      {
+        "text": "طباعة الحالة PDF",
+        "disabled": false,
+        "action": "printPatientData(\"01000070030\")"
+      },
+      {
+        "text": "السابق",
+        "disabled": true,
+        "action": "caseListPage--;qRes()"
+      },
+      {
+        "text": "التالي",
+        "disabled": false,
+        "action": "caseListPage++;qRes()"
+      },
+      {
+        "text": "حالة جديدة",
+        "disabled": false,
+        "action": "newPatient()"
+      }
+    ]
+  },
+  {
+    "role": "doctor",
+    "screen": "case-search",
+    "pass": true
+  },
+  {
+    "role": "doctor",
+    "screen": "session",
+    "label": "جلسة الكشف",
+    "pass": true,
+    "overflow": false,
+    "buttons": [
+      {
+        "text": "الحجوزات والطابور",
+        "disabled": false,
+        "action": "tab='dash';render()"
+      },
+      {
+        "text": "الحالات والشكاوى",
+        "disabled": false,
+        "action": "tab='cases';render()"
+      },
+      {
+        "text": "جلسة الكشف",
+        "disabled": false,
+        "action": "tab='session';render()"
+      },
+      {
+        "text": "التقارير PDF",
+        "disabled": false,
+        "action": "tab='reports';render()"
+      },
+      {
+        "text": "الحجوزات المحذوفة",
+        "disabled": false,
+        "action": "tab='deleted';render()"
+      },
+      {
+        "text": "إعدادات حسابي",
+        "disabled": false,
+        "action": "tab='set';render()"
+      },
+      {
+        "text": "شاشة الدور",
+        "disabled": false,
+        "action": "tab='waiting';render()"
+      },
+      {
+        "text": "طلبات المرضى",
+        "disabled": false,
+        "action": "tab='work';render()"
+      },
+      {
+        "text": "بدء الكشف",
+        "disabled": false,
+        "action": "changeSession('alex','running')"
+      },
+      {
+        "text": "إيقاف مؤقت",
+        "disabled": false,
+        "action": "changeSession('alex','paused')"
+      },
+      {
+        "text": "إنهاء العيادة",
+        "disabled": false,
+        "action": "changeSession('alex','ended')"
+      },
+      {
+        "text": "بدء الكشف",
+        "disabled": false,
+        "action": "changeSession('matrouh','running')"
+      },
+      {
+        "text": "إيقاف مؤقت",
+        "disabled": false,
+        "action": "changeSession('matrouh','paused')"
+      },
+      {
+        "text": "إنهاء العيادة",
+        "disabled": false,
+        "action": "changeSession('matrouh','ended')"
+      },
+      {
+        "text": "بدء الكشف",
+        "disabled": false,
+        "action": "changeSession('dmn','running')"
+      },
+      {
+        "text": "إيقاف مؤقت",
+        "disabled": false,
+        "action": "changeSession('dmn','paused')"
+      },
+      {
+        "text": "إنهاء العيادة",
+        "disabled": false,
+        "action": "changeSession('dmn','ended')"
+      },
+      {
+        "text": "بدء الكشف",
+        "disabled": false,
+        "action": "changeSession('libya','running')"
+      },
+      {
+        "text": "إيقاف مؤقت",
+        "disabled": false,
+        "action": "changeSession('libya','paused')"
+      },
+      {
+        "text": "إنهاء العيادة",
+        "disabled": false,
+        "action": "changeSession('libya','ended')"
+      }
+    ]
+  },
+  {
+    "role": "doctor",
+    "screen": "reports",
+    "label": "التقارير PDF",
+    "pass": true,
+    "overflow": false,
+    "buttons": [
+      {
+        "text": "الحجوزات والطابور",
+        "disabled": false,
+        "action": "tab='dash';render()"
+      },
+      {
+        "text": "الحالات والشكاوى",
+        "disabled": false,
+        "action": "tab='cases';render()"
+      },
+      {
+        "text": "جلسة الكشف",
+        "disabled": false,
+        "action": "tab='session';render()"
+      },
+      {
+        "text": "التقارير PDF",
+        "disabled": false,
+        "action": "tab='reports';render()"
+      },
+      {
+        "text": "الحجوزات المحذوفة",
+        "disabled": false,
+        "action": "tab='deleted';render()"
+      },
+      {
+        "text": "إعدادات حسابي",
+        "disabled": false,
+        "action": "tab='set';render()"
+      },
+      {
+        "text": "شاشة الدور",
+        "disabled": false,
+        "action": "tab='waiting';render()"
+      },
+      {
+        "text": "طلبات المرضى",
+        "disabled": false,
+        "action": "tab='work';render()"
+      },
+      {
+        "text": "تجهيز التقرير للطباعة / الحفظ PDF",
+        "disabled": false,
+        "action": "openClinicReport()"
+      },
+      {
+        "text": "معاينة عدد الحالات",
+        "disabled": false,
+        "action": "previewClinicReport()"
+      },
+      {
+        "text": "تصدير جدول CSV",
+        "disabled": false,
+        "action": "exportReportCsv()"
+      }
+    ]
+  },
+  {
+    "role": "doctor",
+    "screen": "deleted",
+    "label": "الحجوزات المحذوفة",
+    "pass": true,
+    "overflow": false,
+    "buttons": [
+      {
+        "text": "الحجوزات والطابور",
+        "disabled": false,
+        "action": "tab='dash';render()"
+      },
+      {
+        "text": "الحالات والشكاوى",
+        "disabled": false,
+        "action": "tab='cases';render()"
+      },
+      {
+        "text": "جلسة الكشف",
+        "disabled": false,
+        "action": "tab='session';render()"
+      },
+      {
+        "text": "التقارير PDF",
+        "disabled": false,
+        "action": "tab='reports';render()"
+      },
+      {
+        "text": "الحجوزات المحذوفة",
+        "disabled": false,
+        "action": "tab='deleted';render()"
+      },
+      {
+        "text": "إعدادات حسابي",
+        "disabled": false,
+        "action": "tab='set';render()"
+      },
+      {
+        "text": "شاشة الدور",
+        "disabled": false,
+        "action": "tab='waiting';render()"
+      },
+      {
+        "text": "طلبات المرضى",
+        "disabled": false,
+        "action": "tab='work';render()"
+      }
+    ]
+  },
+  {
+    "role": "doctor",
+    "screen": "set",
+    "label": "إعدادات حسابي",
+    "pass": true,
+    "overflow": false,
+    "buttons": [
+      {
+        "text": "الحجوزات والطابور",
+        "disabled": false,
+        "action": "tab='dash';render()"
+      },
+      {
+        "text": "الحالات والشكاوى",
+        "disabled": false,
+        "action": "tab='cases';render()"
+      },
+      {
+        "text": "جلسة الكشف",
+        "disabled": false,
+        "action": "tab='session';render()"
+      },
+      {
+        "text": "التقارير PDF",
+        "disabled": false,
+        "action": "tab='reports';render()"
+      },
+      {
+        "text": "الحجوزات المحذوفة",
+        "disabled": false,
+        "action": "tab='deleted';render()"
+      },
+      {
+        "text": "إعدادات حسابي",
+        "disabled": false,
+        "action": "tab='set';render()"
+      },
+      {
+        "text": "شاشة الدور",
+        "disabled": false,
+        "action": "tab='waiting';render()"
+      },
+      {
+        "text": "طلبات المرضى",
+        "disabled": false,
+        "action": "tab='work';render()"
+      },
+      {
+        "text": "تغيير كلمة سر حسابي",
+        "disabled": false,
+        "action": "editPw()"
+      }
+    ]
+  },
+  {
+    "role": "doctor",
+    "screen": "waiting",
+    "label": "شاشة الدور",
+    "pass": true,
+    "overflow": false,
+    "buttons": [
+      {
+        "text": "الحجوزات والطابور",
+        "disabled": false,
+        "action": "tab='dash';render()"
+      },
+      {
+        "text": "الحالات والشكاوى",
+        "disabled": false,
+        "action": "tab='cases';render()"
+      },
+      {
+        "text": "جلسة الكشف",
+        "disabled": false,
+        "action": "tab='session';render()"
+      },
+      {
+        "text": "التقارير PDF",
+        "disabled": false,
+        "action": "tab='reports';render()"
+      },
+      {
+        "text": "الحجوزات المحذوفة",
+        "disabled": false,
+        "action": "tab='deleted';render()"
+      },
+      {
+        "text": "إعدادات حسابي",
+        "disabled": false,
+        "action": "tab='set';render()"
+      },
+      {
+        "text": "شاشة الدور",
+        "disabled": false,
+        "action": "tab='waiting';render()"
+      },
+      {
+        "text": "طلبات المرضى",
+        "disabled": false,
+        "action": "tab='work';render()"
+      }
+    ]
+  },
+  {
+    "role": "doctor",
+    "screen": "work",
+    "label": "طلبات المرضى",
+    "pass": true,
+    "overflow": false,
+    "buttons": [
+      {
+        "text": "الحجوزات والطابور",
+        "disabled": false,
+        "action": "tab='dash';render()"
+      },
+      {
+        "text": "الحالات والشكاوى",
+        "disabled": false,
+        "action": "tab='cases';render()"
+      },
+      {
+        "text": "جلسة الكشف",
+        "disabled": false,
+        "action": "tab='session';render()"
+      },
+      {
+        "text": "التقارير PDF",
+        "disabled": false,
+        "action": "tab='reports';render()"
+      },
+      {
+        "text": "الحجوزات المحذوفة",
+        "disabled": false,
+        "action": "tab='deleted';render()"
+      },
+      {
+        "text": "إعدادات حسابي",
+        "disabled": false,
+        "action": "tab='set';render()"
+      },
+      {
+        "text": "شاشة الدور",
+        "disabled": false,
+        "action": "tab='waiting';render()"
+      },
+      {
+        "text": "طلبات المرضى",
+        "disabled": false,
+        "action": "tab='work';render()"
+      },
+      {
+        "text": "تحديث الطلبات",
+        "disabled": false,
+        "action": "loadWorkflow(true)"
+      }
+    ]
+  },
+  {
+    "role": "doctor",
+    "screen": "console-and-server-errors",
+    "pass": true,
+    "errors": [],
+    "serverErrors": []
+  },
+  {
+    "role": "nurse",
+    "screen": "login",
+    "pass": true
+  },
+  {
+    "role": "nurse",
+    "screen": "dash",
+    "label": "الحجوزات والطابور",
+    "pass": true,
+    "overflow": false,
+    "buttons": [
+      {
+        "text": "الحجوزات والطابور",
+        "disabled": false,
+        "action": "tab='dash';render()"
+      },
+      {
+        "text": "الحالات والشكاوى",
+        "disabled": false,
+        "action": "tab='cases';render()"
+      },
+      {
+        "text": "إعدادات حسابي",
+        "disabled": false,
+        "action": "tab='set';render()"
+      },
+      {
+        "text": "شاشة الدور",
+        "disabled": false,
+        "action": "tab='waiting';render()"
+      },
+      {
+        "text": "طلبات المرضى",
+        "disabled": false,
+        "action": "tab='work';render()"
+      },
+      {
+        "text": "اليوم",
+        "disabled": false,
+        "action": "F.d=today();render()"
+      },
+      {
+        "text": "كل الأيام",
+        "disabled": false,
+        "action": "F.d='';render()"
+      },
+      {
+        "text": "حجز جديد",
+        "disabled": false,
+        "action": "newBk()"
+      },
+      {
+        "text": "حجز طوارئ - أولوية",
+        "disabled": false,
+        "action": "newBk('emergency')"
+      },
+      {
+        "text": "جاري الكشف",
+        "disabled": false,
+        "action": "setS(\"qa_booking_33\",\"exam\")"
+      },
+      {
+        "text": "تم الكشف",
+        "disabled": false,
+        "action": "setS(\"qa_booking_33\",\"done\")"
+      },
+      {
+        "text": "لم يحضر",
+        "disabled": false,
+        "action": "setS(\"qa_booking_33\",\"no\")"
+      },
+      {
+        "text": "ملغي",
+        "disabled": false,
+        "action": "setS(\"qa_booking_33\",\"cx\")"
+      },
+      {
+        "text": "طباعة الحالة PDF",
+        "disabled": false,
+        "action": "printPatientData(\"01000070033\")"
+      },
+      {
+        "text": "سجل الحالة",
+        "disabled": false,
+        "action": "showPatientTimeline('01000070033')"
+      },
+      {
+        "text": "تسجيل الوصول",
+        "disabled": false,
+        "action": "setPatientArrival('qa_booking_33','arrived')"
+      },
+      {
+        "text": "إلغاء الوصول",
+        "disabled": false,
+        "action": "setPatientArrival('qa_booking_33','not_arrived')"
+      },
+      {
+        "text": "جاري الكشف",
+        "disabled": false,
+        "action": "setS(\"qa_booking_34\",\"exam\")"
+      },
+      {
+        "text": "تم الكشف",
+        "disabled": false,
+        "action": "setS(\"qa_booking_34\",\"done\")"
+      },
+      {
+        "text": "لم يحضر",
+        "disabled": false,
+        "action": "setS(\"qa_booking_34\",\"no\")"
+      },
+      {
+        "text": "ملغي",
+        "disabled": false,
+        "action": "setS(\"qa_booking_34\",\"cx\")"
+      },
+      {
+        "text": "طباعة الحالة PDF",
+        "disabled": false,
+        "action": "printPatientData(\"01000070034\")"
+      },
+      {
+        "text": "سجل الحالة",
+        "disabled": false,
+        "action": "showPatientTimeline('01000070034')"
+      },
+      {
+        "text": "تسجيل الوصول",
+        "disabled": false,
+        "action": "setPatientArrival('qa_booking_34','arrived')"
+      },
+      {
+        "text": "إلغاء الوصول",
+        "disabled": false,
+        "action": "setPatientArrival('qa_booking_34','not_arrived')"
+      },
+      {
+        "text": "جاري الكشف",
+        "disabled": false,
+        "action": "setS(\"qa_booking_35\",\"exam\")"
+      },
+      {
+        "text": "تم الكشف",
+        "disabled": false,
+        "action": "setS(\"qa_booking_35\",\"done\")"
+      },
+      {
+        "text": "لم يحضر",
+        "disabled": false,
+        "action": "setS(\"qa_booking_35\",\"no\")"
+      },
+      {
+        "text": "ملغي",
+        "disabled": false,
+        "action": "setS(\"qa_booking_35\",\"cx\")"
+      },
+      {
+        "text": "طباعة الحالة PDF",
+        "disabled": false,
+        "action": "printPatientData(\"01000070035\")"
+      },
+      {
+        "text": "سجل الحالة",
+        "disabled": false,
+        "action": "showPatientTimeline('01000070035')"
+      },
+      {
+        "text": "تسجيل الوصول",
+        "disabled": false,
+        "action": "setPatientArrival('qa_booking_35','arrived')"
+      },
+      {
+        "text": "إلغاء الوصول",
+        "disabled": false,
+        "action": "setPatientArrival('qa_booking_35','not_arrived')"
+      },
+      {
+        "text": "جاري الكشف",
+        "disabled": false,
+        "action": "setS(\"qa_booking_36\",\"exam\")"
+      },
+      {
+        "text": "تم الكشف",
+        "disabled": false,
+        "action": "setS(\"qa_booking_36\",\"done\")"
+      },
+      {
+        "text": "لم يحضر",
+        "disabled": false,
+        "action": "setS(\"qa_booking_36\",\"no\")"
+      },
+      {
+        "text": "ملغي",
+        "disabled": false,
+        "action": "setS(\"qa_booking_36\",\"cx\")"
+      },
+      {
+        "text": "طباعة الحالة PDF",
+        "disabled": false,
+        "action": "printPatientData(\"01000070036\")"
+      },
+      {
+        "text": "سجل الحالة",
+        "disabled": false,
+        "action": "showPatientTimeline('01000070036')"
+      },
+      {
+        "text": "تسجيل الوصول",
+        "disabled": false,
+        "action": "setPatientArrival('qa_booking_36','arrived')"
+      },
+      {
+        "text": "إلغاء الوصول",
+        "disabled": false,
+        "action": "setPatientArrival('qa_booking_36','not_arrived')"
+      }
+    ]
+  },
+  {
+    "role": "nurse",
+    "screen": "five-date-ranges",
+    "pass": true,
+    "counts": [
+      {
+        "date": "2026-09-22",
+        "count": 16
+      },
+      {
+        "date": "2026-10-26",
+        "count": 16
+      },
+      {
+        "date": "2026-10-27",
+        "count": 16
+      },
+      {
+        "date": "2026-10-28",
+        "count": 16
+      },
+      {
+        "date": "2026-12-01",
+        "count": 16
+      }
+    ]
+  },
+  {
+    "role": "nurse",
+    "screen": "cases",
+    "label": "الحالات والشكاوى",
+    "pass": true,
+    "overflow": false,
+    "buttons": [
+      {
+        "text": "الحجوزات والطابور",
+        "disabled": false,
+        "action": "tab='dash';render()"
+      },
+      {
+        "text": "الحالات والشكاوى",
+        "disabled": false,
+        "action": "tab='cases';render()"
+      },
+      {
+        "text": "إعدادات حسابي",
+        "disabled": false,
+        "action": "tab='set';render()"
+      },
+      {
+        "text": "شاشة الدور",
+        "disabled": false,
+        "action": "tab='waiting';render()"
+      },
+      {
+        "text": "طلبات المرضى",
+        "disabled": false,
+        "action": "tab='work';render()"
+      },
+      {
+        "text": "اختيار",
+        "disabled": false,
+        "action": null
+      },
+      {
+        "text": "طباعة الحالة PDF",
+        "disabled": false,
+        "action": "printPatientData(\"01000070001\")"
+      },
+      {
+        "text": "اختيار",
+        "disabled": false,
+        "action": null
+      },
+      {
+        "text": "طباعة الحالة PDF",
+        "disabled": false,
+        "action": "printPatientData(\"01000070002\")"
+      },
+      {
+        "text": "اختيار",
+        "disabled": false,
+        "action": null
+      },
+      {
+        "text": "طباعة الحالة PDF",
+        "disabled": false,
+        "action": "printPatientData(\"01000070003\")"
+      },
+      {
+        "text": "اختيار",
+        "disabled": false,
+        "action": null
+      },
+      {
+        "text": "طباعة الحالة PDF",
+        "disabled": false,
+        "action": "printPatientData(\"01000070004\")"
+      },
+      {
+        "text": "اختيار",
+        "disabled": false,
+        "action": null
+      },
+      {
+        "text": "طباعة الحالة PDF",
+        "disabled": false,
+        "action": "printPatientData(\"01000070005\")"
+      },
+      {
+        "text": "اختيار",
+        "disabled": false,
+        "action": null
+      },
+      {
+        "text": "طباعة الحالة PDF",
+        "disabled": false,
+        "action": "printPatientData(\"01000070006\")"
+      },
+      {
+        "text": "اختيار",
+        "disabled": false,
+        "action": null
+      },
+      {
+        "text": "طباعة الحالة PDF",
+        "disabled": false,
+        "action": "printPatientData(\"01000070007\")"
+      },
+      {
+        "text": "اختيار",
+        "disabled": false,
+        "action": null
+      },
+      {
+        "text": "طباعة الحالة PDF",
+        "disabled": false,
+        "action": "printPatientData(\"01000070008\")"
+      },
+      {
+        "text": "اختيار",
+        "disabled": false,
+        "action": null
+      },
+      {
+        "text": "طباعة الحالة PDF",
+        "disabled": false,
+        "action": "printPatientData(\"01000070009\")"
+      },
+      {
+        "text": "اختيار",
+        "disabled": false,
+        "action": null
+      },
+      {
+        "text": "طباعة الحالة PDF",
+        "disabled": false,
+        "action": "printPatientData(\"01000070010\")"
+      },
+      {
+        "text": "اختيار",
+        "disabled": false,
+        "action": null
+      },
+      {
+        "text": "طباعة الحالة PDF",
+        "disabled": false,
+        "action": "printPatientData(\"01000070011\")"
+      },
+      {
+        "text": "اختيار",
+        "disabled": false,
+        "action": null
+      },
+      {
+        "text": "طباعة الحالة PDF",
+        "disabled": false,
+        "action": "printPatientData(\"01000070012\")"
+      },
+      {
+        "text": "اختيار",
+        "disabled": false,
+        "action": null
+      },
+      {
+        "text": "طباعة الحالة PDF",
+        "disabled": false,
+        "action": "printPatientData(\"01000070013\")"
+      },
+      {
+        "text": "اختيار",
+        "disabled": false,
+        "action": null
+      },
+      {
+        "text": "طباعة الحالة PDF",
+        "disabled": false,
+        "action": "printPatientData(\"01000070014\")"
+      },
+      {
+        "text": "اختيار",
+        "disabled": false,
+        "action": null
+      },
+      {
+        "text": "طباعة الحالة PDF",
+        "disabled": false,
+        "action": "printPatientData(\"01000070015\")"
+      },
+      {
+        "text": "اختيار",
+        "disabled": false,
+        "action": null
+      },
+      {
+        "text": "طباعة الحالة PDF",
+        "disabled": false,
+        "action": "printPatientData(\"01000070016\")"
+      },
+      {
+        "text": "اختيار",
+        "disabled": false,
+        "action": null
+      },
+      {
+        "text": "طباعة الحالة PDF",
+        "disabled": false,
+        "action": "printPatientData(\"01000070017\")"
+      },
+      {
+        "text": "اختيار",
+        "disabled": false,
+        "action": null
+      },
+      {
+        "text": "طباعة الحالة PDF",
+        "disabled": false,
+        "action": "printPatientData(\"01000070018\")"
+      },
+      {
+        "text": "اختيار",
+        "disabled": false,
+        "action": null
+      },
+      {
+        "text": "طباعة الحالة PDF",
+        "disabled": false,
+        "action": "printPatientData(\"01000070019\")"
+      },
+      {
+        "text": "اختيار",
+        "disabled": false,
+        "action": null
+      },
+      {
+        "text": "طباعة الحالة PDF",
+        "disabled": false,
+        "action": "printPatientData(\"01000070020\")"
+      },
+      {
+        "text": "اختيار",
+        "disabled": false,
+        "action": null
+      },
+      {
+        "text": "طباعة الحالة PDF",
+        "disabled": false,
+        "action": "printPatientData(\"01000070021\")"
+      },
+      {
+        "text": "اختيار",
+        "disabled": false,
+        "action": null
+      },
+      {
+        "text": "طباعة الحالة PDF",
+        "disabled": false,
+        "action": "printPatientData(\"01000070022\")"
+      },
+      {
+        "text": "اختيار",
+        "disabled": false,
+        "action": null
+      },
+      {
+        "text": "طباعة الحالة PDF",
+        "disabled": false,
+        "action": "printPatientData(\"01000070023\")"
+      },
+      {
+        "text": "اختيار",
+        "disabled": false,
+        "action": null
+      },
+      {
+        "text": "طباعة الحالة PDF",
+        "disabled": false,
+        "action": "printPatientData(\"01000070024\")"
+      },
+      {
+        "text": "اختيار",
+        "disabled": false,
+        "action": null
+      },
+      {
+        "text": "طباعة الحالة PDF",
+        "disabled": false,
+        "action": "printPatientData(\"01000070025\")"
+      },
+      {
+        "text": "اختيار",
+        "disabled": false,
+        "action": null
+      },
+      {
+        "text": "طباعة الحالة PDF",
+        "disabled": false,
+        "action": "printPatientData(\"01000070026\")"
+      },
+      {
+        "text": "اختيار",
+        "disabled": false,
+        "action": null
+      },
+      {
+        "text": "طباعة الحالة PDF",
+        "disabled": false,
+        "action": "printPatientData(\"01000070027\")"
+      },
+      {
+        "text": "اختيار",
+        "disabled": false,
+        "action": null
+      },
+      {
+        "text": "طباعة الحالة PDF",
+        "disabled": false,
+        "action": "printPatientData(\"01000070028\")"
+      },
+      {
+        "text": "اختيار",
+        "disabled": false,
+        "action": null
+      },
+      {
+        "text": "طباعة الحالة PDF",
+        "disabled": false,
+        "action": "printPatientData(\"01000070029\")"
+      },
+      {
+        "text": "اختيار",
+        "disabled": false,
+        "action": null
+      },
+      {
+        "text": "طباعة الحالة PDF",
+        "disabled": false,
+        "action": "printPatientData(\"01000070030\")"
+      },
+      {
+        "text": "السابق",
+        "disabled": true,
+        "action": "caseListPage--;qRes()"
+      },
+      {
+        "text": "التالي",
+        "disabled": false,
+        "action": "caseListPage++;qRes()"
+      }
+    ]
+  },
+  {
+    "role": "nurse",
+    "screen": "case-search",
+    "pass": true
+  },
+  {
+    "role": "nurse",
+    "screen": "set",
+    "label": "إعدادات حسابي",
+    "pass": true,
+    "overflow": false,
+    "buttons": [
+      {
+        "text": "الحجوزات والطابور",
+        "disabled": false,
+        "action": "tab='dash';render()"
+      },
+      {
+        "text": "الحالات والشكاوى",
+        "disabled": false,
+        "action": "tab='cases';render()"
+      },
+      {
+        "text": "إعدادات حسابي",
+        "disabled": false,
+        "action": "tab='set';render()"
+      },
+      {
+        "text": "شاشة الدور",
+        "disabled": false,
+        "action": "tab='waiting';render()"
+      },
+      {
+        "text": "طلبات المرضى",
+        "disabled": false,
+        "action": "tab='work';render()"
+      },
+      {
+        "text": "تغيير كلمة سر حسابي",
+        "disabled": false,
+        "action": "editPw()"
+      }
+    ]
+  },
+  {
+    "role": "nurse",
+    "screen": "waiting",
+    "label": "شاشة الدور",
+    "pass": true,
+    "overflow": false,
+    "buttons": [
+      {
+        "text": "الحجوزات والطابور",
+        "disabled": false,
+        "action": "tab='dash';render()"
+      },
+      {
+        "text": "الحالات والشكاوى",
+        "disabled": false,
+        "action": "tab='cases';render()"
+      },
+      {
+        "text": "إعدادات حسابي",
+        "disabled": false,
+        "action": "tab='set';render()"
+      },
+      {
+        "text": "شاشة الدور",
+        "disabled": false,
+        "action": "tab='waiting';render()"
+      },
+      {
+        "text": "طلبات المرضى",
+        "disabled": false,
+        "action": "tab='work';render()"
+      }
+    ]
+  },
+  {
+    "role": "nurse",
+    "screen": "work",
+    "label": "طلبات المرضى",
+    "pass": true,
+    "overflow": false,
+    "buttons": [
+      {
+        "text": "الحجوزات والطابور",
+        "disabled": false,
+        "action": "tab='dash';render()"
+      },
+      {
+        "text": "الحالات والشكاوى",
+        "disabled": false,
+        "action": "tab='cases';render()"
+      },
+      {
+        "text": "إعدادات حسابي",
+        "disabled": false,
+        "action": "tab='set';render()"
+      },
+      {
+        "text": "شاشة الدور",
+        "disabled": false,
+        "action": "tab='waiting';render()"
+      },
+      {
+        "text": "طلبات المرضى",
+        "disabled": false,
+        "action": "tab='work';render()"
+      },
+      {
+        "text": "تحديث الطلبات",
+        "disabled": false,
+        "action": "loadWorkflow(true)"
+      }
+    ]
+  },
+  {
+    "role": "nurse",
+    "screen": "console-and-server-errors",
+    "pass": true,
+    "errors": [],
+    "serverErrors": []
+  },
+  {
+    "role": "alex-sec",
+    "screen": "login",
+    "pass": true
+  },
+  {
+    "role": "alex-sec",
+    "screen": "dash",
+    "label": "الحجوزات والطابور",
+    "pass": true,
+    "overflow": false,
+    "buttons": [
+      {
+        "text": "الحجوزات والطابور",
+        "disabled": false,
+        "action": "tab='dash';render()"
+      },
+      {
+        "text": "إعدادات حسابي",
+        "disabled": false,
+        "action": "tab='set';render()"
+      },
+      {
+        "text": "شاشة الدور",
+        "disabled": false,
+        "action": "tab='waiting';render()"
+      },
+      {
+        "text": "طلبات المرضى",
+        "disabled": false,
+        "action": "tab='work';render()"
+      },
+      {
+        "text": "اليوم",
+        "disabled": false,
+        "action": "SD=today();render()"
+      },
+      {
+        "text": "حجز جديد",
+        "disabled": false,
+        "action": "newBk()"
+      },
+      {
+        "text": "حجز طوارئ - أولوية",
+        "disabled": false,
+        "action": "newBk('emergency')"
+      },
+      {
+        "text": "جاري الكشف",
+        "disabled": false,
+        "action": "setS(\"qa_booking_33\",\"exam\")"
+      },
+      {
+        "text": "تم الكشف",
+        "disabled": false,
+        "action": "setS(\"qa_booking_33\",\"done\")"
+      },
+      {
+        "text": "لم يحضر",
+        "disabled": false,
+        "action": "setS(\"qa_booking_33\",\"no\")"
+      },
+      {
+        "text": "ملغي",
+        "disabled": false,
+        "action": "setS(\"qa_booking_33\",\"cx\")"
+      },
+      {
+        "text": "طباعة الحالة PDF",
+        "disabled": false,
+        "action": "printPatientData(\"01000070033\")"
+      },
+      {
+        "text": "سجل الحالة",
+        "disabled": false,
+        "action": "showPatientTimeline('01000070033')"
+      },
+      {
+        "text": "تسجيل الوصول",
+        "disabled": false,
+        "action": "setPatientArrival('qa_booking_33','arrived')"
+      },
+      {
+        "text": "إلغاء الوصول",
+        "disabled": false,
+        "action": "setPatientArrival('qa_booking_33','not_arrived')"
+      },
+      {
+        "text": "جاري الكشف",
+        "disabled": false,
+        "action": "setS(\"qa_booking_34\",\"exam\")"
+      },
+      {
+        "text": "تم الكشف",
+        "disabled": false,
+        "action": "setS(\"qa_booking_34\",\"done\")"
+      },
+      {
+        "text": "لم يحضر",
+        "disabled": false,
+        "action": "setS(\"qa_booking_34\",\"no\")"
+      },
+      {
+        "text": "ملغي",
+        "disabled": false,
+        "action": "setS(\"qa_booking_34\",\"cx\")"
+      },
+      {
+        "text": "طباعة الحالة PDF",
+        "disabled": false,
+        "action": "printPatientData(\"01000070034\")"
+      },
+      {
+        "text": "سجل الحالة",
+        "disabled": false,
+        "action": "showPatientTimeline('01000070034')"
+      },
+      {
+        "text": "تسجيل الوصول",
+        "disabled": false,
+        "action": "setPatientArrival('qa_booking_34','arrived')"
+      },
+      {
+        "text": "إلغاء الوصول",
+        "disabled": false,
+        "action": "setPatientArrival('qa_booking_34','not_arrived')"
+      },
+      {
+        "text": "جاري الكشف",
+        "disabled": false,
+        "action": "setS(\"qa_booking_35\",\"exam\")"
+      },
+      {
+        "text": "تم الكشف",
+        "disabled": false,
+        "action": "setS(\"qa_booking_35\",\"done\")"
+      },
+      {
+        "text": "لم يحضر",
+        "disabled": false,
+        "action": "setS(\"qa_booking_35\",\"no\")"
+      },
+      {
+        "text": "ملغي",
+        "disabled": false,
+        "action": "setS(\"qa_booking_35\",\"cx\")"
+      },
+      {
+        "text": "طباعة الحالة PDF",
+        "disabled": false,
+        "action": "printPatientData(\"01000070035\")"
+      },
+      {
+        "text": "سجل الحالة",
+        "disabled": false,
+        "action": "showPatientTimeline('01000070035')"
+      },
+      {
+        "text": "تسجيل الوصول",
+        "disabled": false,
+        "action": "setPatientArrival('qa_booking_35','arrived')"
+      },
+      {
+        "text": "إلغاء الوصول",
+        "disabled": false,
+        "action": "setPatientArrival('qa_booking_35','not_arrived')"
+      },
+      {
+        "text": "جاري الكشف",
+        "disabled": false,
+        "action": "setS(\"qa_booking_36\",\"exam\")"
+      },
+      {
+        "text": "تم الكشف",
+        "disabled": false,
+        "action": "setS(\"qa_booking_36\",\"done\")"
+      },
+      {
+        "text": "لم يحضر",
+        "disabled": false,
+        "action": "setS(\"qa_booking_36\",\"no\")"
+      },
+      {
+        "text": "ملغي",
+        "disabled": false,
+        "action": "setS(\"qa_booking_36\",\"cx\")"
+      },
+      {
+        "text": "طباعة الحالة PDF",
+        "disabled": false,
+        "action": "printPatientData(\"01000070036\")"
+      },
+      {
+        "text": "سجل الحالة",
+        "disabled": false,
+        "action": "showPatientTimeline('01000070036')"
+      },
+      {
+        "text": "تسجيل الوصول",
+        "disabled": false,
+        "action": "setPatientArrival('qa_booking_36','arrived')"
+      },
+      {
+        "text": "إلغاء الوصول",
+        "disabled": false,
+        "action": "setPatientArrival('qa_booking_36','not_arrived')"
+      }
+    ]
+  },
+  {
+    "role": "alex-sec",
+    "screen": "five-date-ranges",
+    "pass": true,
+    "counts": [
+      {
+        "date": "2026-09-22",
+        "count": 4
+      },
+      {
+        "date": "2026-10-26",
+        "count": 4
+      },
+      {
+        "date": "2026-10-27",
+        "count": 4
+      },
+      {
+        "date": "2026-10-28",
+        "count": 4
+      },
+      {
+        "date": "2026-12-01",
+        "count": 4
+      }
+    ]
+  },
+  {
+    "role": "alex-sec",
+    "screen": "set",
+    "label": "إعدادات حسابي",
+    "pass": true,
+    "overflow": false,
+    "buttons": [
+      {
+        "text": "الحجوزات والطابور",
+        "disabled": false,
+        "action": "tab='dash';render()"
+      },
+      {
+        "text": "إعدادات حسابي",
+        "disabled": false,
+        "action": "tab='set';render()"
+      },
+      {
+        "text": "شاشة الدور",
+        "disabled": false,
+        "action": "tab='waiting';render()"
+      },
+      {
+        "text": "طلبات المرضى",
+        "disabled": false,
+        "action": "tab='work';render()"
+      },
+      {
+        "text": "تغيير كلمة سر حسابي",
+        "disabled": false,
+        "action": "editPw()"
+      }
+    ]
+  },
+  {
+    "role": "alex-sec",
+    "screen": "waiting",
+    "label": "شاشة الدور",
+    "pass": true,
+    "overflow": false,
+    "buttons": [
+      {
+        "text": "الحجوزات والطابور",
+        "disabled": false,
+        "action": "tab='dash';render()"
+      },
+      {
+        "text": "إعدادات حسابي",
+        "disabled": false,
+        "action": "tab='set';render()"
+      },
+      {
+        "text": "شاشة الدور",
+        "disabled": false,
+        "action": "tab='waiting';render()"
+      },
+      {
+        "text": "طلبات المرضى",
+        "disabled": false,
+        "action": "tab='work';render()"
+      }
+    ]
+  },
+  {
+    "role": "alex-sec",
+    "screen": "work",
+    "label": "طلبات المرضى",
+    "pass": true,
+    "overflow": false,
+    "buttons": [
+      {
+        "text": "الحجوزات والطابور",
+        "disabled": false,
+        "action": "tab='dash';render()"
+      },
+      {
+        "text": "إعدادات حسابي",
+        "disabled": false,
+        "action": "tab='set';render()"
+      },
+      {
+        "text": "شاشة الدور",
+        "disabled": false,
+        "action": "tab='waiting';render()"
+      },
+      {
+        "text": "طلبات المرضى",
+        "disabled": false,
+        "action": "tab='work';render()"
+      },
+      {
+        "text": "تحديث الطلبات",
+        "disabled": false,
+        "action": "loadWorkflow(true)"
+      }
+    ]
+  },
+  {
+    "role": "alex-sec",
+    "screen": "console-and-server-errors",
+    "pass": true,
+    "errors": [],
+    "serverErrors": []
+  },
+  {
+    "role": "matrouh-sec",
+    "screen": "login",
+    "pass": true
+  },
+  {
+    "role": "matrouh-sec",
+    "screen": "dash",
+    "label": "الحجوزات والطابور",
+    "pass": true,
+    "overflow": false,
+    "buttons": [
+      {
+        "text": "الحجوزات والطابور",
+        "disabled": false,
+        "action": "tab='dash';render()"
+      },
+      {
+        "text": "إعدادات حسابي",
+        "disabled": false,
+        "action": "tab='set';render()"
+      },
+      {
+        "text": "شاشة الدور",
+        "disabled": false,
+        "action": "tab='waiting';render()"
+      },
+      {
+        "text": "طلبات المرضى",
+        "disabled": false,
+        "action": "tab='work';render()"
+      },
+      {
+        "text": "اليوم",
+        "disabled": false,
+        "action": "SD=today();render()"
+      },
+      {
+        "text": "حجز جديد",
+        "disabled": false,
+        "action": "newBk()"
+      },
+      {
+        "text": "حجز طوارئ - أولوية",
+        "disabled": false,
+        "action": "newBk('emergency')"
+      },
+      {
+        "text": "جاري الكشف",
+        "disabled": false,
+        "action": "setS(\"qa_booking_37\",\"exam\")"
+      },
+      {
+        "text": "تم الكشف",
+        "disabled": false,
+        "action": "setS(\"qa_booking_37\",\"done\")"
+      },
+      {
+        "text": "لم يحضر",
+        "disabled": false,
+        "action": "setS(\"qa_booking_37\",\"no\")"
+      },
+      {
+        "text": "ملغي",
+        "disabled": false,
+        "action": "setS(\"qa_booking_37\",\"cx\")"
+      },
+      {
+        "text": "طباعة الحالة PDF",
+        "disabled": false,
+        "action": "printPatientData(\"01000070037\")"
+      },
+      {
+        "text": "سجل الحالة",
+        "disabled": false,
+        "action": "showPatientTimeline('01000070037')"
+      },
+      {
+        "text": "تسجيل الوصول",
+        "disabled": false,
+        "action": "setPatientArrival('qa_booking_37','arrived')"
+      },
+      {
+        "text": "إلغاء الوصول",
+        "disabled": false,
+        "action": "setPatientArrival('qa_booking_37','not_arrived')"
+      },
+      {
+        "text": "جاري الكشف",
+        "disabled": false,
+        "action": "setS(\"qa_booking_38\",\"exam\")"
+      },
+      {
+        "text": "تم الكشف",
+        "disabled": false,
+        "action": "setS(\"qa_booking_38\",\"done\")"
+      },
+      {
+        "text": "لم يحضر",
+        "disabled": false,
+        "action": "setS(\"qa_booking_38\",\"no\")"
+      },
+      {
+        "text": "ملغي",
+        "disabled": false,
+        "action": "setS(\"qa_booking_38\",\"cx\")"
+      },
+      {
+        "text": "طباعة الحالة PDF",
+        "disabled": false,
+        "action": "printPatientData(\"01000070038\")"
+      },
+      {
+        "text": "سجل الحالة",
+        "disabled": false,
+        "action": "showPatientTimeline('01000070038')"
+      },
+      {
+        "text": "تسجيل الوصول",
+        "disabled": false,
+        "action": "setPatientArrival('qa_booking_38','arrived')"
+      },
+      {
+        "text": "إلغاء الوصول",
+        "disabled": false,
+        "action": "setPatientArrival('qa_booking_38','not_arrived')"
+      },
+      {
+        "text": "جاري الكشف",
+        "disabled": false,
+        "action": "setS(\"qa_booking_39\",\"exam\")"
+      },
+      {
+        "text": "تم الكشف",
+        "disabled": false,
+        "action": "setS(\"qa_booking_39\",\"done\")"
+      },
+      {
+        "text": "لم يحضر",
+        "disabled": false,
+        "action": "setS(\"qa_booking_39\",\"no\")"
+      },
+      {
+        "text": "ملغي",
+        "disabled": false,
+        "action": "setS(\"qa_booking_39\",\"cx\")"
+      },
+      {
+        "text": "طباعة الحالة PDF",
+        "disabled": false,
+        "action": "printPatientData(\"01000070039\")"
+      },
+      {
+        "text": "سجل الحالة",
+        "disabled": false,
+        "action": "showPatientTimeline('01000070039')"
+      },
+      {
+        "text": "تسجيل الوصول",
+        "disabled": false,
+        "action": "setPatientArrival('qa_booking_39','arrived')"
+      },
+      {
+        "text": "إلغاء الوصول",
+        "disabled": false,
+        "action": "setPatientArrival('qa_booking_39','not_arrived')"
+      },
+      {
+        "text": "جاري الكشف",
+        "disabled": false,
+        "action": "setS(\"qa_booking_40\",\"exam\")"
+      },
+      {
+        "text": "تم الكشف",
+        "disabled": false,
+        "action": "setS(\"qa_booking_40\",\"done\")"
+      },
+      {
+        "text": "لم يحضر",
+        "disabled": false,
+        "action": "setS(\"qa_booking_40\",\"no\")"
+      },
+      {
+        "text": "ملغي",
+        "disabled": false,
+        "action": "setS(\"qa_booking_40\",\"cx\")"
+      },
+      {
+        "text": "طباعة الحالة PDF",
+        "disabled": false,
+        "action": "printPatientData(\"01000070040\")"
+      },
+      {
+        "text": "سجل الحالة",
+        "disabled": false,
+        "action": "showPatientTimeline('01000070040')"
+      },
+      {
+        "text": "تسجيل الوصول",
+        "disabled": false,
+        "action": "setPatientArrival('qa_booking_40','arrived')"
+      },
+      {
+        "text": "إلغاء الوصول",
+        "disabled": false,
+        "action": "setPatientArrival('qa_booking_40','not_arrived')"
+      }
+    ]
+  },
+  {
+    "role": "matrouh-sec",
+    "screen": "five-date-ranges",
+    "pass": true,
+    "counts": [
+      {
+        "date": "2026-09-22",
+        "count": 4
+      },
+      {
+        "date": "2026-10-26",
+        "count": 4
+      },
+      {
+        "date": "2026-10-27",
+        "count": 4
+      },
+      {
+        "date": "2026-10-28",
+        "count": 4
+      },
+      {
+        "date": "2026-12-01",
+        "count": 4
+      }
+    ]
+  },
+  {
+    "role": "matrouh-sec",
+    "screen": "set",
+    "label": "إعدادات حسابي",
+    "pass": true,
+    "overflow": false,
+    "buttons": [
+      {
+        "text": "الحجوزات والطابور",
+        "disabled": false,
+        "action": "tab='dash';render()"
+      },
+      {
+        "text": "إعدادات حسابي",
+        "disabled": false,
+        "action": "tab='set';render()"
+      },
+      {
+        "text": "شاشة الدور",
+        "disabled": false,
+        "action": "tab='waiting';render()"
+      },
+      {
+        "text": "طلبات المرضى",
+        "disabled": false,
+        "action": "tab='work';render()"
+      },
+      {
+        "text": "تغيير كلمة سر حسابي",
+        "disabled": false,
+        "action": "editPw()"
+      }
+    ]
+  },
+  {
+    "role": "matrouh-sec",
+    "screen": "waiting",
+    "label": "شاشة الدور",
+    "pass": true,
+    "overflow": false,
+    "buttons": [
+      {
+        "text": "الحجوزات والطابور",
+        "disabled": false,
+        "action": "tab='dash';render()"
+      },
+      {
+        "text": "إعدادات حسابي",
+        "disabled": false,
+        "action": "tab='set';render()"
+      },
+      {
+        "text": "شاشة الدور",
+        "disabled": false,
+        "action": "tab='waiting';render()"
+      },
+      {
+        "text": "طلبات المرضى",
+        "disabled": false,
+        "action": "tab='work';render()"
+      }
+    ]
+  },
+  {
+    "role": "matrouh-sec",
+    "screen": "work",
+    "label": "طلبات المرضى",
+    "pass": true,
+    "overflow": false,
+    "buttons": [
+      {
+        "text": "الحجوزات والطابور",
+        "disabled": false,
+        "action": "tab='dash';render()"
+      },
+      {
+        "text": "إعدادات حسابي",
+        "disabled": false,
+        "action": "tab='set';render()"
+      },
+      {
+        "text": "شاشة الدور",
+        "disabled": false,
+        "action": "tab='waiting';render()"
+      },
+      {
+        "text": "طلبات المرضى",
+        "disabled": false,
+        "action": "tab='work';render()"
+      },
+      {
+        "text": "تحديث الطلبات",
+        "disabled": false,
+        "action": "loadWorkflow(true)"
+      }
+    ]
+  },
+  {
+    "role": "matrouh-sec",
+    "screen": "console-and-server-errors",
+    "pass": true,
+    "errors": [],
+    "serverErrors": []
+  },
+  {
+    "role": "dmn-sec",
+    "screen": "login",
+    "pass": true
+  },
+  {
+    "role": "dmn-sec",
+    "screen": "dash",
+    "label": "الحجوزات والطابور",
+    "pass": true,
+    "overflow": false,
+    "buttons": [
+      {
+        "text": "الحجوزات والطابور",
+        "disabled": false,
+        "action": "tab='dash';render()"
+      },
+      {
+        "text": "إعدادات حسابي",
+        "disabled": false,
+        "action": "tab='set';render()"
+      },
+      {
+        "text": "شاشة الدور",
+        "disabled": false,
+        "action": "tab='waiting';render()"
+      },
+      {
+        "text": "طلبات المرضى",
+        "disabled": false,
+        "action": "tab='work';render()"
+      },
+      {
+        "text": "اليوم",
+        "disabled": false,
+        "action": "SD=today();render()"
+      },
+      {
+        "text": "حجز جديد",
+        "disabled": false,
+        "action": "newBk()"
+      },
+      {
+        "text": "حجز طوارئ - أولوية",
+        "disabled": false,
+        "action": "newBk('emergency')"
+      },
+      {
+        "text": "جاري الكشف",
+        "disabled": false,
+        "action": "setS(\"qa_booking_41\",\"exam\")"
+      },
+      {
+        "text": "تم الكشف",
+        "disabled": false,
+        "action": "setS(\"qa_booking_41\",\"done\")"
+      },
+      {
+        "text": "لم يحضر",
+        "disabled": false,
+        "action": "setS(\"qa_booking_41\",\"no\")"
+      },
+      {
+        "text": "ملغي",
+        "disabled": false,
+        "action": "setS(\"qa_booking_41\",\"cx\")"
+      },
+      {
+        "text": "طباعة الحالة PDF",
+        "disabled": false,
+        "action": "printPatientData(\"01000070041\")"
+      },
+      {
+        "text": "سجل الحالة",
+        "disabled": false,
+        "action": "showPatientTimeline('01000070041')"
+      },
+      {
+        "text": "تسجيل الوصول",
+        "disabled": false,
+        "action": "setPatientArrival('qa_booking_41','arrived')"
+      },
+      {
+        "text": "إلغاء الوصول",
+        "disabled": false,
+        "action": "setPatientArrival('qa_booking_41','not_arrived')"
+      },
+      {
+        "text": "جاري الكشف",
+        "disabled": false,
+        "action": "setS(\"qa_booking_42\",\"exam\")"
+      },
+      {
+        "text": "تم الكشف",
+        "disabled": false,
+        "action": "setS(\"qa_booking_42\",\"done\")"
+      },
+      {
+        "text": "لم يحضر",
+        "disabled": false,
+        "action": "setS(\"qa_booking_42\",\"no\")"
+      },
+      {
+        "text": "ملغي",
+        "disabled": false,
+        "action": "setS(\"qa_booking_42\",\"cx\")"
+      },
+      {
+        "text": "طباعة الحالة PDF",
+        "disabled": false,
+        "action": "printPatientData(\"01000070042\")"
+      },
+      {
+        "text": "سجل الحالة",
+        "disabled": false,
+        "action": "showPatientTimeline('01000070042')"
+      },
+      {
+        "text": "تسجيل الوصول",
+        "disabled": false,
+        "action": "setPatientArrival('qa_booking_42','arrived')"
+      },
+      {
+        "text": "إلغاء الوصول",
+        "disabled": false,
+        "action": "setPatientArrival('qa_booking_42','not_arrived')"
+      },
+      {
+        "text": "جاري الكشف",
+        "disabled": false,
+        "action": "setS(\"qa_booking_43\",\"exam\")"
+      },
+      {
+        "text": "تم الكشف",
+        "disabled": false,
+        "action": "setS(\"qa_booking_43\",\"done\")"
+      },
+      {
+        "text": "لم يحضر",
+        "disabled": false,
+        "action": "setS(\"qa_booking_43\",\"no\")"
+      },
+      {
+        "text": "ملغي",
+        "disabled": false,
+        "action": "setS(\"qa_booking_43\",\"cx\")"
+      },
+      {
+        "text": "طباعة الحالة PDF",
+        "disabled": false,
+        "action": "printPatientData(\"01000070043\")"
+      },
+      {
+        "text": "سجل الحالة",
+        "disabled": false,
+        "action": "showPatientTimeline('01000070043')"
+      },
+      {
+        "text": "تسجيل الوصول",
+        "disabled": false,
+        "action": "setPatientArrival('qa_booking_43','arrived')"
+      },
+      {
+        "text": "إلغاء الوصول",
+        "disabled": false,
+        "action": "setPatientArrival('qa_booking_43','not_arrived')"
+      },
+      {
+        "text": "جاري الكشف",
+        "disabled": false,
+        "action": "setS(\"qa_booking_44\",\"exam\")"
+      },
+      {
+        "text": "تم الكشف",
+        "disabled": false,
+        "action": "setS(\"qa_booking_44\",\"done\")"
+      },
+      {
+        "text": "لم يحضر",
+        "disabled": false,
+        "action": "setS(\"qa_booking_44\",\"no\")"
+      },
+      {
+        "text": "ملغي",
+        "disabled": false,
+        "action": "setS(\"qa_booking_44\",\"cx\")"
+      },
+      {
+        "text": "طباعة الحالة PDF",
+        "disabled": false,
+        "action": "printPatientData(\"01000070044\")"
+      },
+      {
+        "text": "سجل الحالة",
+        "disabled": false,
+        "action": "showPatientTimeline('01000070044')"
+      },
+      {
+        "text": "تسجيل الوصول",
+        "disabled": false,
+        "action": "setPatientArrival('qa_booking_44','arrived')"
+      },
+      {
+        "text": "إلغاء الوصول",
+        "disabled": false,
+        "action": "setPatientArrival('qa_booking_44','not_arrived')"
+      }
+    ]
+  },
+  {
+    "role": "dmn-sec",
+    "screen": "five-date-ranges",
+    "pass": true,
+    "counts": [
+      {
+        "date": "2026-09-22",
+        "count": 4
+      },
+      {
+        "date": "2026-10-26",
+        "count": 4
+      },
+      {
+        "date": "2026-10-27",
+        "count": 4
+      },
+      {
+        "date": "2026-10-28",
+        "count": 4
+      },
+      {
+        "date": "2026-12-01",
+        "count": 4
+      }
+    ]
+  },
+  {
+    "role": "dmn-sec",
+    "screen": "set",
+    "label": "إعدادات حسابي",
+    "pass": true,
+    "overflow": false,
+    "buttons": [
+      {
+        "text": "الحجوزات والطابور",
+        "disabled": false,
+        "action": "tab='dash';render()"
+      },
+      {
+        "text": "إعدادات حسابي",
+        "disabled": false,
+        "action": "tab='set';render()"
+      },
+      {
+        "text": "شاشة الدور",
+        "disabled": false,
+        "action": "tab='waiting';render()"
+      },
+      {
+        "text": "طلبات المرضى",
+        "disabled": false,
+        "action": "tab='work';render()"
+      },
+      {
+        "text": "تغيير كلمة سر حسابي",
+        "disabled": false,
+        "action": "editPw()"
+      }
+    ]
+  },
+  {
+    "role": "dmn-sec",
+    "screen": "waiting",
+    "label": "شاشة الدور",
+    "pass": true,
+    "overflow": false,
+    "buttons": [
+      {
+        "text": "الحجوزات والطابور",
+        "disabled": false,
+        "action": "tab='dash';render()"
+      },
+      {
+        "text": "إعدادات حسابي",
+        "disabled": false,
+        "action": "tab='set';render()"
+      },
+      {
+        "text": "شاشة الدور",
+        "disabled": false,
+        "action": "tab='waiting';render()"
+      },
+      {
+        "text": "طلبات المرضى",
+        "disabled": false,
+        "action": "tab='work';render()"
+      }
+    ]
+  },
+  {
+    "role": "dmn-sec",
+    "screen": "work",
+    "label": "طلبات المرضى",
+    "pass": true,
+    "overflow": false,
+    "buttons": [
+      {
+        "text": "الحجوزات والطابور",
+        "disabled": false,
+        "action": "tab='dash';render()"
+      },
+      {
+        "text": "إعدادات حسابي",
+        "disabled": false,
+        "action": "tab='set';render()"
+      },
+      {
+        "text": "شاشة الدور",
+        "disabled": false,
+        "action": "tab='waiting';render()"
+      },
+      {
+        "text": "طلبات المرضى",
+        "disabled": false,
+        "action": "tab='work';render()"
+      },
+      {
+        "text": "تحديث الطلبات",
+        "disabled": false,
+        "action": "loadWorkflow(true)"
+      }
+    ]
+  },
+  {
+    "role": "dmn-sec",
+    "screen": "console-and-server-errors",
+    "pass": true,
+    "errors": [],
+    "serverErrors": []
+  },
+  {
+    "role": "libya-sec",
+    "screen": "login",
+    "pass": true
+  },
+  {
+    "role": "libya-sec",
+    "screen": "dash",
+    "label": "الحجوزات والطابور",
+    "pass": true,
+    "overflow": false,
+    "buttons": [
+      {
+        "text": "الحجوزات والطابور",
+        "disabled": false,
+        "action": "tab='dash';render()"
+      },
+      {
+        "text": "إعدادات حسابي",
+        "disabled": false,
+        "action": "tab='set';render()"
+      },
+      {
+        "text": "شاشة الدور",
+        "disabled": false,
+        "action": "tab='waiting';render()"
+      },
+      {
+        "text": "طلبات المرضى",
+        "disabled": false,
+        "action": "tab='work';render()"
+      },
+      {
+        "text": "اليوم",
+        "disabled": false,
+        "action": "SD=today();render()"
+      },
+      {
+        "text": "حجز جديد",
+        "disabled": false,
+        "action": "newBk()"
+      },
+      {
+        "text": "حجز طوارئ - أولوية",
+        "disabled": false,
+        "action": "newBk('emergency')"
+      },
+      {
+        "text": "جاري الكشف",
+        "disabled": false,
+        "action": "setS(\"qa_booking_45\",\"exam\")"
+      },
+      {
+        "text": "تم الكشف",
+        "disabled": false,
+        "action": "setS(\"qa_booking_45\",\"done\")"
+      },
+      {
+        "text": "لم يحضر",
+        "disabled": false,
+        "action": "setS(\"qa_booking_45\",\"no\")"
+      },
+      {
+        "text": "ملغي",
+        "disabled": false,
+        "action": "setS(\"qa_booking_45\",\"cx\")"
+      },
+      {
+        "text": "طباعة الحالة PDF",
+        "disabled": false,
+        "action": "printPatientData(\"01000070045\")"
+      },
+      {
+        "text": "سجل الحالة",
+        "disabled": false,
+        "action": "showPatientTimeline('01000070045')"
+      },
+      {
+        "text": "تسجيل الوصول",
+        "disabled": false,
+        "action": "setPatientArrival('qa_booking_45','arrived')"
+      },
+      {
+        "text": "إلغاء الوصول",
+        "disabled": false,
+        "action": "setPatientArrival('qa_booking_45','not_arrived')"
+      },
+      {
+        "text": "جاري الكشف",
+        "disabled": false,
+        "action": "setS(\"qa_booking_46\",\"exam\")"
+      },
+      {
+        "text": "تم الكشف",
+        "disabled": false,
+        "action": "setS(\"qa_booking_46\",\"done\")"
+      },
+      {
+        "text": "لم يحضر",
+        "disabled": false,
+        "action": "setS(\"qa_booking_46\",\"no\")"
+      },
+      {
+        "text": "ملغي",
+        "disabled": false,
+        "action": "setS(\"qa_booking_46\",\"cx\")"
+      },
+      {
+        "text": "طباعة الحالة PDF",
+        "disabled": false,
+        "action": "printPatientData(\"01000070046\")"
+      },
+      {
+        "text": "سجل الحالة",
+        "disabled": false,
+        "action": "showPatientTimeline('01000070046')"
+      },
+      {
+        "text": "تسجيل الوصول",
+        "disabled": false,
+        "action": "setPatientArrival('qa_booking_46','arrived')"
+      },
+      {
+        "text": "إلغاء الوصول",
+        "disabled": false,
+        "action": "setPatientArrival('qa_booking_46','not_arrived')"
+      },
+      {
+        "text": "جاري الكشف",
+        "disabled": false,
+        "action": "setS(\"qa_booking_47\",\"exam\")"
+      },
+      {
+        "text": "تم الكشف",
+        "disabled": false,
+        "action": "setS(\"qa_booking_47\",\"done\")"
+      },
+      {
+        "text": "لم يحضر",
+        "disabled": false,
+        "action": "setS(\"qa_booking_47\",\"no\")"
+      },
+      {
+        "text": "ملغي",
+        "disabled": false,
+        "action": "setS(\"qa_booking_47\",\"cx\")"
+      },
+      {
+        "text": "طباعة الحالة PDF",
+        "disabled": false,
+        "action": "printPatientData(\"01000070047\")"
+      },
+      {
+        "text": "سجل الحالة",
+        "disabled": false,
+        "action": "showPatientTimeline('01000070047')"
+      },
+      {
+        "text": "تسجيل الوصول",
+        "disabled": false,
+        "action": "setPatientArrival('qa_booking_47','arrived')"
+      },
+      {
+        "text": "إلغاء الوصول",
+        "disabled": false,
+        "action": "setPatientArrival('qa_booking_47','not_arrived')"
+      },
+      {
+        "text": "جاري الكشف",
+        "disabled": false,
+        "action": "setS(\"qa_booking_48\",\"exam\")"
+      },
+      {
+        "text": "تم الكشف",
+        "disabled": false,
+        "action": "setS(\"qa_booking_48\",\"done\")"
+      },
+      {
+        "text": "لم يحضر",
+        "disabled": false,
+        "action": "setS(\"qa_booking_48\",\"no\")"
+      },
+      {
+        "text": "ملغي",
+        "disabled": false,
+        "action": "setS(\"qa_booking_48\",\"cx\")"
+      },
+      {
+        "text": "طباعة الحالة PDF",
+        "disabled": false,
+        "action": "printPatientData(\"01000070048\")"
+      },
+      {
+        "text": "سجل الحالة",
+        "disabled": false,
+        "action": "showPatientTimeline('01000070048')"
+      },
+      {
+        "text": "تسجيل الوصول",
+        "disabled": false,
+        "action": "setPatientArrival('qa_booking_48','arrived')"
+      },
+      {
+        "text": "إلغاء الوصول",
+        "disabled": false,
+        "action": "setPatientArrival('qa_booking_48','not_arrived')"
+      }
+    ]
+  },
+  {
+    "role": "libya-sec",
+    "screen": "five-date-ranges",
+    "pass": true,
+    "counts": [
+      {
+        "date": "2026-09-22",
+        "count": 4
+      },
+      {
+        "date": "2026-10-26",
+        "count": 4
+      },
+      {
+        "date": "2026-10-27",
+        "count": 4
+      },
+      {
+        "date": "2026-10-28",
+        "count": 4
+      },
+      {
+        "date": "2026-12-01",
+        "count": 4
+      }
+    ]
+  },
+  {
+    "role": "libya-sec",
+    "screen": "set",
+    "label": "إعدادات حسابي",
+    "pass": true,
+    "overflow": false,
+    "buttons": [
+      {
+        "text": "الحجوزات والطابور",
+        "disabled": false,
+        "action": "tab='dash';render()"
+      },
+      {
+        "text": "إعدادات حسابي",
+        "disabled": false,
+        "action": "tab='set';render()"
+      },
+      {
+        "text": "شاشة الدور",
+        "disabled": false,
+        "action": "tab='waiting';render()"
+      },
+      {
+        "text": "طلبات المرضى",
+        "disabled": false,
+        "action": "tab='work';render()"
+      },
+      {
+        "text": "تغيير كلمة سر حسابي",
+        "disabled": false,
+        "action": "editPw()"
+      }
+    ]
+  },
+  {
+    "role": "libya-sec",
+    "screen": "waiting",
+    "label": "شاشة الدور",
+    "pass": true,
+    "overflow": false,
+    "buttons": [
+      {
+        "text": "الحجوزات والطابور",
+        "disabled": false,
+        "action": "tab='dash';render()"
+      },
+      {
+        "text": "إعدادات حسابي",
+        "disabled": false,
+        "action": "tab='set';render()"
+      },
+      {
+        "text": "شاشة الدور",
+        "disabled": false,
+        "action": "tab='waiting';render()"
+      },
+      {
+        "text": "طلبات المرضى",
+        "disabled": false,
+        "action": "tab='work';render()"
+      }
+    ]
+  },
+  {
+    "role": "libya-sec",
+    "screen": "work",
+    "label": "طلبات المرضى",
+    "pass": true,
+    "overflow": false,
+    "buttons": [
+      {
+        "text": "الحجوزات والطابور",
+        "disabled": false,
+        "action": "tab='dash';render()"
+      },
+      {
+        "text": "إعدادات حسابي",
+        "disabled": false,
+        "action": "tab='set';render()"
+      },
+      {
+        "text": "شاشة الدور",
+        "disabled": false,
+        "action": "tab='waiting';render()"
+      },
+      {
+        "text": "طلبات المرضى",
+        "disabled": false,
+        "action": "tab='work';render()"
+      },
+      {
+        "text": "تحديث الطلبات",
+        "disabled": false,
+        "action": "loadWorkflow(true)"
+      }
+    ]
+  },
+  {
+    "role": "libya-sec",
+    "screen": "console-and-server-errors",
+    "pass": true,
+    "errors": [],
+    "serverErrors": []
+  },
+  {
+    "role": "data-entry",
+    "screen": "login",
+    "pass": true
+  },
+  {
+    "role": "data-entry",
+    "screen": "dash",
+    "label": "الحجوزات والطابور",
+    "pass": true,
+    "overflow": false,
+    "buttons": [
+      {
+        "text": "الحجوزات والطابور",
+        "disabled": false,
+        "action": "tab='dash';render()"
+      },
+      {
+        "text": "الحالات والشكاوى",
+        "disabled": false,
+        "action": "tab='cases';render()"
+      },
+      {
+        "text": "إعدادات حسابي",
+        "disabled": false,
+        "action": "tab='set';render()"
+      },
+      {
+        "text": "شاشة الدور",
+        "disabled": false,
+        "action": "tab='waiting';render()"
+      },
+      {
+        "text": "اليوم",
+        "disabled": false,
+        "action": "F.d=today();render()"
+      },
+      {
+        "text": "كل الأيام",
+        "disabled": false,
+        "action": "F.d='';render()"
+      },
+      {
+        "text": "حجز جديد",
+        "disabled": false,
+        "action": "newBk()"
+      },
+      {
+        "text": "طباعة الحالة PDF",
+        "disabled": false,
+        "action": "printPatientData(\"01000070033\")"
+      },
+      {
+        "text": "سجل الحالة",
+        "disabled": false,
+        "action": "showPatientTimeline('01000070033')"
+      },
+      {
+        "text": "طباعة الحالة PDF",
+        "disabled": false,
+        "action": "printPatientData(\"01000070034\")"
+      },
+      {
+        "text": "سجل الحالة",
+        "disabled": false,
+        "action": "showPatientTimeline('01000070034')"
+      },
+      {
+        "text": "طباعة الحالة PDF",
+        "disabled": false,
+        "action": "printPatientData(\"01000070035\")"
+      },
+      {
+        "text": "سجل الحالة",
+        "disabled": false,
+        "action": "showPatientTimeline('01000070035')"
+      },
+      {
+        "text": "طباعة الحالة PDF",
+        "disabled": false,
+        "action": "printPatientData(\"01000070036\")"
+      },
+      {
+        "text": "سجل الحالة",
+        "disabled": false,
+        "action": "showPatientTimeline('01000070036')"
+      }
+    ]
+  },
+  {
+    "role": "data-entry",
+    "screen": "five-date-ranges",
+    "pass": true,
+    "counts": [
+      {
+        "date": "2026-09-22",
+        "count": 16
+      },
+      {
+        "date": "2026-10-26",
+        "count": 16
+      },
+      {
+        "date": "2026-10-27",
+        "count": 16
+      },
+      {
+        "date": "2026-10-28",
+        "count": 16
+      },
+      {
+        "date": "2026-12-01",
+        "count": 16
+      }
+    ]
+  },
+  {
+    "role": "data-entry",
+    "screen": "cases",
+    "label": "الحالات والشكاوى",
+    "pass": true,
+    "overflow": false,
+    "buttons": [
+      {
+        "text": "الحجوزات والطابور",
+        "disabled": false,
+        "action": "tab='dash';render()"
+      },
+      {
+        "text": "الحالات والشكاوى",
+        "disabled": false,
+        "action": "tab='cases';render()"
+      },
+      {
+        "text": "إعدادات حسابي",
+        "disabled": false,
+        "action": "tab='set';render()"
+      },
+      {
+        "text": "شاشة الدور",
+        "disabled": false,
+        "action": "tab='waiting';render()"
+      },
+      {
+        "text": "اختيار",
+        "disabled": false,
+        "action": null
+      },
+      {
+        "text": "طباعة الحالة PDF",
+        "disabled": false,
+        "action": "printPatientData(\"01000070001\")"
+      },
+      {
+        "text": "اختيار",
+        "disabled": false,
+        "action": null
+      },
+      {
+        "text": "طباعة الحالة PDF",
+        "disabled": false,
+        "action": "printPatientData(\"01000070002\")"
+      },
+      {
+        "text": "اختيار",
+        "disabled": false,
+        "action": null
+      },
+      {
+        "text": "طباعة الحالة PDF",
+        "disabled": false,
+        "action": "printPatientData(\"01000070003\")"
+      },
+      {
+        "text": "اختيار",
+        "disabled": false,
+        "action": null
+      },
+      {
+        "text": "طباعة الحالة PDF",
+        "disabled": false,
+        "action": "printPatientData(\"01000070004\")"
+      },
+      {
+        "text": "اختيار",
+        "disabled": false,
+        "action": null
+      },
+      {
+        "text": "طباعة الحالة PDF",
+        "disabled": false,
+        "action": "printPatientData(\"01000070005\")"
+      },
+      {
+        "text": "اختيار",
+        "disabled": false,
+        "action": null
+      },
+      {
+        "text": "طباعة الحالة PDF",
+        "disabled": false,
+        "action": "printPatientData(\"01000070006\")"
+      },
+      {
+        "text": "اختيار",
+        "disabled": false,
+        "action": null
+      },
+      {
+        "text": "طباعة الحالة PDF",
+        "disabled": false,
+        "action": "printPatientData(\"01000070007\")"
+      },
+      {
+        "text": "اختيار",
+        "disabled": false,
+        "action": null
+      },
+      {
+        "text": "طباعة الحالة PDF",
+        "disabled": false,
+        "action": "printPatientData(\"01000070008\")"
+      },
+      {
+        "text": "اختيار",
+        "disabled": false,
+        "action": null
+      },
+      {
+        "text": "طباعة الحالة PDF",
+        "disabled": false,
+        "action": "printPatientData(\"01000070009\")"
+      },
+      {
+        "text": "اختيار",
+        "disabled": false,
+        "action": null
+      },
+      {
+        "text": "طباعة الحالة PDF",
+        "disabled": false,
+        "action": "printPatientData(\"01000070010\")"
+      },
+      {
+        "text": "اختيار",
+        "disabled": false,
+        "action": null
+      },
+      {
+        "text": "طباعة الحالة PDF",
+        "disabled": false,
+        "action": "printPatientData(\"01000070011\")"
+      },
+      {
+        "text": "اختيار",
+        "disabled": false,
+        "action": null
+      },
+      {
+        "text": "طباعة الحالة PDF",
+        "disabled": false,
+        "action": "printPatientData(\"01000070012\")"
+      },
+      {
+        "text": "اختيار",
+        "disabled": false,
+        "action": null
+      },
+      {
+        "text": "طباعة الحالة PDF",
+        "disabled": false,
+        "action": "printPatientData(\"01000070013\")"
+      },
+      {
+        "text": "اختيار",
+        "disabled": false,
+        "action": null
+      },
+      {
+        "text": "طباعة الحالة PDF",
+        "disabled": false,
+        "action": "printPatientData(\"01000070014\")"
+      },
+      {
+        "text": "اختيار",
+        "disabled": false,
+        "action": null
+      },
+      {
+        "text": "طباعة الحالة PDF",
+        "disabled": false,
+        "action": "printPatientData(\"01000070015\")"
+      },
+      {
+        "text": "اختيار",
+        "disabled": false,
+        "action": null
+      },
+      {
+        "text": "طباعة الحالة PDF",
+        "disabled": false,
+        "action": "printPatientData(\"01000070016\")"
+      },
+      {
+        "text": "اختيار",
+        "disabled": false,
+        "action": null
+      },
+      {
+        "text": "طباعة الحالة PDF",
+        "disabled": false,
+        "action": "printPatientData(\"01000070017\")"
+      },
+      {
+        "text": "اختيار",
+        "disabled": false,
+        "action": null
+      },
+      {
+        "text": "طباعة الحالة PDF",
+        "disabled": false,
+        "action": "printPatientData(\"01000070018\")"
+      },
+      {
+        "text": "اختيار",
+        "disabled": false,
+        "action": null
+      },
+      {
+        "text": "طباعة الحالة PDF",
+        "disabled": false,
+        "action": "printPatientData(\"01000070019\")"
+      },
+      {
+        "text": "اختيار",
+        "disabled": false,
+        "action": null
+      },
+      {
+        "text": "طباعة الحالة PDF",
+        "disabled": false,
+        "action": "printPatientData(\"01000070020\")"
+      },
+      {
+        "text": "اختيار",
+        "disabled": false,
+        "action": null
+      },
+      {
+        "text": "طباعة الحالة PDF",
+        "disabled": false,
+        "action": "printPatientData(\"01000070021\")"
+      },
+      {
+        "text": "اختيار",
+        "disabled": false,
+        "action": null
+      },
+      {
+        "text": "طباعة الحالة PDF",
+        "disabled": false,
+        "action": "printPatientData(\"01000070022\")"
+      },
+      {
+        "text": "اختيار",
+        "disabled": false,
+        "action": null
+      },
+      {
+        "text": "طباعة الحالة PDF",
+        "disabled": false,
+        "action": "printPatientData(\"01000070023\")"
+      },
+      {
+        "text": "اختيار",
+        "disabled": false,
+        "action": null
+      },
+      {
+        "text": "طباعة الحالة PDF",
+        "disabled": false,
+        "action": "printPatientData(\"01000070024\")"
+      },
+      {
+        "text": "اختيار",
+        "disabled": false,
+        "action": null
+      },
+      {
+        "text": "طباعة الحالة PDF",
+        "disabled": false,
+        "action": "printPatientData(\"01000070025\")"
+      },
+      {
+        "text": "اختيار",
+        "disabled": false,
+        "action": null
+      },
+      {
+        "text": "طباعة الحالة PDF",
+        "disabled": false,
+        "action": "printPatientData(\"01000070026\")"
+      },
+      {
+        "text": "اختيار",
+        "disabled": false,
+        "action": null
+      },
+      {
+        "text": "طباعة الحالة PDF",
+        "disabled": false,
+        "action": "printPatientData(\"01000070027\")"
+      },
+      {
+        "text": "اختيار",
+        "disabled": false,
+        "action": null
+      },
+      {
+        "text": "طباعة الحالة PDF",
+        "disabled": false,
+        "action": "printPatientData(\"01000070028\")"
+      },
+      {
+        "text": "اختيار",
+        "disabled": false,
+        "action": null
+      },
+      {
+        "text": "طباعة الحالة PDF",
+        "disabled": false,
+        "action": "printPatientData(\"01000070029\")"
+      },
+      {
+        "text": "اختيار",
+        "disabled": false,
+        "action": null
+      },
+      {
+        "text": "طباعة الحالة PDF",
+        "disabled": false,
+        "action": "printPatientData(\"01000070030\")"
+      },
+      {
+        "text": "السابق",
+        "disabled": true,
+        "action": "caseListPage--;qRes()"
+      },
+      {
+        "text": "التالي",
+        "disabled": false,
+        "action": "caseListPage++;qRes()"
+      },
+      {
+        "text": "حالة جديدة",
+        "disabled": false,
+        "action": "newPatient()"
+      }
+    ]
+  },
+  {
+    "role": "data-entry",
+    "screen": "case-search",
+    "pass": true
+  },
+  {
+    "role": "data-entry",
+    "screen": "set",
+    "label": "إعدادات حسابي",
+    "pass": true,
+    "overflow": false,
+    "buttons": [
+      {
+        "text": "الحجوزات والطابور",
+        "disabled": false,
+        "action": "tab='dash';render()"
+      },
+      {
+        "text": "الحالات والشكاوى",
+        "disabled": false,
+        "action": "tab='cases';render()"
+      },
+      {
+        "text": "إعدادات حسابي",
+        "disabled": false,
+        "action": "tab='set';render()"
+      },
+      {
+        "text": "شاشة الدور",
+        "disabled": false,
+        "action": "tab='waiting';render()"
+      },
+      {
+        "text": "تغيير كلمة سر حسابي",
+        "disabled": false,
+        "action": "editPw()"
+      }
+    ]
+  },
+  {
+    "role": "data-entry",
+    "screen": "waiting",
+    "label": "شاشة الدور",
+    "pass": true,
+    "overflow": false,
+    "buttons": [
+      {
+        "text": "الحجوزات والطابور",
+        "disabled": false,
+        "action": "tab='dash';render()"
+      },
+      {
+        "text": "الحالات والشكاوى",
+        "disabled": false,
+        "action": "tab='cases';render()"
+      },
+      {
+        "text": "إعدادات حسابي",
+        "disabled": false,
+        "action": "tab='set';render()"
+      },
+      {
+        "text": "شاشة الدور",
+        "disabled": false,
+        "action": "tab='waiting';render()"
+      }
+    ]
+  },
+  {
+    "role": "data-entry",
+    "screen": "console-and-server-errors",
+    "pass": true,
+    "errors": [],
+    "serverErrors": []
+  },
+  {
+    "role": "patient",
+    "screen": "/",
+    "pass": true,
+    "status": 200
+  },
+  {
+    "role": "patient",
+    "screen": "/privacy.html",
+    "pass": true,
+    "status": 200
+  },
+  {
+    "role": "patient",
+    "screen": "/terms.html",
+    "pass": true,
+    "status": 200
+  },
+  {
+    "role": "patient",
+    "screen": "/branches/alex",
+    "pass": true,
+    "status": 200
+  },
+  {
+    "role": "patient",
+    "screen": "/branches/matrouh",
+    "pass": true,
+    "status": 200
+  },
+  {
+    "role": "patient",
+    "screen": "/branches/dmn",
+    "pass": true,
+    "status": 200
+  },
+  {
+    "role": "patient",
+    "screen": "/branches/libya",
+    "pass": true,
+    "status": 200
+  },
+  {
+    "role": "patient",
+    "screen": "/missing-page-qa",
+    "pass": true,
+    "status": 404
+  },
+  {
+    "role": "patient",
+    "screen": "phone-lookup",
+    "pass": true,
+    "options": 1
+  },
+  {
+    "role": "display",
+    "screen": "queue",
+    "pass": true,
+    "overflow": false
+  }
+]

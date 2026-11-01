@@ -1,3 +1,5 @@
+const visitDuration=require('./visit-duration.cjs');
+const patientIdentity=require('./patient-identity.cjs');
 const perms=require('./permissions.cjs');
 const cases=require('./cases.cjs');
 const branchConfig=require('./branches.cjs');
@@ -38,10 +40,10 @@ function canExamine(state,d,b){return (!presence(state,d)||presence(state,d)===b
 function assertExamine(state,d,b){if(!canExamine(state,d,b))fail('الطبيب متواجد أو لديه جلسة كشف في الفرع الآخر. أنهِ الجلسة الحالية وحدد فرع التواجد أولًا.',409);}
 function queueTrack(state,list,x,clock=Date.now(),prepared){
  const ordered=prepared?.ordered||list.filter(y=>y.b===x.b).sort(queueOrder),active=prepared?prepared.active:ordered.find(y=>y.s==='exam'),waiting=prepared?.waiting||ordered.filter(y=>y.s==='wait');
- const avg=Math.max(1,Math.min(180,Number(state.settings?.avg)||15)),index=Math.max(0,prepared?prepared.positions.get(x.id)??0:waiting.findIndex(y=>y.id===x.id));
+ const avg=visitDuration.minutes(state,x),index=Math.max(0,prepared?prepared.positions.get(x.id)??0:waiting.findIndex(y=>y.id===x.id));
  const selected=prepared?prepared.presence:presence(state,x.date),session=state.sessions?.[x.date+'_'+x.b],blocked=(session&&session.status!=='running')||(selected&&selected!==x.b);
- const started=!blocked&&active&&(prepared?prepared.isToday:x.date===today(new Date(clock)))&&Number.isFinite(Date.parse(active.startedAt)),remaining=started?Math.max(0,avg*60000-(clock-Date.parse(active.startedAt))):avg*60000;
- const delay=x.s==='wait'?(active?remaining:0)+index*avg*60000:0;
+ const started=!blocked&&active&&(prepared?prepared.isToday:x.date===today(new Date(clock)))&&Number.isFinite(Date.parse(active.startedAt)),remaining=started?Math.max(0,visitDuration.minutes(state,active)*60000-(clock-Date.parse(active.startedAt))):avg*60000;
+ const delay=x.s==='wait'?(active?remaining:0)+waiting.slice(0,index).reduce((n,row)=>n+visitDuration.minutes(state,row)*60000,0):0;
  return {date:x.date,no:x.no,s:x.s,b:x.b,v:x.v,sessionStatus:session?.status||'not_started',ahead:x.s==='wait'?index+(active?1:0):0,avg,queueStarted:!!started,estimatedWaitMinutes:started?Math.ceil(delay/60000):null,expectedAt:started?(x.s==='exam'?active.startedAt:x.s==='wait'?new Date(clock+delay).toISOString():null):null};
 }
 function rebuild(state) {
@@ -78,7 +80,7 @@ function commit(state, uid, puts, dels, now=today()) {
  };
  dels.forEach(x=>remove(x,true));
  for(const p of puts){
-  const n=booking(p.n,state);allowed(r,n.b);if(!branchIds(state,true).includes(n.b)&&(!p.o||p.o.b!==n.b||p.o.date!==n.date))fail("الفرع متوقف عن استقبال حجوزات جديدة");
+  const n=booking(p.n,state);if(p.n.patientId){const identity=patientIdentity.resolve(state,{phone:n.phone,patientId:p.n.patientId});n.patientId=identity.patientId;}allowed(r,n.b);if(!branchIds(state,true).includes(n.b)&&(!p.o||p.o.b!==n.b||p.o.date!==n.date))fail("الفرع متوقف عن استقبال حجوزات جديدة");
   const old=p.o?remove(p.o,false):null;
   if(!perms.can(r,'notes.edit'))n.nt=old?.nt||'';
   if(!old)perms.requirePermission(r,'bookings.create');
@@ -106,7 +108,7 @@ function commit(state, uid, puts, dels, now=today()) {
   const max=Math.max(state.sequences[seqKey]||0,0,...Object.values(rows).filter(x=>x.b===n.b).map(x=>Number(x.no)||0));
   n.no=moved?max+1:old.no;
   state.sequences[seqKey]=Math.max(max,n.no);
-  n.createdAt=old?.createdAt||new Date().toISOString();n.createdBy=old?.createdBy||r.u;n.updatedAt=new Date().toISOString();n.updatedBy=r.u;n.rev=(old?.rev||0)+1;if(old?.scheduleMove)n.scheduleMove=old.scheduleMove;
+  n.createdAt=old?.createdAt||new Date().toISOString();n.createdBy=old?.createdBy||r.u;n.updatedAt=new Date().toISOString();n.updatedBy=r.u;n.rev=(old?.rev||0)+1;if(old?.scheduleMove)n.scheduleMove=old.scheduleMove;if(old?.trainingBatch)n.trainingBatch=old.trainingBatch;for(const key of ['followupPlanId','nextVisitOf','timingWindow','nextVisitRequestKey','nextVisitBookedBy'])if(old?.[key]!==undefined)n[key]=structuredClone(old[key]);
   if(Object.hasOwn(p,'patient')){
    if(!p.patient||typeof p.patient!=='object'||Array.isArray(p.patient)||Object.keys(p.patient).some(k=>!['spouseName','spouseJob','spousePhone'].includes(k)))fail('راجع بيانات الزوج');
    const existing=state.patients?.[n.phone],family={};
@@ -117,7 +119,7 @@ function commit(state, uid, puts, dels, now=today()) {
   if(old?.s==='exam'&&n.s==='wait'&&old.date===n.date&&old.b===n.b)advance.delete(old.date+'_'+old.b);
  }
  for(const key of advance){const d=key.slice(0,10),b=key.slice(11);if(!canExamine(state,d,b)||d!==now||state.sessions?.[key]&&state.sessions[key].status!=='running')continue;const list=Object.values(state.bookings[d]||{}).filter(x=>x.b===b);if(list.some(x=>x.s==='exam'))continue;const next=list.filter(x=>x.s==='wait').sort(queueOrder)[0];if(next){next.s='exam';next.startedAt=new Date().toISOString();next.rev=(next.rev||0)+1;}}
- rebuild(state);cases.indexPatients(state);return {state};
+ rebuild(state);cases.indexPatients(state);for(const put of puts){const row=state.bookings?.[put.n.date]?.[put.n.id];if(row)row.patientId=patientIdentity.idForPhone(state,row.phone);}return {state};
 }
 function publicSettings(state){if(!state.settings)return null;const {previousDesign,...settings}=state.settings;return settings;}
 function read(state,uid,path) {

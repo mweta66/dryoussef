@@ -1,0 +1,85 @@
+{
+  "release": "2026.11.01.1",
+  "scope": "isolated generated data; not production",
+  "unitTests": {
+    "passed": 418,
+    "failed": 0
+  },
+  "syntaxCheckedFiles": 249,
+  "screenNavigation": {
+    "checks": 99,
+    "failed": 0,
+    "horizontalOverflows": 0,
+    "roles": [
+      "admin",
+      "alex-sec",
+      "data-entry",
+      "display",
+      "dmn-sec",
+      "doctor",
+      "libya-sec",
+      "matrouh-sec",
+      "nurse",
+      "patient"
+    ]
+  },
+  "clinicalBrowserJourneys": [
+    {
+      "name": "doctor focused file -> save and finish -> next full file",
+      "pass": true,
+      "detail": {
+        "completed": "qa_booking_36",
+        "next": "qa_booking_33"
+      }
+    },
+    {
+      "name": "doctor saves sensitive follow-up plan after two weeks",
+      "pass": true,
+      "detail": {
+        "planId": "followup_3439c739f1bb401faf766690d11dbe0a",
+        "targetDate": "2026-11-15"
+      }
+    },
+    {
+      "name": "focused UI light/dark mobile no overflow",
+      "pass": true
+    },
+    {
+      "name": "secretary books next visit without clinical details and without duplicate",
+      "pass": true,
+      "detail": {
+        "newBooking": "next_1bf7c61d-16c8-4cac-8c0b-19e3aa52e7d0",
+        "ticket": 1
+      }
+    },
+    {
+      "name": "reception merged arrival and confirmation view",
+      "pass": true,
+      "detail": {
+        "rows": 4
+      }
+    },
+    {
+      "name": "patient four-step booking request pending",
+      "pass": true,
+      "detail": {
+        "requestId": "04067e59-bd3e-4e5b-bce5-f42049ae264a"
+      }
+    },
+    {
+      "name": "no browser JavaScript errors",
+      "pass": true
+    }
+  ],
+  "postgres": {
+    "passed": 47,
+    "postgres": "17.6",
+    "projectionTriggerTested": true,
+    "migrationsReapplied": true,
+    "adapterRoundtripWithLostResponse": true,
+    "scope": "isolated real PostgreSQL, not Supabase production"
+  },
+  "vercelPackaging": "passed",
+  "productionDeployment": "not performed; current network and credential bindings unavailable",
+  "browsers": "system Chromium; no Safari/Firefox/Edge verification"
+}

@@ -1,0 +1,92 @@
+[
+  {
+    "role": "doctor",
+    "action": "create-booking-invalid-then-valid-with-spouse",
+    "pass": true
+  },
+  {
+    "role": "doctor",
+    "action": "start-pause-resume-end-session-and-priority",
+    "pass": true
+  },
+  {
+    "role": "doctor",
+    "action": "past-future-session-safety",
+    "pass": true
+  },
+  {
+    "role": "doctor",
+    "action": "mobile-and-tablet-layout-light-dark",
+    "pass": true
+  },
+  {
+    "role": "doctor",
+    "action": "logout-protected-data-unavailable",
+    "pass": true
+  },
+  {
+    "role": "nurse",
+    "action": "nurse-case-search-complaint-history-save",
+    "pass": true
+  },
+  {
+    "role": "nurse",
+    "action": "nurse-pdf-print-popup",
+    "pass": true
+  },
+  {
+    "role": "nurse",
+    "action": "nurse-cannot-change-site-or-other-users",
+    "pass": true
+  },
+  {
+    "role": "nurse",
+    "action": "mobile-and-tablet-layout-light-dark",
+    "pass": true
+  },
+  {
+    "role": "nurse",
+    "action": "logout-protected-data-unavailable",
+    "pass": true
+  },
+  {
+    "role": "alex-sec",
+    "action": "create-booking-invalid-then-valid-with-spouse",
+    "pass": true
+  },
+  {
+    "role": "alex-sec",
+    "action": "mobile-and-tablet-layout-light-dark",
+    "pass": true
+  },
+  {
+    "role": "alex-sec",
+    "action": "logout-protected-data-unavailable",
+    "pass": true
+  },
+  {
+    "role": "data-entry",
+    "action": "create-booking-invalid-then-valid-with-spouse",
+    "pass": true
+  },
+  {
+    "role": "data-entry",
+    "action": "mobile-and-tablet-layout-light-dark",
+    "pass": true
+  },
+  {
+    "role": "data-entry",
+    "action": "logout-protected-data-unavailable",
+    "pass": true
+  },
+  {
+    "role": "admin",
+    "action": "mobile-and-tablet-layout-light-dark",
+    "pass": true
+  },
+  {
+    "role": "admin",
+    "action": "logout-protected-data-unavailable",
+    "pass": true
+  }
+]
