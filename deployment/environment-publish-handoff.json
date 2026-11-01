@@ -1,6 +1,5 @@
 {
   "release": "2026.11.01.3",
-  "applicationCommit": "fb1a42c7de5e665ea43ff8402cde3166287ef751",
   "repository": "mweta66/dryoussef",
   "branch": "codex/patient-delete-action-audit",
   "supabaseProjectRef": "matkxrnobjdewhptybpj",
@@ -57,5 +56,8 @@
     "Current runtime network policy does not grant the deployment destinations.",
     "The configuration update was rejected; no environment changes or production deployment were made.",
     "Actual Vercel Git production integration and Auth/Storage behavior must be checked after access is ready."
-  ]
+  ],
+  "validatedClinicalCommit": "fb1a42c7de5e665ea43ff8402cde3166287ef751",
+  "deployRef": "refs/heads/codex/patient-delete-action-audit",
+  "packagingNote": "Use the current branch files, including the embedded training map in supabase/functions/clinic-api/training-assignment.js. The single-file bundle must start/end with CLINIC_API_BUNDLE_START/END 2026.11.01.3. The earlier clinical commit has no copy markers and retains an external fixture source import."
 }
