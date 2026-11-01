@@ -1,5 +1,5 @@
 {
-  "version": "2026.11.01.1",
+  "version": "2026.11.01.2",
   "apiContract": 1,
   "capabilities": [
     "pdfReports",
@@ -25,6 +25,10 @@
     "mutationReceipts",
     "operationalDeltaWrites",
     "completeRecoveryBundle",
-    "trainingMetricsSeparation"
+    "trainingMetricsSeparation",
+    "safePatientDeletion",
+    "deleteReadback",
+    "legacyArchiveTolerance",
+    "staleRequestRejection"
   ]
 }

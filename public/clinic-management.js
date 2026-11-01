@@ -38,7 +38,39 @@ function resetUserPassword(id){openForm('تغيير كلمة سر '+esc(ROLE_LIS
 async function deleteUserAccount(id){if(!confirm('حذف حساب '+ROLE_LIST[id].u+' نهائيًا؟'))return;await act(function(){return gateway('userDelete',{uid:id},true)},'تم حذف الحساب')}
 function editPatientData(ph){var p=PT&&PT[ph];if(!p)return;if(typeof confirmMedicalTransition==='function'&&!confirmMedicalTransition())return;openForm('تعديل بيانات الحالة',[{k:'name',l:'اسم الحالة',v:p.n},{k:'phone',l:'رقم الهاتف',t:'tel',v:ph},...spouseFields(p)],async function(o){await gateway('patientSave',{phone:ph,newPhone:o.phone,name:o.name,spouseName:o.spouseName,spouseJob:o.spouseJob,spousePhone:o.spousePhone},true);PT=null;SEL='';await loadPatients(true)})}
 function newPatient(){openForm('حالة جديدة',[{k:'name',l:'اسم الحالة',v:''},{k:'phone',l:'رقم الهاتف',t:'tel',v:''},...spouseFields({})],async function(o){await gateway('patientSave',{phone:o.phone,name:o.name,spouseName:o.spouseName,spouseJob:o.spouseJob,spousePhone:o.spousePhone},true);PT=null;await loadPatients(true)})}
-async function deletePatientData(ph){if(!confirm('نقل الحالة وكل حجوزاتها وملاحظاتها وشكاواها إلى سلة المحذوفات؟ يستطيع الأدمن استعادتها.'))return;closeM();await act(async function(){await gateway('patientDelete',{phone:ph},true);PT=null;SEL='';CL=[];await loadPatients(true)},'تم نقل الحالة وبياناتها إلى سلة المحذوفات')}
+var patientDeletionInFlight=false;
+function clearDeletedPatientView(phone){
+ if(SEL===phone){SEL='';CL=[];}
+ if(typeof invalidatePatientDirectory==='function')invalidatePatientDirectory(phone);else{if(PT)delete PT[phone];PTt=0;}
+ if(typeof S!=='undefined'&&Array.isArray(S.bk))S.bk=S.bk.filter(x=>x.phone!==phone);
+ if(typeof PATIENT_COMPLAINT_PAGE!=='undefined'&&PATIENT_COMPLAINT_PAGE.phone===phone)PATIENT_COMPLAINT_PAGE={phone:'',page:0,hasMore:false,total:0};
+ if(typeof CARE!=='undefined'&&CARE.owner===AUTH){CARE.request++;CARE.loading=null;CARE.loadedAt=0;CARE.rows=CARE.rows.filter(x=>x.phone!==phone);if(CARE.selected?.phone===phone){clearTimeout(CARE.draftTimer);CARE.selected=null;CARE.selectedId='';CARE.draft=null;CARE.dirty=false;CARE.draftCandidate=null;CARE.draftId=null;}if(typeof careDrawBoard==='function')careDrawBoard();}
+ if(typeof failedPrivateDrafts!=='undefined'&&typeof pendingPrivateDrafts!=='undefined'){for(const draft of new Set([...failedPrivateDrafts,...pendingPrivateDrafts]))if(draft.owner===AUTH&&draft.entity===phone){draft.saved=true;failedPrivateDrafts.delete(draft);}}
+}
+async function deletePatientData(ph){
+ if(patientDeletionInFlight||featureBusy||saving||writing){notify('انتظر انتهاء العملية الحالية');return;}
+ if(!me||!can('patients.delete')){notify('ليس لديك صلاحية حذف الحالات');return;}
+ if(!confirm('نقل الحالة وكل حجوزاتها وملاحظاتها وشكاواها إلى سلة المحذوفات؟ يستطيع الأدمن استعادتها.'))return;
+ closeM();if(document.querySelector('.mod'))return;
+ const owner=AUTH,phone=norm(ph),message='تم نقل الحالة وبياناتها إلى سلة المحذوفات';let confirmed=false,refreshFailed=false;patientDeletionInFlight=true;
+ try{await act(async function(){
+  let result;
+  try{result=await gateway('patientDelete',{phone},true);}
+  catch(error){
+   if(AUTH!==owner||!([500,502,503,504].includes(error.status)||!error.status&&/fetch|network|timeout|abort|اتصال/i.test(error.message||'')))throw error;
+   error.message='لم نؤكد نتيجة الحذف؛ تحقق من الحالة أو سجل العمليات قبل إعادة المحاولة'+(error.requestId?' (مرجع: '+error.requestId+')':'');
+   if(!can('patients.read')||!(me.role==='admin'||typeof allBranches==='function'&&allBranches()))throw error;
+   let readback;try{readback=await gateway('patientSearch',{query:phone,page:0,pageSize:50},true);}catch{throw error;}
+   if(AUTH!==owner||!Array.isArray(readback?.rows)||readback.hasMore===true||readback.rows.some(x=>x.phone===phone))throw error;
+   if(typeof ClinicSaveStatus!=='undefined')ClinicSaveStatus.confirmReadVerification?.('patientDelete',error.operationId);
+   result={ok:true,verifiedByRead:true};
+  }
+  if(result?.ok!==true||['verifying','not_saved'].includes(result.writeStatus))throw Error('لم نؤكد حذف الحالة؛ راجع نتيجة العملية قبل المحاولة مجددًا');
+  if(AUTH!==owner)return;confirmed=true;clearDeletedPatientView(phone);
+  try{await loadPatients(true);if(typeof PATIENT_DIRECTORY!=='undefined'&&PATIENT_DIRECTORY.error)refreshFailed=true;}catch{refreshFailed=true;}
+ },message);if(AUTH===owner&&confirmed&&refreshFailed)notify(message+'. تعذر تحديث القائمة؛ أعد تحميلها دون إعادة الحذف.');}
+ finally{patientDeletionInFlight=false;}
+}
 var originalPatient=patient;patient=function(){return '<p id="clinic-about" class="about-card" style="display:'+(SITE.about?'':'none')+'">'+esc(SITE.about||'')+'</p>'+originalPatient()};
 var originalLoadCL=loadCL;loadCL=async function(ph){if(can('complaints.read'))return originalLoadCL(ph);CL=[]};
 var originalNurse=nurse;nurse=function(){var h=originalNurse();if(can('patients.edit'))h+='<button class="btn a" onclick="newPatient()">حالة جديدة</button>';if(!can('complaints.create'))h=h.replace(/<button[^>]*data-a="ca"[^>]*>.*?<\/button>/g,'');if(SEL&&PT&&PT[SEL])h+='<div class="acts">'+(can('patients.edit')?'<button class="btn sm" onclick="editPatientData(\''+SEL+'\')">تعديل بيانات الحالة</button>':'')+(can('patients.delete')?'<button class="btn sm r" onclick="deletePatientData(\''+SEL+'\')">حذف الحالة بالكامل</button>':'')+'</div>';return h};

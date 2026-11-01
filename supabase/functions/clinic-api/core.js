@@ -122,12 +122,16 @@ function commit(state, uid, puts, dels, now=today()) {
  rebuild(state);cases.indexPatients(state);for(const put of puts){const row=state.bookings?.[put.n.date]?.[put.n.id];if(row)row.patientId=patientIdentity.idForPhone(state,row.phone);}return {state};
 }
 function publicSettings(state){if(!state.settings)return null;const {previousDesign,...settings}=state.settings;return settings;}
+function archivedBooking(item){
+ const x=item?.booking;if(!x||typeof x!=='object'||Array.isArray(x)||!/^[-A-Za-z0-9_]{1,128}$/.test(x.id||'')||typeof x.name!=='string'||!x.name.trim()||x.name.length>120||!/^01[0125]\d{8}$/.test(phone(x.phone))||typeof x.b!=='string'||!['exam','cons','follow','emergency'].includes(x.v))return null;
+ try{date(x.date)}catch{return null}return x;
+}
 function read(state,uid,path) {
  if(path==='settings')return publicSettings(state);
  const r=role(state,uid);
  if(path==='sessions'){perms.requirePermission(r,'bookings.read');return state.sessions||{};}
  if(path==='audit'){perms.requirePermission(r,'audit.read');return state.audit||[];}
- if(path==='deletedBookings'){perms.requirePermission(r,'bookings.delete');return Object.fromEntries(Object.entries(state.deletedBookings||{}).filter(([,x])=>perms.allBranches(r)||x.booking.b===r.br));}
+ if(path==='deletedBookings'){perms.requirePermission(r,'bookings.delete');return Object.fromEntries(Object.entries(state.deletedBookings||{}).filter(([,x])=>archivedBooking(x)&&(perms.allBranches(r)||x.booking.b===r.br)));}
  if(path==='roles/'+uid)return perms.normalize(state.roles[uid]);
  if(path==='roles'){perms.requirePermission(r,'users.manage');return state.roles||{};}
  if(/^(patients|complaints|files|inbox)(?:\/|$)/.test(path))return cases.read(state,r,path);
@@ -170,4 +174,4 @@ function lookup(state,p,now=today(),clock=Date.now()) {
  const x=Object.values(state.bookings?.[now]||{}).find(x=>x.phone===p);
  if(!x)return null;return queueTrack(state,Object.values(state.bookings[now]||{}),x,clock);
 }
-export {allowed,publicSettings,branchIds,presence,canExamine,assertExamine,phone,today,date,role,booking,commit,read,patch,lookup,rebuild,fail,schedule,queueOrder,queueTrack};
+export {archivedBooking,allowed,publicSettings,branchIds,presence,canExamine,assertExamine,phone,today,date,role,booking,commit,read,patch,lookup,rebuild,fail,schedule,queueOrder,queueTrack};

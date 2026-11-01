@@ -1,0 +1,52 @@
+{
+  "release": "2026.11.01.2",
+  "scope": "Isolated generated data; Chromium and real local PostgreSQL, not production",
+  "unitTests": {
+    "passed": 452,
+    "failed": 0
+  },
+  "browserActionChecks": {
+    "staff": 90,
+    "admin": 15,
+    "patientDeletion": 9,
+    "patient": 15,
+    "requestApprovals": 5,
+    "total": 134,
+    "failed": 0
+  },
+  "screenNavigation": {
+    "passed": 99,
+    "failed": 0,
+    "horizontalOverflows": 0
+  },
+  "controlActivationOnly": {
+    "passed": 85,
+    "failed": 0
+  },
+  "postgres": {
+    "passed": 55,
+    "postgres": "17.6",
+    "projectionTriggerTested": true,
+    "migrationsReapplied": true,
+    "deploymentBundleTested": true,
+    "adapterRoundtripWithLostResponse": true,
+    "patientDeletionAndRestoreThroughGateway": true,
+    "deletionProjectionReadback": true,
+    "lostDeleteResponseWithoutReplay": true,
+    "scope": "isolated real PostgreSQL, not Supabase production"
+  },
+  "productionDeployment": "not performed; network and credential bindings unavailable",
+  "productionCause": "not confirmed; code-level failures reproduced and fixed",
+  "evidence": [
+    "staff-actions.json",
+    "admin-actions.json",
+    "patient-deletion.json",
+    "patient-actions.json",
+    "request-approvals.json",
+    "screens.json",
+    "controls.json",
+    "postgres.json"
+  ],
+  "syntaxCheckedFiles": 255,
+  "vercelPackaging": "passed"
+}

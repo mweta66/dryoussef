@@ -81,15 +81,29 @@ function mutate(original,uid,input,core){
  }
  if(input.action==='patientDelete'){
   perms.requirePermission(r,'patients.delete');const p=core.phone(input.phone);if(!/^01[0125]\d{8}$/.test(p))core.fail('هاتف غير صحيح');cases.assertAccess(s,r,p);
+  const patientId=patientIdentity.idForPhone(s,p),bookingIds=new Set(),advance=new Set(),matches=x=>!!x&&(core.phone(x.phone||x.p)===p||!!patientId&&x.patientId===patientId);
+  if(!cases.allPatients(r)){const records=[...Object.values(s.bookings||{}).flatMap(rows=>Object.values(rows||{})),...Object.values(s.deletedBookings||{}).map(x=>x?.booking)];if(s.patients?.[p]?.br&&s.patients[p].br!==r.br||records.some(x=>matches(x)&&x.b!==r.br))core.fail('الحالة لها بيانات في فرع آخر؛ حذف الملف الكامل يحتاج صلاحية جميع الفروع',403);}
   storageCleanup.enqueue(s,s.attachments?.[p]);delete s.complaintSequences?.[p];
-  for(const rows of Object.values(s.bookings||{}))for(const [id,x] of Object.entries(rows))if(x.phone===p)delete rows[id];
-  for(const [id,x] of Object.entries(s.deletedBookings||{}))if(x.booking.phone===p)delete s.deletedBookings[id];
-  for(const kind of ['patients','files','complaints','followups','attachments','complaintSequences'])delete s[kind]?.[p];for(const root of ['clinicalVisits','followupPlans','urgentReviews','bookingContacts'])for(const [id,x]of Object.entries(s[root]||{}))if(x.phone===p||x.p===p)delete s[root][id];for(const [id,x] of Object.entries(s.inbox||{}))if(x.p===p)delete s.inbox[id];patientIdentity.ensure(s);core.rebuild(s);return s;
+  for(const [date,rows]of Object.entries(s.bookings||{}))for(const [id,x]of Object.entries(rows||{}))if(matches(x)){bookingIds.add(id);if(x.s==='exam')advance.add(date+'_'+x.b);delete rows[id];}
+  // Legacy archive rows can be incomplete. An unrelated malformed row must not block deletion.
+  for(const [id,x]of Object.entries(s.deletedBookings||{}))if(matches(x?.booking)){bookingIds.add(id);if(x.booking.id)bookingIds.add(x.booking.id);delete s.deletedBookings[id];}
+  for(const kind of ['patients','files','complaints','followups','attachments','complaintSequences'])delete s[kind]?.[p];
+  // Remove pending workflows as well as the clinical file: an old request must not recreate it.
+  for(const root of ['clinicalVisits','followupPlans','urgentReviews','bookingContacts','checkins','appointmentRequests','waitingList','tasks','inbox'])for(const [id,x]of Object.entries(s[root]||{}))if(matches(x)||bookingIds.has(x?.bookingId)||bookingIds.has(x?.sourceBookingId)||['checkins','bookingContacts'].includes(root)&&bookingIds.has(id))delete s[root][id];
+  for(const drafts of Object.values(s.drafts||{}))for(const [id,x]of Object.entries(drafts||{}))if(x&&(core.phone(x.entity)===p||x.entity===patientId||bookingIds.has(x.entity)||matches(x.data)))delete drafts[id];
+  delete s.editingPresence?.[p];
+  // Deleting the examined case follows the same current-day queue advancement rule as deleting its booking.
+  for(const key of advance){const date=key.slice(0,10),branch=key.slice(11);if(date!==core.today()||!core.canExamine(s,date,branch)||s.sessions?.[key]&&s.sessions[key].status!=='running')continue;const rows=Object.values(s.bookings?.[date]||{}).filter(x=>x.b===branch);if(rows.some(x=>x.s==='exam'))continue;const next=rows.filter(x=>x.s==='wait').sort(core.queueOrder)[0];if(next){next.s='exam';next.startedAt=new Date().toISOString();next.rev=(next.rev||0)+1;}}
+  patientIdentity.ensure(s);core.rebuild(s);return s;
  }
  if(input.action==='dataClear'){
   perms.requirePermission(r,'data.delete');if(input.confirmation!=='DELETE_CLINIC_DATA')core.fail('تأكيد الحذف مطلوب');
-  for(const items of Object.values(s.attachments||{}))storageCleanup.enqueue(s,items);
-  for(const kind of ['bookings','patients','files','complaints','inbox','track','deletedBookings','sessions','followups','attachments','complaintSequences'])s[kind]={};return s;
+  patientIdentity.ensure(s);for(const items of Object.values(s.attachments||{}))storageCleanup.enqueue(s,items);
+  for(const kind of ['bookings','patients','files','complaints','inbox','track','deletedBookings','sessions','followups','attachments','complaintSequences','clinicalVisits','followupPlans','urgentReviews','bookingContacts','checkins','appointmentRequests','waitingList','tasks','slotOpenings','dayClosures','scheduleTransferPending','editingPresence'])s[kind]={};
+  for(const drafts of Object.values(s.drafts||{}))for(const [id,x]of Object.entries(drafts||{}))if(['booking','complaint','medical','patient','task'].includes(x?.kind))delete drafts[id];
+  for(const batch of Object.values(s.settings?.trainingYearBatches||{}))if(batch&&batch.status!=='purged')Object.assign(batch,{status:'purged',purgedAt:new Date().toISOString(),purgedBy:uid});
+  // Keep identity tombstones and issued ticket counters so a later new file cannot inherit an archived identity.
+  patientIdentity.ensure(s);return s;
  }
  core.fail('عملية غير مسموحة',403);
 }

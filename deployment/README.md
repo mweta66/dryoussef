@@ -17,3 +17,5 @@ For release `2026.11.01.1`, follow the coordinated migration → gateway → fro
 Local verification: the bundled handler was executed with mocked Auth/database services to verify public settings, rejection of an unauthenticated migration, authorized legacy profile migration, spouse data completion, and audit identity context. This is not verification of a live deployment or of the production database migrations.
 
 Booking family metadata: the updated frontend checks `bookingCapabilities` before submitting spouse data. The updated service saves the booking and patient family fields in one transaction. An older service is detected before creating a partial booking; deploy this regenerated bundle together with the frontend. Existing spouse data cannot be overwritten without patient-edit permission. New registrations can include spouse fields through the secretary's booking permission.
+
+For the patient-deletion fixes in `2026.11.01.2`, see [the action audit and deployment checklist](../docs/action-audit-2026-11-01-ar.md). This fix adds no new SQL migration beyond the earlier clinical-workflow prerequisites; publish the updated gateway and matching frontend.

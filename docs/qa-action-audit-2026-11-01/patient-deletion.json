@@ -1,0 +1,38 @@
+[
+  {
+    "name": "canceling the delete confirmation does not write or close the patient file",
+    "pass": true
+  },
+  {
+    "name": "refusing to discard dirty medical notes also cancels the delete request",
+    "pass": true
+  },
+  {
+    "name": "deleting one patient with a malformed legacy trash row removes every visit and survives reload",
+    "pass": true
+  },
+  {
+    "name": "a denied patient deletion retains the file and has no success notice",
+    "pass": true
+  },
+  {
+    "name": "confirmed deletion followed by failing refresh removes the local row and reports refresh failure honestly",
+    "pass": true
+  },
+  {
+    "name": "lost delete response is read-verified without replaying the delete mutation",
+    "pass": true
+  },
+  {
+    "name": "an unconfirmed failed delete never hides an existing patient or announces success",
+    "pass": true
+  },
+  {
+    "name": "mobile patient deletion has the same confirmation and persisted result",
+    "pass": true
+  },
+  {
+    "name": "no browser JavaScript errors in patient deletion scenarios",
+    "pass": true
+  }
+]

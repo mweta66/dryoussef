@@ -317,6 +317,7 @@ function supabaseAdapter(url, secret, fetcher = fetch) {
 var core_exports = {};
 __export(core_exports, {
   allowed: () => allowed,
+  archivedBooking: () => archivedBooking,
   assertExamine: () => assertExamine,
   booking: () => booking,
   branchIds: () => branchIds,
@@ -988,6 +989,16 @@ function publicSettings(state) {
   const { previousDesign, ...settings2 } = state.settings;
   return settings2;
 }
+function archivedBooking(item) {
+  const x = item?.booking;
+  if (!x || typeof x !== "object" || Array.isArray(x) || !/^[-A-Za-z0-9_]{1,128}$/.test(x.id || "") || typeof x.name !== "string" || !x.name.trim() || x.name.length > 120 || !/^01[0125]\d{8}$/.test(phone(x.phone)) || typeof x.b !== "string" || !["exam", "cons", "follow", "emergency"].includes(x.v)) return null;
+  try {
+    date(x.date);
+  } catch {
+    return null;
+  }
+  return x;
+}
 function read2(state, uid, path) {
   if (path === "settings") return publicSettings(state);
   const r = role(state, uid);
@@ -1001,7 +1012,7 @@ function read2(state, uid, path) {
   }
   if (path === "deletedBookings") {
     requirePermission(r, "bookings.delete");
-    return Object.fromEntries(Object.entries(state.deletedBookings || {}).filter(([, x]) => allBranches(r) || x.booking.b === r.br));
+    return Object.fromEntries(Object.entries(state.deletedBookings || {}).filter(([, x]) => archivedBooking(x) && (allBranches(r) || x.booking.b === r.br)));
   }
   if (path === "roles/" + uid) return normalize(state.roles[uid]);
   if (path === "roles") {
@@ -1882,7 +1893,7 @@ async function handle5(adapter2, input, uid) {
 }
 
 // supabase/functions/clinic-api/release.js
-var release_default = { "version": "2026.11.01.1", "apiContract": 1, "capabilities": ["pdfReports", "splitBackup", "phoneChangeLookup", "patientRequestAlerts", "globalThemePresets", "patientNotificationCenter", "yearEndTrainingData", "novemberManualDataProtection", "sessionReadback", "emptySessionRecovery", "focusedConsultation", "followupPlans", "nextVisitBooking", "receptionArrival", "visitDurations", "requestAssignment", "bookingConfirmations", "appointmentCalendar", "patientIdentity", "patientPagination", "mutationReceipts", "operationalDeltaWrites", "completeRecoveryBundle", "trainingMetricsSeparation"] };
+var release_default = { "version": "2026.11.01.2", "apiContract": 1, "capabilities": ["pdfReports", "splitBackup", "phoneChangeLookup", "patientRequestAlerts", "globalThemePresets", "patientNotificationCenter", "yearEndTrainingData", "novemberManualDataProtection", "sessionReadback", "emptySessionRecovery", "focusedConsultation", "followupPlans", "nextVisitBooking", "receptionArrival", "visitDurations", "requestAssignment", "bookingConfirmations", "appointmentCalendar", "patientIdentity", "patientPagination", "mutationReceipts", "operationalDeltaWrites", "completeRecoveryBundle", "trainingMetricsSeparation", "safePatientDeletion", "deleteReadback", "legacyArchiveTolerance", "staleRequestRejection"] };
 
 // supabase/functions/clinic-api/request-notifications.js
 import { createHash as createHash4 } from "node:crypto";
@@ -2454,7 +2465,8 @@ function context(before, next, changes, input = {}) {
 }
 function record(before, next, input, uid) {
   const changes = [];
-  for (const root of ROOTS2) diff(before[root] || {}, next[root] || {}, [root], changes);
+  const tracked = ROOTS2.concat(["patientDelete", "dataClear"].includes(input.action) ? ["drafts"] : []);
+  for (const root of tracked) diff(before[root] || {}, next[root] || {}, [root], changes);
   const id2 = crypto.randomUUID(), at = (/* @__PURE__ */ new Date()).toISOString(), branches2 = [...new Set((input.puts || []).map((x) => x.n?.b).concat((input.dels || []).map((x) => x.b)).filter(Boolean))];
   stamp(before, next, input, uid, at);
   const phones = /* @__PURE__ */ new Set();
@@ -2491,15 +2503,16 @@ function record(before, next, input, uid) {
   next.activityDetails = { ...next.activityDetails || {}, [id2]: changes.map((x) => safe(x)) };
   next.activityContext = { ...next.activityContext || {}, [id2]: context(before, next, changes, { ...input, actor: uid }) };
   if (input.action === "bookingRestore") for (const group of Object.values(next.recycleBin || {})) {
-    group.items = (group.items || []).filter((x) => !(x.path[0] === "bookings" && x.path[2] === input.id));
+    if (!group || !Array.isArray(group.items)) continue;
+    group.items = group.items.filter((x) => !(x?.path?.[0] === "bookings" && x.path[2] === input.id));
     if (!group.items.length) group.restoredAt = at;
   }
   const removed = changes.filter((x) => x.removed && !["roles", "sessions", "complaintSequences"].includes(x.path[0]));
   if (removed.length && !["trashRestore", "bookingRestore", "patientSave", "userCredentials"].includes(input.action)) {
     next.recycleBin = { ...next.recycleBin || {}, [id2]: { ...entry, items: structuredClone(removed) } };
   }
-  for (const group of Object.values(next.recycleBin || {})) if (!group.restoredAt) {
-    for (const item of group.items || []) if (item.path[0] === "attachments") {
+  for (const group of Object.values(next.recycleBin || {})) if (group && !group.restoredAt && Array.isArray(group.items)) {
+    for (const item of group.items) if (item?.path?.[0] === "attachments") {
       const collect = (x) => {
         if (!object(x)) return;
         if (x.key && next.attachmentGarbage) delete next.attachmentGarbage[x.key];
@@ -2521,7 +2534,8 @@ function get(state, path) {
 function restore(original, uid, id2) {
   admin(original, uid);
   const s = structuredClone(original), group = s.recycleBin?.[id2];
-  if (!group || group.restoredAt) fail3("\u0627\u0644\u0645\u062D\u0630\u0648\u0641\u0627\u062A \u063A\u064A\u0631 \u0645\u0648\u062C\u0648\u062F\u0629 \u0623\u0648 \u0633\u0628\u0642 \u0627\u0633\u062A\u0639\u0627\u062F\u062A\u0647\u0627", 404);
+  if (!group || group.restoredAt || !Array.isArray(group.items)) fail3("\u0627\u0644\u0645\u062D\u0630\u0648\u0641\u0627\u062A \u063A\u064A\u0631 \u0645\u0648\u062C\u0648\u062F\u0629 \u0623\u0648 \u0633\u0628\u0642 \u0627\u0633\u062A\u0639\u0627\u062F\u062A\u0647\u0627", 404);
+  if (group.items.some((x) => !x || !Array.isArray(x.path) || !x.path.length || x.path.some((k) => typeof k !== "string" || ["__proto__", "constructor", "prototype"].includes(k)))) fail3("\u0628\u064A\u0627\u0646\u0627\u062A \u0627\u0644\u0623\u0631\u0634\u064A\u0641 \u063A\u064A\u0631 \u0645\u0643\u062A\u0645\u0644\u0629\u061B \u0644\u0645 \u062A\u062A\u0645 \u0627\u0644\u0627\u0633\u062A\u0639\u0627\u062F\u0629", 409);
   for (const item of group.items) {
     if (get(s, item.path) !== void 0) fail3("\u062A\u0639\u0627\u0631\u0636 \u0645\u0639 \u0628\u064A\u0627\u0646\u0627\u062A \u062D\u0627\u0644\u064A\u0629 \u0641\u064A " + item.path.join("/") + "\u061B \u0644\u0645 \u064A\u062A\u0645 \u062A\u063A\u064A\u064A\u0631 \u0623\u064A \u0628\u064A\u0627\u0646\u0627\u062A", 409);
   }
@@ -2532,6 +2546,13 @@ function restore(original, uid, id2) {
       parent = parent[key] ||= {};
     }
     parent[item.path.at(-1)] = structuredClone(item.before);
+  }
+  const restoredPhones = new Set(group.items.filter((x) => x.path[0] === "patients").flatMap((x) => x.path.length === 1 ? Object.keys(x.before || {}) : [x.path[1]]));
+  for (const phone3 of restoredPhones) {
+    const id3 = s.patientPhoneIndex?.[phone3] || s.patients?.[phone3]?.patientId, record2 = id3 && s.patientIdentities?.[id3];
+    if (!record2) continue;
+    if (record2.phone !== phone3) fail3("\u0647\u0648\u064A\u0629 \u0627\u0644\u062D\u0627\u0644\u0629 \u0645\u0631\u062A\u0628\u0637\u0629 \u0627\u0644\u0622\u0646 \u0628\u0631\u0642\u0645 \u0622\u062E\u0631\u061B \u0644\u0645 \u062A\u062A\u0645 \u0627\u0644\u0627\u0633\u062A\u0639\u0627\u062F\u0629", 409);
+    delete record2.deletedAt;
   }
   for (const item of group.items.filter((x) => x.path[0] === "bookings")) {
     const rows = s.bookings[item.path[1]] || {};
@@ -2562,8 +2583,8 @@ function restore(original, uid, id2) {
 function list3(state, uid, input) {
   admin(state, uid);
   const page = Math.max(0, Math.floor(Number(input.page) || 0)), size = 30;
-  let rows = Object.values(state.recycleBin || {}).filter((x) => !x.restoredAt).sort((a, b) => b.at.localeCompare(a.at));
-  return { total: rows.length, page, rows: rows.slice(page * size, (page + 1) * size).map(({ items, ...entry }) => ({ ...entry, count: items.length, paths: items.map((x) => x.path.join("/")) })) };
+  let rows = Object.values(state.recycleBin || {}).filter((x) => x && !x.restoredAt && Array.isArray(x.items)).sort((a, b) => String(b.at || "").localeCompare(String(a.at || "")));
+  return { total: rows.length, page, rows: rows.slice(page * size, (page + 1) * size).map(({ items, ...entry }) => ({ ...entry, count: items.length, paths: items.filter((x) => Array.isArray(x?.path)).map((x) => x.path.join("/")) })) };
 }
 
 // supabase/functions/clinic-api/workflow.js
@@ -3092,7 +3113,7 @@ async function handle10(adapter2, input, uid, client) {
     await adapter2.mutate((original) => {
       if (!settings(original).showPatientRequests || !settings(original).changesEnabled) fail3("\u0637\u0644\u0628\u0627\u062A \u062A\u063A\u064A\u064A\u0631 \u0648\u0625\u0644\u063A\u0627\u0621 \u0627\u0644\u0645\u0648\u0627\u0639\u064A\u062F \u0645\u062A\u0648\u0642\u0641\u0629\u061B \u062A\u0648\u0627\u0635\u0644 \u0645\u0639 \u0627\u0644\u0639\u064A\u0627\u062F\u0629", 409);
       const s = structuredClone(original), booking2 = Object.values(s.bookings?.[date2] || {}).find((x) => x.phone === p);
-      if (!booking2 || ["cx", "done"].includes(booking2.s) || date2 < today()) return s;
+      if (!booking2 || booking2.s !== "wait" || date2 < today()) fail3("\u0647\u0630\u0627 \u0627\u0644\u062D\u062C\u0632 \u0644\u0645 \u064A\u0639\u062F \u0645\u062A\u0627\u062D\u064B\u0627 \u0644\u0644\u062A\u0639\u062F\u064A\u0644 \u0623\u0648 \u0627\u0644\u0625\u0644\u063A\u0627\u0621\u061B \u0623\u0639\u062F \u0639\u0631\u0636 \u062D\u062C\u0648\u0632\u0627\u062A\u0643 \u0623\u0648 \u062A\u0648\u0627\u0635\u0644 \u0645\u0639 \u0627\u0644\u0633\u0643\u0631\u062A\u0627\u0631\u064A\u0629", 409);
       if (!cutoff(s, booking2)) fail3("\u0627\u0644\u0645\u0648\u0639\u062F \u0642\u0631\u064A\u0628\u061B \u062A\u0648\u0627\u0635\u0644 \u0645\u0639 \u0627\u0644\u0633\u0643\u0631\u062A\u0627\u0631\u064A\u0629 \u0645\u0628\u0627\u0634\u0631\u0629", 409);
       const to = input.kind === "reschedule" ? validateDate(s, input.date) : date2, b = input.kind === "reschedule" ? input.branch : booking2.b;
       if (input.kind === "reschedule" && !available2(s, to).some((x) => x.id === b && !x.full && (x.scheduled || x.flexible))) fail3("\u0627\u0644\u0641\u0631\u0639 \u063A\u064A\u0631 \u0645\u062A\u0627\u062D \u0641\u064A \u0627\u0644\u0645\u0648\u0639\u062F \u0627\u0644\u0645\u0637\u0644\u0648\u0628", 409);
@@ -3551,13 +3572,39 @@ function mutate(original, uid, input, core) {
     const p = core.phone(input.phone);
     if (!/^01[0125]\d{8}$/.test(p)) core.fail("\u0647\u0627\u062A\u0641 \u063A\u064A\u0631 \u0635\u062D\u064A\u062D");
     assertAccess(s, r, p);
+    const patientId = idForPhone(s, p), bookingIds = /* @__PURE__ */ new Set(), advance = /* @__PURE__ */ new Set(), matches = (x) => !!x && (core.phone(x.phone || x.p) === p || !!patientId && x.patientId === patientId);
+    if (!allPatients(r)) {
+      const records2 = [...Object.values(s.bookings || {}).flatMap((rows) => Object.values(rows || {})), ...Object.values(s.deletedBookings || {}).map((x) => x?.booking)];
+      if (s.patients?.[p]?.br && s.patients[p].br !== r.br || records2.some((x) => matches(x) && x.b !== r.br)) core.fail("\u0627\u0644\u062D\u0627\u0644\u0629 \u0644\u0647\u0627 \u0628\u064A\u0627\u0646\u0627\u062A \u0641\u064A \u0641\u0631\u0639 \u0622\u062E\u0631\u061B \u062D\u0630\u0641 \u0627\u0644\u0645\u0644\u0641 \u0627\u0644\u0643\u0627\u0645\u0644 \u064A\u062D\u062A\u0627\u062C \u0635\u0644\u0627\u062D\u064A\u0629 \u062C\u0645\u064A\u0639 \u0627\u0644\u0641\u0631\u0648\u0639", 403);
+    }
     enqueue(s, s.attachments?.[p]);
     delete s.complaintSequences?.[p];
-    for (const rows of Object.values(s.bookings || {})) for (const [id2, x] of Object.entries(rows)) if (x.phone === p) delete rows[id2];
-    for (const [id2, x] of Object.entries(s.deletedBookings || {})) if (x.booking.phone === p) delete s.deletedBookings[id2];
+    for (const [date2, rows] of Object.entries(s.bookings || {})) for (const [id2, x] of Object.entries(rows || {})) if (matches(x)) {
+      bookingIds.add(id2);
+      if (x.s === "exam") advance.add(date2 + "_" + x.b);
+      delete rows[id2];
+    }
+    for (const [id2, x] of Object.entries(s.deletedBookings || {})) if (matches(x?.booking)) {
+      bookingIds.add(id2);
+      if (x.booking.id) bookingIds.add(x.booking.id);
+      delete s.deletedBookings[id2];
+    }
     for (const kind of ["patients", "files", "complaints", "followups", "attachments", "complaintSequences"]) delete s[kind]?.[p];
-    for (const root of ["clinicalVisits", "followupPlans", "urgentReviews", "bookingContacts"]) for (const [id2, x] of Object.entries(s[root] || {})) if (x.phone === p || x.p === p) delete s[root][id2];
-    for (const [id2, x] of Object.entries(s.inbox || {})) if (x.p === p) delete s.inbox[id2];
+    for (const root of ["clinicalVisits", "followupPlans", "urgentReviews", "bookingContacts", "checkins", "appointmentRequests", "waitingList", "tasks", "inbox"]) for (const [id2, x] of Object.entries(s[root] || {})) if (matches(x) || bookingIds.has(x?.bookingId) || bookingIds.has(x?.sourceBookingId) || ["checkins", "bookingContacts"].includes(root) && bookingIds.has(id2)) delete s[root][id2];
+    for (const drafts of Object.values(s.drafts || {})) for (const [id2, x] of Object.entries(drafts || {})) if (x && (core.phone(x.entity) === p || x.entity === patientId || bookingIds.has(x.entity) || matches(x.data))) delete drafts[id2];
+    delete s.editingPresence?.[p];
+    for (const key of advance) {
+      const date2 = key.slice(0, 10), branch2 = key.slice(11);
+      if (date2 !== core.today() || !core.canExamine(s, date2, branch2) || s.sessions?.[key] && s.sessions[key].status !== "running") continue;
+      const rows = Object.values(s.bookings?.[date2] || {}).filter((x) => x.b === branch2);
+      if (rows.some((x) => x.s === "exam")) continue;
+      const next = rows.filter((x) => x.s === "wait").sort(core.queueOrder)[0];
+      if (next) {
+        next.s = "exam";
+        next.startedAt = (/* @__PURE__ */ new Date()).toISOString();
+        next.rev = (next.rev || 0) + 1;
+      }
+    }
     ensure(s);
     core.rebuild(s);
     return s;
@@ -3565,8 +3612,12 @@ function mutate(original, uid, input, core) {
   if (input.action === "dataClear") {
     requirePermission(r, "data.delete");
     if (input.confirmation !== "DELETE_CLINIC_DATA") core.fail("\u062A\u0623\u0643\u064A\u062F \u0627\u0644\u062D\u0630\u0641 \u0645\u0637\u0644\u0648\u0628");
+    ensure(s);
     for (const items of Object.values(s.attachments || {})) enqueue(s, items);
-    for (const kind of ["bookings", "patients", "files", "complaints", "inbox", "track", "deletedBookings", "sessions", "followups", "attachments", "complaintSequences"]) s[kind] = {};
+    for (const kind of ["bookings", "patients", "files", "complaints", "inbox", "track", "deletedBookings", "sessions", "followups", "attachments", "complaintSequences", "clinicalVisits", "followupPlans", "urgentReviews", "bookingContacts", "checkins", "appointmentRequests", "waitingList", "tasks", "slotOpenings", "dayClosures", "scheduleTransferPending", "editingPresence"]) s[kind] = {};
+    for (const drafts of Object.values(s.drafts || {})) for (const [id2, x] of Object.entries(drafts || {})) if (["booking", "complaint", "medical", "patient", "task"].includes(x?.kind)) delete drafts[id2];
+    for (const batch of Object.values(s.settings?.trainingYearBatches || {})) if (batch && batch.status !== "purged") Object.assign(batch, { status: "purged", purgedAt: (/* @__PURE__ */ new Date()).toISOString(), purgedBy: uid });
+    ensure(s);
     return s;
   }
   core.fail("\u0639\u0645\u0644\u064A\u0629 \u063A\u064A\u0631 \u0645\u0633\u0645\u0648\u062D\u0629", 403);
@@ -4805,7 +4856,7 @@ function createService(baseAdapter) {
         requirePermission(role(s, uid), "clinic.manage");
         const b = input.branch, registry = branches(s);
         if (!Object.hasOwn(registry, b)) fail3("\u0627\u0644\u0641\u0631\u0639 \u063A\u064A\u0631 \u0645\u0648\u062C\u0648\u062F", 404);
-        const linked = Object.values(s.bookings || {}).some((rows) => Object.values(rows).some((x) => x.b === b)) || Object.values(s.roles || {}).some((x) => x.br === b) || Object.keys(s.sessions || {}).some((key) => key.endsWith("_" + b)) || Object.values(s.deletedBookings || {}).some((x) => x.booking?.b === b);
+        const linked = Object.values(s.bookings || {}).some((rows) => Object.values(rows).some((x) => x.b === b)) || Object.values(s.roles || {}).some((x) => x.br === b) || Object.keys(s.sessions || {}).some((key) => key.endsWith("_" + b)) || Object.values(s.deletedBookings || {}).some((x) => x?.booking?.b === b);
         if (linked) {
           archived = true;
           return save(s, uid, { branch: b, details: { ...registry[b], enabled: false } }, core_exports, permissions_exports);
@@ -4960,7 +5011,9 @@ function createService(baseAdapter) {
         requirePermission(r, "bookings.create");
         const item = s.deletedBookings?.[input.id];
         if (!item) fail3("\u0627\u0644\u062D\u062C\u0632 \u0627\u0644\u0645\u062D\u0630\u0648\u0641 \u063A\u064A\u0631 \u0645\u0648\u062C\u0648\u062F", 404);
-        const n = { ...item.booking, s: "wait" };
+        const stored = archivedBooking(item);
+        if (!stored || !branchIds(s).includes(stored.b)) fail3("\u0627\u0644\u062D\u062C\u0632 \u0627\u0644\u0645\u0624\u0631\u0634\u0641 \u0646\u0627\u0642\u0635 \u0627\u0644\u0628\u064A\u0627\u0646\u0627\u062A\u061B \u0644\u0645 \u064A\u062A\u0645 \u0627\u0633\u062A\u0631\u062C\u0627\u0639\u0647", 409);
+        const n = { ...stored, phone: phone(stored.phone), s: "wait" };
         if (!allBranches(r) && r.br !== n.b) fail3("\u063A\u064A\u0631 \u0645\u0635\u0631\u062D \u0644\u0647\u0630\u0627 \u0627\u0644\u0641\u0631\u0639", 403);
         if (Object.values(s.bookings || {}).some((rows2) => rows2[n.id])) fail3("\u0627\u0644\u062D\u062C\u0632 \u0645\u0648\u062C\u0648\u062F \u0628\u0627\u0644\u0641\u0639\u0644", 409);
         const rows = (s.bookings ||= {})[n.date] ||= {};

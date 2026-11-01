@@ -50,6 +50,38 @@ async function adapterRoundtrip(){
  await assert.rejects(adapter.mutate(()=>{calls++;return {}},{operational:true,receipt:request}),e=>e.code==='MUTATION_ALREADY_COMMITTED');assert.equal(calls,1);assert.equal(writes,1);checks++;
 }
 function docker(args){return cp.spawnSync('env',[...dockerArgs,...args],{encoding:'utf8'});}
+async function patientDeletionRoundtrip(){
+ // Exercise the actual gateway + Supabase adapter + canonical CAS + projection trigger.
+ const {supabaseAdapter}=await import(require('node:url').pathToFileURL(path.join(repo,'supabase/functions/clinic-api/adapter.js')).href);
+ const {createService}=await import(require('node:url').pathToFileURL(path.join(repo,'supabase/functions/clinic-api/service.js')).href);
+ const schema=fs.readFileSync(repo+'/supabase/migrations/20261014164841_clinic_schema.sql','utf8');
+ const cas=schema.match(/create or replace function public\.clinic_compare_and_swap\([\s\S]*?end \$\$;/)?.[0];assert.ok(cas);
+ sql(cas+'revoke all on function public.clinic_compare_and_swap(bigint,jsonb) from public,anon,authenticated;grant execute on function public.clinic_compare_and_swap(bigint,jsonb) to service_role;');
+ const initial=structuredClone(fixture);initial.deletedBookings={legacy:{deletedAt:'2026-10-01'},legacyNull:null};
+ require(repo+'/server/patient-identity.cjs').ensure(initial);
+ const phone='01011111111',patientId=initial.patientPhoneIndex[phone];
+ sql(`update public.clinic_state set payload=${j(initial)},version=10 where id=true;`);
+ let writes=0;
+ const adapter=supabaseAdapter('https://fixture.invalid','local-only',async(url,options)=>{
+  const target=new URL(url),name=target.pathname.split('/').at(-1),body=JSON.parse(options.body||'{}');let result;
+  if(name==='clinic_state')result=[JSON.parse(sql('set role service_role;select jsonb_build_object(\'version\',version,\'payload\',payload) from public.clinic_state where id=true;'))];
+  else if(name==='clinic_compare_and_swap'){
+   writes++;result=sql(`set role service_role;select public.clinic_compare_and_swap(${Number(body.expected_version)},${j(body.next_payload)});`)==='t';
+   if(writes===1)throw new TypeError('simulated lost delete response after actual SQL commit');
+  }else if(name==='clinic_read_slice')result=val(`public.clinic_read_slice(array[${body.fields.map(quote).join(',')}]::text[],${body.selected_day==null?'null':quote(body.selected_day)+'::date'},${body.entity==null?'null':quote(body.entity)})`);
+  else if(name==='clinic_patient_search_page')result=val(`public.clinic_patient_search_page(${quote(body.actor_uid)},${quote(body.search_query||'')},${body.selected_branch==null?'null':quote(body.selected_branch)},${Number(body.selected_page||0)},${Number(body.page_size||20)})`);
+  else throw Error('Unexpected deletion RPC '+name);
+  return new Response(JSON.stringify(result),{status:200,headers:{'Content-Type':'application/json'}});
+ });
+ const handle=createService(adapter);
+ await assert.rejects(handle({action:'patientDelete',phone},'admin'),e=>e.status===503);assert.equal(writes,1);checks++;
+ const persisted=JSON.parse(sql('set role service_role;select payload from public.clinic_state where id=true;'));
+ assert.equal(persisted.patients[phone],undefined);assert.equal(persisted.files[phone],undefined);assert.equal(persisted.complaints[phone],undefined);assert.ok(!Object.values(persisted.bookings||{}).flatMap(Object.values).some(x=>x.phone===phone));checks++;
+ for(const table of ['clinic_patients','clinic_files','clinic_complaints','clinic_bookings'])assert.equal(sql(`set role service_role;select count(*) from public.${table} where phone=${quote(phone)};`),'0');checks++;
+ const search=await handle({action:'patientSearch',query:phone},'admin');assert.equal(search.total,0);assert.deepEqual(search.rows,[]);checks++;
+ const trash=await handle({action:'trashList'},'admin');const entry=trash.rows.find(x=>x.action==='patientDelete');assert.ok(entry);await handle({action:'trashRestore',id:entry.id},'admin');checks++;
+ const restored=JSON.parse(sql('set role service_role;select payload from public.clinic_state where id=true;'));assert.equal(require(repo+'/server/patient-identity.cjs').idForPhone(restored,phone),patientId);assert.equal(restored.files[phone].n,initial.files[phone].n);assert.ok(restored.attachments[phone].x);assert.equal(sql(`set role service_role;select count(*) from public.clinic_patients where phone=${quote(phone)};`),'1');checks++;
+}
 (async()=>{
  let started=false;
  try{
@@ -57,7 +89,7 @@ function docker(args){return cp.spawnSync('env',[...dockerArgs,...args],{encodin
   const startedResult=docker(['run','--rm','-d','--network','none','--name',container,'-e','POSTGRES_HOST_AUTH_METHOD=trust','postgres:17.6-alpine']);assert.equal(startedResult.status,0,startedResult.stderr);started=true;
   let ready=false;for(let i=0;i<40;i++){if(docker(['exec',container,'pg_isready','-h','127.0.0.1','-U','postgres']).status===0){ready=true;break}await new Promise(resolve=>setTimeout(resolve,100));}assert.ok(ready,'Isolated PostgreSQL did not become ready');
   const created=docker(['exec',container,'createdb','-U','postgres',db]);assert.equal(created.status,0,created.stderr);
-  run();await adapterRoundtrip();const result={passed:checks,postgres:sql('show server_version;'),projectionTriggerTested:true,migrationsReapplied:true,deploymentBundleTested:process.argv.includes('--deployment-bundle'),adapterRoundtripWithLostResponse:true,scope:'isolated real PostgreSQL, not Supabase production'};
+  run();await adapterRoundtrip();await patientDeletionRoundtrip();const result={passed:checks,postgres:sql('show server_version;'),projectionTriggerTested:true,migrationsReapplied:true,deploymentBundleTested:process.argv.includes('--deployment-bundle'),adapterRoundtripWithLostResponse:true,patientDeletionAndRestoreThroughGateway:true,deletionProjectionReadback:true,lostDeleteResponseWithoutReplay:true,scope:'isolated real PostgreSQL, not Supabase production'};
   const outputIndex=process.argv.indexOf('--output');if(outputIndex>=0){const output=process.argv[outputIndex+1];assert.ok(output,'--output needs a file path');fs.mkdirSync(path.dirname(path.resolve(output)),{recursive:true});fs.writeFileSync(output,JSON.stringify(result,null,2)+'\n');}
   console.log(JSON.stringify(result));
  }finally{if(started)docker(['rm','-f',container]);}

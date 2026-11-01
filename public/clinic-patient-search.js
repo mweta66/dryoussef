@@ -7,11 +7,17 @@ function applyPatientDirectoryPage(page,owner){
  const kept=SEL&&PT?.[SEL]?{[SEL]:PT[SEL]}:{},rows=Array.isArray(page.rows)?page.rows.filter(x=>/^01[0125]\d{8}$/.test(x.phone)&&typeof(x.name??x.n)==='string'):[];PT=kept;for(const row of rows)PT[row.phone]=patientDirectoryRow(row);PTt=Date.now();
  Object.assign(PATIENT_DIRECTORY,{owner:key,query,page:Number(page.page)||0,pageSize:Number(page.pageSize)||20,total:Number(page.total)||0,pages:Math.max(1,Number(page.pages)||1),hasMore:page.hasMore===true,rows,loaded:true,loading:false,error:''});caseListPage=PATIENT_DIRECTORY.page;caseListQuery=query;return true;
 }
+function invalidatePatientDirectory(phone){
+ const state=PATIENT_DIRECTORY;clearTimeout(patientDirectoryTimer);state.version++;state.loaded=false;state.loading=false;state.flight=null;state.flightKey='';state.error='';PTt=0;
+ if(phone){state.rows=state.rows.filter(x=>x.phone!==phone);if(PT)delete PT[phone];}else{state.rows=[];PT=null;}
+ if(typeof dataEpoch!=='undefined')dataEpoch++;
+ patientDirectoryPaint();
+}
 function patientDirectoryPaint(){const box=document.getElementById('qres');if(box)box.innerHTML=qList();const directory=document.getElementById('nurse-directory');if(directory)directory.open=true;}
 async function fetchPatientDirectory(force){
  if(!me||!can('patients.read'))return;const owner=me,key=patientDirectoryOwner(),query=String(QS||''),page=Math.max(0,Number(caseListPage)||0),state=PATIENT_DIRECTORY;
  if(!force&&state.owner===key&&state.loaded&&state.query===query&&state.page===page&&Date.now()-PTt<60000)return;
- if(state.loading&&state.flightKey===JSON.stringify([key,query,page]))return state.flight;
+ if(!force&&state.loading&&state.flightKey===JSON.stringify([key,query,page]))return state.flight;
  const version=++state.version;state.loading=true;state.error='';state.flightKey=JSON.stringify([key,query,page]);
  const promise=(async()=>{try{const response=await gateway('patientSearch',{query,page,pageSize:20},true);if(me!==owner||patientDirectoryOwner()!==key||version!==state.version||String(QS||'')!==query||Math.max(0,Number(caseListPage)||0)!==page)return;applyPatientDirectoryPage({...response,query},owner)}catch(e){if(me===owner&&version===state.version){state.loading=false;state.error=errMsg(e)}}finally{if(version===state.version){state.loading=false;state.flight=null;patientDirectoryPaint()}}})();state.flight=promise;return promise;
 }

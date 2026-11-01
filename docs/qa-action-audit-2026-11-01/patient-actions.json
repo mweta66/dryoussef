@@ -1,0 +1,84 @@
+{
+  "scope": "isolated generated data; Chromium only; actual UI actions and explicit API negatives",
+  "results": [
+    {
+      "name": "phone validation: empty/invalid disabled; Arabic +20 accepts and lookup survives reload",
+      "pass": true
+    },
+    {
+      "name": "multiple booking select changes actual date/ticket and public API excludes medical fields",
+      "pass": true,
+      "detail": {
+        "bookings": 3
+      }
+    },
+    {
+      "name": "public calendar download and appointment popup expose operational details only",
+      "pass": true
+    },
+    {
+      "name": "WhatsApp configured number is visible on mobile and desktop and opens only approved chat URL",
+      "pass": true
+    },
+    {
+      "name": "new request rejects blank/invalid contact and keeps back-step values before pending submission",
+      "pass": true
+    },
+    {
+      "name": "change request uses phone-only existing booking selection and nurse receives notification",
+      "pass": true
+    },
+    {
+      "name": "cancel request hides new date controls and preserves booking until approval",
+      "pass": true
+    },
+    {
+      "name": "change request rejects completed/cancelled/exam/deleted selection before sending without false success",
+      "pass": true,
+      "detail": {
+        "racingStates": [
+          "done",
+          "cancelled",
+          "exam",
+          "deleted"
+        ]
+      }
+    },
+    {
+      "name": "date picker ignores stale slower availability response",
+      "pass": true
+    },
+    {
+      "name": "offline new-request submit stays open with unsaved error and creates no record",
+      "pass": true
+    },
+    {
+      "name": "lost new-request response after actual commit remains uncertain and retry reuses the same pending request",
+      "pass": true
+    },
+    {
+      "name": "display URL fixed future date controls correct queue without private medical/patient identity data",
+      "pass": true
+    },
+    {
+      "name": "notifications reach all eight accounts, respect secretary branch and redact identity without request-read permission",
+      "pass": true,
+      "detail": {
+        "accounts": 8
+      }
+    },
+    {
+      "name": "public direct private-read and malformed request API actions reject without mutation",
+      "pass": true,
+      "detail": {
+        "rejected": 5
+      }
+    },
+    {
+      "name": "browser JavaScript errors",
+      "pass": true,
+      "detail": []
+    }
+  ],
+  "errors": []
+}

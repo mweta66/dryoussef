@@ -1,0 +1,522 @@
+{
+  "scope": "Generated isolated local state; Chromium only. No production mutation.",
+  "checks": [
+    {
+      "role": "doctor",
+      "action": "booking form rejects empty and invalid phone",
+      "pass": true
+    },
+    {
+      "role": "doctor",
+      "action": "create booking with family -> persisted and survives reload",
+      "pass": true,
+      "detail": {
+        "bookingId": "73d24799c87449c0bc230315b6d3d15b",
+        "branch": "alex",
+        "ticket": 5
+      }
+    },
+    {
+      "role": "doctor",
+      "action": "duplicate same-day booking blocked without additional row",
+      "pass": true
+    },
+    {
+      "role": "doctor",
+      "action": "print patient PDF through visible booking button",
+      "pass": true,
+      "detail": {
+        "pdfBytes": 100987
+      }
+    },
+    {
+      "role": "doctor",
+      "action": "booking status done persists, ticket unchanged",
+      "pass": true
+    },
+    {
+      "role": "doctor",
+      "action": "booking status wait persists, ticket unchanged",
+      "pass": true
+    },
+    {
+      "role": "doctor",
+      "action": "booking status no persists, ticket unchanged",
+      "pass": true
+    },
+    {
+      "role": "doctor",
+      "action": "booking status cx persists, ticket unchanged",
+      "pass": true
+    },
+    {
+      "role": "doctor",
+      "action": "booking status wait persists, ticket unchanged",
+      "pass": true
+    },
+    {
+      "role": "doctor",
+      "action": "arrival and undo arrival persist with stable ticket",
+      "pass": true
+    },
+    {
+      "role": "doctor",
+      "action": "contact confirmation saves and is read back after reload",
+      "pass": true
+    },
+    {
+      "role": "doctor",
+      "action": "patient deletion forbidden to non-admin default role",
+      "pass": true
+    },
+    {
+      "role": "doctor",
+      "action": "edit booking name persists and does not erase family metadata",
+      "pass": true
+    },
+    {
+      "role": "doctor",
+      "action": "delete booking via visible control removes active row and archives it",
+      "pass": true
+    },
+    {
+      "role": "doctor",
+      "action": "start -> pause -> resume -> complete examination opens confirmed next file",
+      "pass": true
+    },
+    {
+      "role": "nurse",
+      "action": "booking form rejects empty and invalid phone",
+      "pass": true
+    },
+    {
+      "role": "nurse",
+      "action": "create booking with family -> persisted and survives reload",
+      "pass": true,
+      "detail": {
+        "bookingId": "bff0109182ac41f79c7e16f7a29f9b79",
+        "branch": "alex",
+        "ticket": 5
+      }
+    },
+    {
+      "role": "nurse",
+      "action": "duplicate same-day booking blocked without additional row",
+      "pass": true
+    },
+    {
+      "role": "nurse",
+      "action": "print patient PDF through visible booking button",
+      "pass": true,
+      "detail": {
+        "pdfBytes": 100688
+      }
+    },
+    {
+      "role": "nurse",
+      "action": "booking status done persists, ticket unchanged",
+      "pass": true
+    },
+    {
+      "role": "nurse",
+      "action": "booking status wait persists, ticket unchanged",
+      "pass": true
+    },
+    {
+      "role": "nurse",
+      "action": "booking status no persists, ticket unchanged",
+      "pass": true
+    },
+    {
+      "role": "nurse",
+      "action": "booking status cx persists, ticket unchanged",
+      "pass": true
+    },
+    {
+      "role": "nurse",
+      "action": "booking status wait persists, ticket unchanged",
+      "pass": true
+    },
+    {
+      "role": "nurse",
+      "action": "arrival and undo arrival persist with stable ticket",
+      "pass": true
+    },
+    {
+      "role": "nurse",
+      "action": "patient deletion forbidden to non-admin default role",
+      "pass": true
+    },
+    {
+      "role": "nurse",
+      "action": "nurse search -> select -> save two complaints with consecutive numbers and dates",
+      "pass": true
+    },
+    {
+      "role": "nurse",
+      "action": "nurse uploads image, views it, zooms/rotates and deletes own report",
+      "pass": true
+    },
+    {
+      "role": "nurse",
+      "action": "nurse uploads and downloads original PDF bytes",
+      "pass": true,
+      "detail": {
+        "pdfBytes": 7259
+      }
+    },
+    {
+      "role": "nurse",
+      "action": "nurse cannot read doctor notes or approve patient requests",
+      "pass": true
+    },
+    {
+      "role": "alex-sec",
+      "action": "booking form rejects empty and invalid phone",
+      "pass": true
+    },
+    {
+      "role": "alex-sec",
+      "action": "create booking with family -> persisted and survives reload",
+      "pass": true,
+      "detail": {
+        "bookingId": "61c151abe2c543959c7586fcf167149d",
+        "branch": "alex",
+        "ticket": 5
+      }
+    },
+    {
+      "role": "alex-sec",
+      "action": "duplicate same-day booking blocked without additional row",
+      "pass": true
+    },
+    {
+      "role": "alex-sec",
+      "action": "print patient PDF through visible booking button",
+      "pass": true,
+      "detail": {
+        "pdfBytes": 94999
+      }
+    },
+    {
+      "role": "alex-sec",
+      "action": "booking status done persists, ticket unchanged",
+      "pass": true
+    },
+    {
+      "role": "alex-sec",
+      "action": "booking status wait persists, ticket unchanged",
+      "pass": true
+    },
+    {
+      "role": "alex-sec",
+      "action": "booking status no persists, ticket unchanged",
+      "pass": true
+    },
+    {
+      "role": "alex-sec",
+      "action": "booking status cx persists, ticket unchanged",
+      "pass": true
+    },
+    {
+      "role": "alex-sec",
+      "action": "booking status wait persists, ticket unchanged",
+      "pass": true
+    },
+    {
+      "role": "alex-sec",
+      "action": "arrival and undo arrival persist with stable ticket",
+      "pass": true
+    },
+    {
+      "role": "alex-sec",
+      "action": "contact confirmation saves and is read back after reload",
+      "pass": true
+    },
+    {
+      "role": "alex-sec",
+      "action": "patient deletion forbidden to non-admin default role",
+      "pass": true
+    },
+    {
+      "role": "alex-sec",
+      "action": "foreign branch writes and general booking edits denied",
+      "pass": true
+    },
+    {
+      "role": "matrouh-sec",
+      "action": "booking form rejects empty and invalid phone",
+      "pass": true
+    },
+    {
+      "role": "matrouh-sec",
+      "action": "create booking with family -> persisted and survives reload",
+      "pass": true,
+      "detail": {
+        "bookingId": "743cd93767464270839c30f5648a8716",
+        "branch": "matrouh",
+        "ticket": 5
+      }
+    },
+    {
+      "role": "matrouh-sec",
+      "action": "duplicate same-day booking blocked without additional row",
+      "pass": true
+    },
+    {
+      "role": "matrouh-sec",
+      "action": "print patient PDF through visible booking button",
+      "pass": true,
+      "detail": {
+        "pdfBytes": 95879
+      }
+    },
+    {
+      "role": "matrouh-sec",
+      "action": "booking status done persists, ticket unchanged",
+      "pass": true
+    },
+    {
+      "role": "matrouh-sec",
+      "action": "booking status wait persists, ticket unchanged",
+      "pass": true
+    },
+    {
+      "role": "matrouh-sec",
+      "action": "booking status no persists, ticket unchanged",
+      "pass": true
+    },
+    {
+      "role": "matrouh-sec",
+      "action": "booking status cx persists, ticket unchanged",
+      "pass": true
+    },
+    {
+      "role": "matrouh-sec",
+      "action": "booking status wait persists, ticket unchanged",
+      "pass": true
+    },
+    {
+      "role": "matrouh-sec",
+      "action": "arrival and undo arrival persist with stable ticket",
+      "pass": true
+    },
+    {
+      "role": "matrouh-sec",
+      "action": "contact confirmation saves and is read back after reload",
+      "pass": true
+    },
+    {
+      "role": "matrouh-sec",
+      "action": "patient deletion forbidden to non-admin default role",
+      "pass": true
+    },
+    {
+      "role": "matrouh-sec",
+      "action": "foreign branch writes and general booking edits denied",
+      "pass": true
+    },
+    {
+      "role": "dmn-sec",
+      "action": "booking form rejects empty and invalid phone",
+      "pass": true
+    },
+    {
+      "role": "dmn-sec",
+      "action": "create booking with family -> persisted and survives reload",
+      "pass": true,
+      "detail": {
+        "bookingId": "93435c05bcea467cba00a5dc92836102",
+        "branch": "dmn",
+        "ticket": 5
+      }
+    },
+    {
+      "role": "dmn-sec",
+      "action": "duplicate same-day booking blocked without additional row",
+      "pass": true
+    },
+    {
+      "role": "dmn-sec",
+      "action": "print patient PDF through visible booking button",
+      "pass": true,
+      "detail": {
+        "pdfBytes": 95314
+      }
+    },
+    {
+      "role": "dmn-sec",
+      "action": "booking status done persists, ticket unchanged",
+      "pass": true
+    },
+    {
+      "role": "dmn-sec",
+      "action": "booking status wait persists, ticket unchanged",
+      "pass": true
+    },
+    {
+      "role": "dmn-sec",
+      "action": "booking status no persists, ticket unchanged",
+      "pass": true
+    },
+    {
+      "role": "dmn-sec",
+      "action": "booking status cx persists, ticket unchanged",
+      "pass": true
+    },
+    {
+      "role": "dmn-sec",
+      "action": "booking status wait persists, ticket unchanged",
+      "pass": true
+    },
+    {
+      "role": "dmn-sec",
+      "action": "arrival and undo arrival persist with stable ticket",
+      "pass": true
+    },
+    {
+      "role": "dmn-sec",
+      "action": "contact confirmation saves and is read back after reload",
+      "pass": true
+    },
+    {
+      "role": "dmn-sec",
+      "action": "patient deletion forbidden to non-admin default role",
+      "pass": true
+    },
+    {
+      "role": "dmn-sec",
+      "action": "foreign branch writes and general booking edits denied",
+      "pass": true
+    },
+    {
+      "role": "libya-sec",
+      "action": "booking form rejects empty and invalid phone",
+      "pass": true
+    },
+    {
+      "role": "libya-sec",
+      "action": "create booking with family -> persisted and survives reload",
+      "pass": true,
+      "detail": {
+        "bookingId": "a2b569550b6f4fe48a79fa426cd29ff2",
+        "branch": "libya",
+        "ticket": 5
+      }
+    },
+    {
+      "role": "libya-sec",
+      "action": "duplicate same-day booking blocked without additional row",
+      "pass": true
+    },
+    {
+      "role": "libya-sec",
+      "action": "print patient PDF through visible booking button",
+      "pass": true,
+      "detail": {
+        "pdfBytes": 93398
+      }
+    },
+    {
+      "role": "libya-sec",
+      "action": "booking status done persists, ticket unchanged",
+      "pass": true
+    },
+    {
+      "role": "libya-sec",
+      "action": "booking status wait persists, ticket unchanged",
+      "pass": true
+    },
+    {
+      "role": "libya-sec",
+      "action": "booking status no persists, ticket unchanged",
+      "pass": true
+    },
+    {
+      "role": "libya-sec",
+      "action": "booking status cx persists, ticket unchanged",
+      "pass": true
+    },
+    {
+      "role": "libya-sec",
+      "action": "booking status wait persists, ticket unchanged",
+      "pass": true
+    },
+    {
+      "role": "libya-sec",
+      "action": "arrival and undo arrival persist with stable ticket",
+      "pass": true
+    },
+    {
+      "role": "libya-sec",
+      "action": "contact confirmation saves and is read back after reload",
+      "pass": true
+    },
+    {
+      "role": "libya-sec",
+      "action": "patient deletion forbidden to non-admin default role",
+      "pass": true
+    },
+    {
+      "role": "libya-sec",
+      "action": "foreign branch writes and general booking edits denied",
+      "pass": true
+    },
+    {
+      "role": "data-entry",
+      "action": "booking form rejects empty and invalid phone",
+      "pass": true
+    },
+    {
+      "role": "data-entry",
+      "action": "create booking with family -> persisted and survives reload",
+      "pass": true,
+      "detail": {
+        "bookingId": "7e335b7b30364411900405bf385029a9",
+        "branch": "alex",
+        "ticket": 5
+      }
+    },
+    {
+      "role": "data-entry",
+      "action": "duplicate same-day booking blocked without additional row",
+      "pass": true
+    },
+    {
+      "role": "data-entry",
+      "action": "print patient PDF through visible booking button",
+      "pass": true,
+      "detail": {
+        "pdfBytes": 102609
+      }
+    },
+    {
+      "role": "data-entry",
+      "action": "patient deletion forbidden to non-admin default role",
+      "pass": true
+    },
+    {
+      "role": "data-entry",
+      "action": "data-entry cannot change booking status or read medical notes",
+      "pass": true
+    },
+    {
+      "role": "data-entry",
+      "action": "data-entry creates and edits patient demographics without clinical access",
+      "pass": true
+    },
+    {
+      "role": "all-staff",
+      "action": "no uncaught JavaScript errors",
+      "pass": true
+    }
+  ],
+  "notCovered": [
+    "Every possible field/value combination",
+    "Actual external Supabase Auth/Storage/network behavior",
+    "Safari/Firefox/Edge",
+    "OS print dialog and physical printer",
+    "Administrator configuration/account/recovery actions tested separately",
+    "Patient request assignment/approval and sensitive follow-up flows covered in separate runners, not this matrix"
+  ]
+}

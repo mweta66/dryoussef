@@ -26,7 +26,7 @@ function context(before,next,changes,input={}){
  out.patients=Object.fromEntries(Object.entries(out.patients).filter(([p])=>phones.has(p)));out.bookings=Object.fromEntries(Object.entries(out.bookings).filter(([k])=>tickets.has(k)));out.users=Object.fromEntries(Object.entries(out.users).filter(([id])=>users.has(id)||changes.some(c=>['by','editedBy','archivedBy'].includes(c.path.at(-1))&&[c.before,c.after].includes(id))));return out;
 }
 function record(before,next,input,uid){
- const changes=[];for(const root of ROOTS)diff(before[root]||{},next[root]||{},[root],changes);
+ const changes=[];const tracked=ROOTS.concat(['patientDelete','dataClear'].includes(input.action)?['drafts']:[]);for(const root of tracked)diff(before[root]||{},next[root]||{},[root],changes);
  const id=crypto.randomUUID(),at=new Date().toISOString(),branches=[...new Set((input.puts||[]).map(x=>x.n?.b).concat((input.dels||[]).map(x=>x.b)).filter(Boolean))];
  entryProvenance.stamp(before,next,input,uid,at);
  const phones=new Set();for(const change of changes){const [root,a,b]=change.path;if(['patients','files','complaints','attachments'].includes(root))phones.add(a);if(root==='bookings'&&b){for(const state of [before,next]){const booking=state.bookings?.[a]?.[b];if(booking?.b)branches.push(booking.b);if(booking?.phone)phones.add(booking.phone);}}if(root==='settings'&&['sched','branches'].includes(a)&&b)branches.push(b);}
@@ -40,13 +40,13 @@ function record(before,next,input,uid){
  const entry={id,at,actor:uid,actorName:before.roles?.[uid]?.displayName||before.roles?.[uid]?.u,action:input.action,target:input.uid,branch:input.branch||(branches.length===1?branches[0]:undefined),branches,changeCount:changes.length};
  next.audit=[...(before.audit||[]),entry];next.activityDetails={...(next.activityDetails||{}),[id]:changes.map(x=>safe(x))};next.activityContext={...(next.activityContext||{}),[id]:context(before,next,changes,{...input,actor:uid})};
  // Archive the exact missing subtrees, including original image references. No automatic expiry.
- if(input.action==='bookingRestore')for(const group of Object.values(next.recycleBin||{})){group.items=(group.items||[]).filter(x=>!(x.path[0]==='bookings'&&x.path[2]===input.id));if(!group.items.length)group.restoredAt=at;}
+ if(input.action==='bookingRestore')for(const group of Object.values(next.recycleBin||{})){if(!group||!Array.isArray(group.items))continue;group.items=group.items.filter(x=>!(x?.path?.[0]==='bookings'&&x.path[2]===input.id));if(!group.items.length)group.restoredAt=at;}
  const removed=changes.filter(x=>x.removed&&!['roles','sessions','complaintSequences'].includes(x.path[0]));
  if(removed.length&& !['trashRestore','bookingRestore','patientSave','userCredentials'].includes(input.action)){
   next.recycleBin={...(next.recycleBin||{}),[id]:{...entry,items:structuredClone(removed)}};
  }
  // A clinical deletion is reversible: do not let the physical cleanup outbox erase its reports.
- for(const group of Object.values(next.recycleBin||{}))if(!group.restoredAt)for(const item of group.items||[])if(item.path[0]==='attachments'){
+ for(const group of Object.values(next.recycleBin||{}))if(group&&!group.restoredAt&&Array.isArray(group.items))for(const item of group.items)if(item?.path?.[0]==='attachments'){
   const collect=x=>{if(!object(x))return;if(x.key&&next.attachmentGarbage)delete next.attachmentGarbage[x.key];for(const v of Object.values(x))if(object(v))collect(v)};collect(item.before);
  }
  return next;
@@ -54,9 +54,18 @@ function record(before,next,input,uid){
 function admin(state,uid,key='data.restore'){perms.requirePermission(core.role(state,uid),key);}
 function get(state,path){let x=state;for(const k of path)x=x?.[k];return x;}
 function restore(original,uid,id){
- admin(original,uid);const s=structuredClone(original),group=s.recycleBin?.[id];if(!group||group.restoredAt)core.fail('المحذوفات غير موجودة أو سبق استعادتها',404);
+ admin(original,uid);const s=structuredClone(original),group=s.recycleBin?.[id];if(!group||group.restoredAt||!Array.isArray(group.items))core.fail('المحذوفات غير موجودة أو سبق استعادتها',404);
+ if(group.items.some(x=>!x||!Array.isArray(x.path)||!x.path.length||x.path.some(k=>typeof k!=='string'||['__proto__','constructor','prototype'].includes(k))))core.fail('بيانات الأرشيف غير مكتملة؛ لم تتم الاستعادة',409);
  for(const item of group.items){if(get(s,item.path)!==undefined)core.fail('تعارض مع بيانات حالية في '+item.path.join('/')+'؛ لم يتم تغيير أي بيانات',409);}
  for(const item of group.items){let parent=s;for(const key of item.path.slice(0,-1)){if(parent[key]!==undefined&&!object(parent[key]))core.fail('تعارض مع بيانات أحدث',409);parent=parent[key]||={};}parent[item.path.at(-1)]=structuredClone(item.before);}
+ // Restore the same internal identity; a tombstone is for a NEW registration, not undo.
+ const restoredPhones=new Set(group.items.filter(x=>x.path[0]==='patients').flatMap(x=>x.path.length===1?Object.keys(x.before||{}):[x.path[1]]));
+ for(const phone of restoredPhones){
+  const id=s.patientPhoneIndex?.[phone]||s.patients?.[phone]?.patientId,record=id&&s.patientIdentities?.[id];
+  if(!record)continue;
+  if(record.phone!==phone)core.fail('هوية الحالة مرتبطة الآن برقم آخر؛ لم تتم الاستعادة',409);
+  delete record.deletedAt;
+ }
  // Restored bookings are waiting, never resume a past examination or reuse a ticket.
  for(const item of group.items.filter(x=>x.path[0]==='bookings')){
   const rows=s.bookings[item.path[1]]||{};const restored=item.path.length===2?Object.values(rows):[rows[item.path[2]]];
@@ -66,5 +75,5 @@ function restore(original,uid,id){
  for(const [phone,rows]of Object.entries(s.complaints||{})){s.complaintSequences||={};s.complaintSequences[phone]=Math.max(original.complaintSequences?.[phone]||0,s.complaintSequences[phone]||0,...Object.values(rows).map(x=>x.no||0));}
  group.restoredAt=new Date().toISOString();group.restoredBy=uid;core.rebuild(s);return s;
 }
-function list(state,uid,input){admin(state,uid);const page=Math.max(0,Math.floor(Number(input.page)||0)),size=30;let rows=Object.values(state.recycleBin||{}).filter(x=>!x.restoredAt).sort((a,b)=>b.at.localeCompare(a.at));return {total:rows.length,page,rows:rows.slice(page*size,(page+1)*size).map(({items,...entry})=>({...entry,count:items.length,paths:items.map(x=>x.path.join('/'))}))};}
+function list(state,uid,input){admin(state,uid);const page=Math.max(0,Math.floor(Number(input.page)||0)),size=30;let rows=Object.values(state.recycleBin||{}).filter(x=>x&&!x.restoredAt&&Array.isArray(x.items)).sort((a,b)=>String(b.at||'').localeCompare(String(a.at||'')));return {total:rows.length,page,rows:rows.slice(page*size,(page+1)*size).map(({items,...entry})=>({...entry,count:items.length,paths:items.filter(x=>Array.isArray(x?.path)).map(x=>x.path.join('/'))}))};}
 module.exports={context,record,restore,list,admin,diff};

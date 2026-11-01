@@ -1,0 +1,43 @@
+{
+  "scope": "isolated generated state; real browser forms and physical-state readback",
+  "checks": [
+    {
+      "name": "default secretary assigns and approves new public request; visit type and responsible employee persist after reload",
+      "pass": true,
+      "detail": {
+        "request": "195e6486-bc35-4bb7-be52-7584548e645e",
+        "booking": "ce4e580d-6e87-4752-8799-9d1aeb17528d",
+        "ticket": 8
+      }
+    },
+    {
+      "name": "default secretary approves requested reschedule without general booking-edit privilege",
+      "pass": true,
+      "detail": {
+        "date": "2026-11-04",
+        "ticket": 1
+      }
+    },
+    {
+      "name": "secretary approves cancellation and then rejects a separate request without creating a booking",
+      "pass": true,
+      "detail": {
+        "cancelled": "523d4298-0a3f-4ec8-82c1-edf4ac05796f",
+        "rejected": "30abf70c-0167-4c39-bea8-89129eeecc15"
+      }
+    },
+    {
+      "name": "two real staff views cannot approve the same request twice; stale reviewer keeps a conflict",
+      "pass": true,
+      "detail": {
+        "duplicateBookings": 0
+      }
+    },
+    {
+      "name": "request decision browser JavaScript errors",
+      "pass": true,
+      "detail": []
+    }
+  ],
+  "errors": []
+}
