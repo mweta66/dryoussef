@@ -1,0 +1,7 @@
+{
+  "network": {"allowed_domains": ["dryoussef.vercel.app", "matkxrnobjdewhptybpj.supabase.co", "api.supabase.com"]},
+  "secrets": [
+    {"name": "SUPABASE_ACCESS_TOKEN", "source": "environment", "target": {"type": "environment_variable", "name": "SUPABASE_ACCESS_TOKEN", "allowed_domains": ["api.supabase.com"]}},
+    {"name": "SUPABASE_SERVICE_ROLE_KEY", "source": "environment", "target": {"type": "environment_variable", "name": "SUPABASE_SERVICE_ROLE_KEY", "allowed_domains": ["matkxrnobjdewhptybpj.supabase.co"]}}
+  ]
+}

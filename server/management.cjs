@@ -1,3 +1,4 @@
+const patientIdentity=require('./patient-identity.cjs');
 const displayOptions=require('./display-options.cjs');
 const siteContent=require('./site-content.cjs');
 const perms=require('./permissions.cjs'),cases=require('./cases.cjs');
@@ -70,17 +71,17 @@ function mutate(original,uid,input,core){
   if(s.patients[p])cases.assertAccess(s,r,p);
   if(p!==to&&s.patients[to])core.fail('رقم الهاتف الجديد مستخدم لحالة أخرى',409);
   const spouse={};for(const k of ['spouseName','spouseJob','spousePhone'])if(Object.hasOwn(input,k)){if(typeof input[k]!=='string'||input[k].length>120)core.fail('راجع بيانات الزوج');spouse[k]=k==='spousePhone'?core.phone(input[k]):input[k].trim();if(k==='spousePhone'&&spouse[k]&&!/^01[0125]\d{8}$/.test(spouse[k]))core.fail('رقم موبايل الزوج غير صحيح');}
-  s.patients[to]={...s.patients[p],...spouse,n:name,d:s.patients[p]?.d||core.today(),...(!cases.allPatients(r)?{br:r.br}:{})};if(p!==to)delete s.patients[p];
+  const stableId=patientIdentity.rename(s,p,to);s.patients[to]={...s.patients[p],...(stableId?{id:stableId,patientId:stableId}:{}),...spouse,n:name,d:s.patients[p]?.d||core.today(),...(!cases.allPatients(r)?{br:r.br}:{})};if(p!==to)delete s.patients[p];
   for(const rows of Object.values(s.bookings||{}))for(const x of Object.values(rows))if(x.phone===p){x.phone=to;x.name=name;x.rev=(x.rev||0)+1;}
   if(p!==to)for(const kind of ['files','complaints','followups','attachments','complaintSequences'])if(s[kind]?.[p]){s[kind][to]=s[kind][p];delete s[kind][p];}
-  for(const n of Object.values(s.inbox||{}))if(n.p===p){n.p=to;n.n=name;}core.rebuild(s);return s;
+  for(const n of Object.values(s.inbox||{}))if(n.p===p){n.p=to;n.n=name;}patientIdentity.ensure(s);core.rebuild(s);return s;
  }
  if(input.action==='patientDelete'){
   perms.requirePermission(r,'patients.delete');const p=core.phone(input.phone);if(!/^01[0125]\d{8}$/.test(p))core.fail('هاتف غير صحيح');cases.assertAccess(s,r,p);
   storageCleanup.enqueue(s,s.attachments?.[p]);delete s.complaintSequences?.[p];
   for(const rows of Object.values(s.bookings||{}))for(const [id,x] of Object.entries(rows))if(x.phone===p)delete rows[id];
   for(const [id,x] of Object.entries(s.deletedBookings||{}))if(x.booking.phone===p)delete s.deletedBookings[id];
-  for(const kind of ['patients','files','complaints','followups','attachments','complaintSequences'])delete s[kind]?.[p];for(const [id,x] of Object.entries(s.inbox||{}))if(x.p===p)delete s.inbox[id];core.rebuild(s);return s;
+  for(const kind of ['patients','files','complaints','followups','attachments','complaintSequences'])delete s[kind]?.[p];for(const root of ['clinicalVisits','followupPlans','urgentReviews','bookingContacts'])for(const [id,x]of Object.entries(s[root]||{}))if(x.phone===p||x.p===p)delete s[root][id];for(const [id,x] of Object.entries(s.inbox||{}))if(x.p===p)delete s.inbox[id];patientIdentity.ensure(s);core.rebuild(s);return s;
  }
  if(input.action==='dataClear'){
   perms.requirePermission(r,'data.delete');if(input.confirmation!=='DELETE_CLINIC_DATA')core.fail('تأكيد الحذف مطلوب');

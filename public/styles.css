@@ -308,3 +308,11 @@ input:focus,select:focus,textarea:focus{outline:3px solid var(--pri);outline-off
 .request-notification-empty{padding:22px 8px;text-align:center;line-height:1.9}
 .request-notification-target{outline:3px solid var(--pri);outline-offset:4px}
 @media(max-width:480px){.request-notification-center{padding:14px}.request-center-heading h2{font-size:18px}.request-center-actions .btn{flex:1 1 125px}.request-notification-item .acts .btn{flex:1 1 125px}}
+
+/* Native hidden attributes must remain hidden under component display rules. */
+[hidden]{display:none!important}
+
+.clinic-save-state{display:flex;align-items:center;justify-content:space-between;gap:10px;min-height:40px;margin:0;padding:10px 16px;border:0;border-radius:0;background:var(--soft);color:var(--ink);font-size:.9rem;line-height:1.6;overflow-wrap:anywhere}
+.clinic-save-state[data-status="verifying"]{border-inline-start:4px solid var(--amb)}
+.clinic-save-state[data-status="not_saved"]{border-inline-start:4px solid var(--bad)}
+.clinic-save-state[data-status="saved"]{border-inline-start:4px solid var(--ok)}

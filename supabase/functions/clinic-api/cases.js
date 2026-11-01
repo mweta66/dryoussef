@@ -1,3 +1,4 @@
+import * as patientIdentity from './patient-identity.js';
 import * as perms from './permissions.js';
 const fail=(m,s=400)=>{const e=new Error(m);e.status=s;throw e};
 const validPhone=p=>/^01[0125]\d{8}$/.test(p);
@@ -7,7 +8,7 @@ function indexPatients(state){
  for(const rows of Object.values(state.bookings||{}))for(const x of Object.values(rows||{})){
   if(validPhone(x.phone)&&(!state.patients[x.phone]||state.patients[x.phone].d<=x.date))state.patients[x.phone]={...state.patients[x.phone],n:x.name,d:x.date};
  }
- return state;
+ patientIdentity.ensure(state);return state;
 }
 function allPatients(r){return perms.allBranches(r)||(r.r==='nurse'&&!r.scope&&!r.br);}
 function canAccess(state,r,phone){return allPatients(r)||state.patients?.[phone]?.br===r.br&&!!r.br||Object.values(state.bookings||{}).some(rows=>Object.values(rows).some(x=>x.phone===phone&&x.b===r.br));}
