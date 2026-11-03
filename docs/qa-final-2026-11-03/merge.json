@@ -1,0 +1,54 @@
+{
+  "scope": "Generated isolated state; Chromium form actions and persisted readback, not production",
+  "entrypoint": "workflowMerge()/workflowMerges() test invocation; forms and save/undo/delete/restore controls are clicked normally",
+  "results": [
+    {
+      "name": "merge form preserves doctor history, follow-up, report bytes, pending workflows and stable target identity",
+      "pass": true,
+      "detail": {
+        "sourceIdentity": "pat_289283c242805cf45ebb46e94bff9b67",
+        "targetIdentity": "pat_80240359a0578cb6118df1f2df4a4810",
+        "modernRoots": 8
+      }
+    },
+    {
+      "name": "merge history undo control restores the complete source/target graph exactly",
+      "pass": true,
+      "detail": {
+        "restoredRoots": 21
+      }
+    },
+    {
+      "name": "stale merge preview is rejected through the form without changing either patient",
+      "pass": true,
+      "detail": {
+        "atomic": true
+      }
+    },
+    {
+      "name": "new clinical activity makes the undo control reject atomically",
+      "pass": true,
+      "detail": {
+        "newVisitPreserved": true
+      }
+    },
+    {
+      "name": "merged target can be deleted and restored with all linked history and original report image",
+      "pass": true,
+      "detail": {
+        "sameIdentity": true,
+        "reportOriginalBytes": 69
+      }
+    },
+    {
+      "name": "no uncaught JavaScript errors in the exercised merge and recovery paths",
+      "pass": true
+    }
+  ],
+  "errors": [],
+  "notCovered": [
+    "Production Supabase Auth/Storage",
+    "Native Safari/iPhone",
+    "Ordinary user navigation to intentionally hidden merge tools"
+  ]
+}

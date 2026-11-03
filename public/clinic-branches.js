@@ -32,9 +32,12 @@ function syncBookingSchedule(reason){
 }
 function bookingBranchWarning(){
  if(!me||!staffView())return;
- const modal=document.querySelector('.mod'),dateInput=document.getElementById('f_date');if(!modal||!dateInput||!document.getElementById('f_phone'))return;
+ const modal=document.querySelector('.mod'),dateInput=document.getElementById('f_date'),select=document.getElementById('f_b'),b=select?.value||me.br,date=dateInput?.value;
+ // New appointment forms own their f_branch availability controller and its status.
+ // A generic date/phone form is not enough to infer an admin's booking branch.
+ if(!modal||!dateInput||!document.getElementById('f_phone')||document.getElementById('f_branch')||!BR[b]||!/^\d{4}-\d{2}-\d{2}$/.test(date||'')){document.getElementById('booking-branch-warning')?.remove();return;}
  let note=document.getElementById('booking-branch-warning');if(!note){note=document.createElement('div');note.id='booking-branch-warning';note.className='box';note.setAttribute('role','status');modal.prepend(note)}note.replaceChildren();
- const select=document.getElementById('f_b'),b=select?.value||me.br,date=dateInput.value,present=SESSIONS[today()+'_presence']?.branch,suggestions=clinicBookingSuggestions(BR,S.sched,date);
+ const present=SESSIONS[today()+'_presence']?.branch,suggestions=clinicBookingSuggestions(BR,S.sched,date);
  const add=text=>{const p=document.createElement('p');p.className='hint';p.textContent=text;note.append(p)};
  add('الحجز سيُحفظ في '+(BR[b]?.name||b)+' بتاريخ '+date);
  if(date===today()&&present)add('تواجد الطبيب الفعلي اليوم: '+(BR[present]?.name||present)+(present!==b?' — الحجز متاح هنا، لكن الكشف يبدأ بعد انتقال الطبيب.':''));

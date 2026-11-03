@@ -1,0 +1,197 @@
+{
+  "scope": "Generated isolated actual browser contexts; browser clocks advance44000ms per window for the shared-minute budget check; no production",
+  "results": [
+    {
+      "name": "session start reaches both displays",
+      "pass": true,
+      "ticket": 4
+    },
+    {
+      "name": "booking done reaches next ticket on both displays",
+      "pass": true,
+      "ticket": 1
+    },
+    {
+      "name": "focused consultation completion reaches next ticket on both displays",
+      "pass": true,
+      "ticket": 2
+    },
+    {
+      "name": "pause and resume reflect in both display windows without changing the active ticket",
+      "pass": true,
+      "ticket": 2
+    },
+    {
+      "name": "ending then starting a session advances both displays and preserves every issued ticket",
+      "pass": true,
+      "ticket": 3
+    },
+    {
+      "name": "each display document receives a separate bounded anonymous identifier",
+      "pass": true
+    },
+    {
+      "name": "two normal display windows avoid publicQueue rate-limit exhaustion",
+      "pass": true,
+      "rateLimitedResponses": 0,
+      "totalQueueReads": 30
+    },
+    {
+      "name": "no uncaught browser errors",
+      "pass": true
+    }
+  ],
+  "network": [
+    {
+      "screen": 0,
+      "status": 200,
+      "at": 1793735508147
+    },
+    {
+      "screen": 1,
+      "status": 200,
+      "at": 1793735508708
+    },
+    {
+      "screen": 0,
+      "status": 200,
+      "at": 1793735514112
+    },
+    {
+      "screen": 1,
+      "status": 200,
+      "at": 1793735514655
+    },
+    {
+      "screen": 0,
+      "status": 200,
+      "at": 1793735520112
+    },
+    {
+      "screen": 1,
+      "status": 200,
+      "at": 1793735520656
+    },
+    {
+      "screen": 0,
+      "status": 200,
+      "at": 1793735526113
+    },
+    {
+      "screen": 1,
+      "status": 200,
+      "at": 1793735526655
+    },
+    {
+      "screen": 0,
+      "status": 200,
+      "at": 1793735532113
+    },
+    {
+      "screen": 1,
+      "status": 200,
+      "at": 1793735532656
+    },
+    {
+      "screen": 0,
+      "status": 200,
+      "at": 1793735538115
+    },
+    {
+      "screen": 1,
+      "status": 200,
+      "at": 1793735538666
+    },
+    {
+      "screen": 0,
+      "status": 200,
+      "at": 1793735544114
+    },
+    {
+      "screen": 1,
+      "status": 200,
+      "at": 1793735544660
+    },
+    {
+      "screen": 0,
+      "status": 200,
+      "at": 1793735550117
+    },
+    {
+      "screen": 1,
+      "status": 200,
+      "at": 1793735550662
+    },
+    {
+      "screen": 0,
+      "status": 200,
+      "at": 1793735550715
+    },
+    {
+      "screen": 1,
+      "status": 200,
+      "at": 1793735550800
+    },
+    {
+      "screen": 0,
+      "status": 200,
+      "at": 1793735550835
+    },
+    {
+      "screen": 1,
+      "status": 200,
+      "at": 1793735550884
+    },
+    {
+      "screen": 0,
+      "status": 200,
+      "at": 1793735550923
+    },
+    {
+      "screen": 1,
+      "status": 200,
+      "at": 1793735550970
+    },
+    {
+      "screen": 0,
+      "status": 200,
+      "at": 1793735551027
+    },
+    {
+      "screen": 1,
+      "status": 200,
+      "at": 1793735551065
+    },
+    {
+      "screen": 0,
+      "status": 200,
+      "at": 1793735551103
+    },
+    {
+      "screen": 1,
+      "status": 200,
+      "at": 1793735551143
+    },
+    {
+      "screen": 0,
+      "status": 200,
+      "at": 1793735551180
+    },
+    {
+      "screen": 1,
+      "status": 200,
+      "at": 1793735551216
+    },
+    {
+      "screen": 0,
+      "status": 200,
+      "at": 1793735551248
+    },
+    {
+      "screen": 1,
+      "status": 200,
+      "at": 1793735551295
+    }
+  ],
+  "errors": []
+}

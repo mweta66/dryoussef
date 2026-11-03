@@ -1,63 +1,20 @@
 {
-  "release": "2026.11.01.3",
+  "release": "2026.11.03.1",
   "repository": "mweta66/dryoussef",
   "branch": "codex/patient-delete-action-audit",
   "supabaseProjectRef": "matkxrnobjdewhptybpj",
   "functionSlug": "clinic-api",
   "verifyJwt": false,
-  "entrypoint": "supabase/functions/clinic-api/index.js",
   "dashboardBundle": "deployment/clinic-api.js",
-  "productionUrl": "https://dryoussef.vercel.app",
   "newSqlMigrationForThisRelease": false,
-  "prerequisites": "Verify previous clinical workflow SQL migrations exist; deployment/clinical-workflow-upgrade.sql installs the three Oct31 migrations if still missing.",
-  "configurationProposal": {
-    "config": {
-      "network": {
-        "allowed_domains": [
-          "dryoussef.vercel.app",
-          "matkxrnobjdewhptybpj.supabase.co",
-          "api.supabase.com"
-        ]
-      },
-      "secrets": [
-        {
-          "name": "SUPABASE_ACCESS_TOKEN",
-          "source": "environment",
-          "target": {
-            "type": "environment_variable",
-            "name": "SUPABASE_ACCESS_TOKEN",
-            "allowed_domains": [
-              "api.supabase.com"
-            ]
-          }
-        }
-      ]
-    },
-    "notes": {
-      "status": "not_saved_stale_base",
-      "preserveExistingConfiguration": true,
-      "omitRepositoriesAndScripts": "Preserve current values; reconcile against the current draft in a new environment setup chat.",
-      "secretValues": "Enter only in environment Secrets UI, never in chat or Git."
-    }
-  },
-  "savedConfiguration": false,
-  "rejection": "stale_base",
+  "priorVersionUserConfirmed": "2026.11.01.3",
   "deploymentPerformed": false,
+  "strategy": "Pinned immutable HTTPS import of bundled gateway in dashboard index.js; source is embedded and has no fixture dependency.",
   "steps": [
-    "Read the current environment draft in a new setup chat; reconcile and save the proposed domains and secret requirement without changing existing repositories/scripts.",
-    "Have the user bind the Supabase personal access token securely and publish the environment configuration; recheck observed network/credential readiness.",
-    "Inspect production SQL prerequisites and retain the existing gateway code/config and current backups.",
-    "Deploy clinic-api to the specified ref, preserving existing hosted secrets and verify_jwt=false. Verify public settings and unauthenticated protected-call rejection.",
-    "Only after the gateway is healthy, update GitHub main preserving current remote commits; never force push. The linked Vercel production integration must build the same release.",
-    "Verify matching frontend/service version2026.11.01.3. Sign in once as administrator to run the audited secretaryClinicalAccessUpgrade; refresh secretary account to verify protected reads and write/branch denials."
+    "Deploy new gateway bundle to clinic-api preserving hosted secrets and verify_jwt=false.",
+    "Verify protected admin systemVersion reports2026.11.03.1.",
+    "Only after gateway verification update main and linked Vercel frontend.",
+    "Verify frontend and service2026.11.03.1, then real admin session->queue screen advancement."
   ],
-  "limitations": [
-    "No production credentials available in the current task.",
-    "Current runtime network policy does not grant the deployment destinations.",
-    "The configuration update was rejected; no environment changes or production deployment were made.",
-    "Actual Vercel Git production integration and Auth/Storage behavior must be checked after access is ready."
-  ],
-  "validatedClinicalCommit": "fb1a42c7de5e665ea43ff8402cde3166287ef751",
-  "deployRef": "refs/heads/codex/patient-delete-action-audit",
-  "packagingNote": "Use the current branch files, including the embedded training map in supabase/functions/clinic-api/training-assignment.js. The single-file bundle must start/end with CLINIC_API_BUNDLE_START/END 2026.11.01.3. The earlier clinical commit has no copy markers and retains an external fixture source import."
+  "report": "docs/final-audit-2026-11-03-ar.md"
 }

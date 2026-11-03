@@ -26,3 +26,90 @@ test('visit snapshots remain explicitly dated and are not copied into todays edi
 test('admin visit duration editor validates numbers and submits all types without financial fields',async()=>{let form,calls=[];const {c}=harness({me:{role:'admin'},settingsCache:{visitDurations:{exam:20,cons:10,follow:12,emergency:25}},settingsTime:1,loadSettings:async()=>{},openForm:(title,fields,save)=>{form={title,fields,save}},gateway:async(a,p)=>{calls.push({a,p});return {ok:true}}});c.document.querySelector=()=>null;c.openVisitDurations();assert.deepEqual(Array.from(form.fields,x=>x.k),['exam','cons','follow','emergency']);assert.equal(form.fields[0].v,20);assert.equal(typeof await form.save({exam:'0',cons:'10',follow:'5',emergency:'20'}),'string');assert.equal(calls.length,0);const saved=await form.save({exam:'20',cons:'10',follow:'5',emergency:'25'});assert.equal(calls[0].a,'visitDurationsSave');assert.equal(calls[0].p.durations.follow,5);assert.ok(saved.successMessage.includes('حُفظت'));assert.ok(!form.fields.some(x=>/دفع|سعر|مال|تحصيل/.test(x.l)));});
 
 test('returning to a remounted focused screen invalidates a cached examination revision and in-flight read',async()=>{const {c}=harness();seed(c);c.CARE.loadedAt=Date.now();c.CARE.loading=Promise.resolve('old request');const prior=c.CARE.request;c.carePage('consultation');assert.equal(c.CARE.loadedAt,0);assert.equal(c.CARE.loading,null);assert.ok(c.CARE.request>prior);c.gateway=async()=>({bookings:[{...row(),rev:4}],selected:{phone:row().phone,file:{rev:1,n:'ملف حديث'}},checkins:{}});await c.careLoad(false);assert.equal(c.CARE.rows[0].rev,4);assert.equal(c.CARE.selectedId,'a');});
+
+test('focused medical draft requests are serialized and an older response never reports newer text as saved',async()=>{
+ const {c,nodes}=harness();seed(c);c.CARE.dirty=true;c.CARE.draft.n='الأقدم';
+ const calls=[],release=[];nodes['care-save-status']={textContent:'نص أحدث لم يؤكد بعد'};
+ c.gateway=(action,input)=>{assert.equal(action,'draftSave');calls.push(input);return new Promise(resolve=>release.push(resolve));};
+ const older=c.careSavePrivateDraft();await new Promise(setImmediate);assert.equal(calls.length,1);
+ c.CARE.draft.n='الأحدث';const newer=c.careSavePrivateDraft();await new Promise(setImmediate);assert.equal(calls.length,1);
+ release.shift()({id:'draft'});await new Promise(setImmediate);
+ assert.equal(calls.length,2);assert.equal(calls[0].data.n,'الأقدم');assert.equal(calls[1].data.n,'الأحدث');
+ assert.equal(nodes['care-save-status'].textContent,'نص أحدث لم يؤكد بعد');
+ release.shift()({id:'draft'});await Promise.all([older,newer]);
+ assert.match(nodes['care-save-status'].textContent,/حُفظت مسودة خاصة/);assert.equal(c.CARE.draft.n,'الأحدث');
+});
+
+test('confirmed completion cleans a pending old draft after it settles without touching the next patient draft',async()=>{
+ const {c}=harness();seed(c);c.CARE.dirty=true;c.CARE.draft.n='مسودة قديمة';
+ const calls=[];let release;
+ c.gateway=async(action,input)=>{
+  calls.push({action,input});
+  if(action==='draftSave'&&input.entity==='01011111111')return new Promise(resolve=>release=resolve);
+  if(action==='draftSave')return {id:'next-draft'};
+  if(action==='draftDelete')return {ok:true};
+  if(action==='consultationComplete')return {ok:true};
+  if(action==='consultationView')return {bookings:[{...row('a','done'),rev:3},{...row('b','exam'),phone:'01011111112',no:2}],checkins:{},selected:{phone:'01011111112',name:'التالية',file:{n:'ملف التالية',rev:1},complaints:[]}};
+  throw Error('Unexpected '+action);
+ };
+ const older=c.careSavePrivateDraft();await new Promise(setImmediate);
+ c.CARE.draft.n='النص الطبي النهائي';await c.careSave(true);
+ const pending=c.CARE.privateDrafts.get('01011111111').queue;
+ assert.equal(c.CARE.selected.phone,'01011111112');assert.equal(c.CARE.draftId,null);
+ c.CARE.dirty=true;c.CARE.draft=c.careMedicalDraft(c.CARE.selected.file);c.CARE.draft.n='مسودة التالية';
+ await c.careSavePrivateDraft();assert.equal(c.CARE.draftId,'next-draft');
+ release({id:'old-draft'});await older;await pending;
+ assert.deepEqual(calls.filter(x=>x.action==='draftDelete').map(x=>x.input.id),['old-draft']);
+ assert.equal(c.CARE.selected.phone,'01011111112');assert.equal(c.CARE.draftId,'next-draft');assert.equal(c.CARE.draft.n,'مسودة التالية');
+});
+
+test('an old medical draft keeps its captured patient and branch and cannot update another branch UI',async()=>{
+ const {c,nodes}=harness();seed(c);c.CARE.dirty=true;c.CARE.draft.n='فرع الإسكندرية';
+ let input,release;nodes['care-save-status']={textContent:'حالة الفرع الحالي'};
+ c.gateway=(action,payload)=>{input=payload;return new Promise(resolve=>release=resolve);};
+ const pending=c.careSavePrivateDraft();await new Promise(setImmediate);
+ c.CARE.branch='matrouh';c.CARE.selected={phone:'01011111112',file:{rev:1}};c.CARE.draftId=null;c.CARE.draft={n:'نص حالة أخرى',rev:1};
+ release({id:'old-draft'});await pending;
+ assert.equal(input.entity,'01011111111');assert.equal(input.branch,'alex');assert.equal(input.data.n,'فرع الإسكندرية');
+ assert.equal(c.CARE.draftId,null);assert.equal(c.CARE.draft.n,'نص حالة أخرى');assert.equal(nodes['care-save-status'].textContent,'حالة الفرع الحالي');
+});
+
+test('logout cancels queued medical drafts and late responses cannot alter a new account',async()=>{
+ const {c,nodes}=harness();seed(c);c.CARE.dirty=true;c.CARE.draft.n='نص الحساب الأول';
+ let calls=0,release;nodes['care-save-status']={textContent:'حالة الحساب الجديد'};
+ c.gateway=()=>{calls++;return new Promise(resolve=>release=resolve);};
+ const first=c.careSavePrivateDraft();await new Promise(setImmediate);
+ c.CARE.draft.n='نص أحدث بالحساب الأول';const queued=c.careSavePrivateDraft();
+ c.logout();c.AUTH={uid:'second'};
+ release({id:'old-account-draft'});await Promise.all([first,queued]);
+ assert.equal(calls,1);assert.equal(c.CARE.draftId,null);assert.equal(c.CARE.privateDrafts.size,0);
+ assert.equal(nodes['care-save-status'].textContent,'حالة الحساب الجديد');
+});
+
+test('an older draft response cannot mark newer typing saved before its debounce starts',async()=>{
+ const {c,nodes,events}=harness();seed(c);c.CARE.dirty=true;c.CARE.draft.n='النص الأقدم';
+ let release;nodes['care-save-status']={textContent:'توجد تعديلات لم تُحفظ'};
+ c.gateway=()=>new Promise(resolve=>release=resolve);
+ const pending=c.careSavePrivateDraft();await new Promise(setImmediate);
+ events.input({target:{dataset:{careMedical:'n'},value:'نص أحدث لم يبدأ حفظه بعد'}});
+ release({id:'older-draft'});await pending;
+ assert.equal(c.CARE.draft.n,'نص أحدث لم يبدأ حفظه بعد');
+ assert.equal(nodes['care-save-status'].textContent,'توجد تعديلات لم تُحفظ');
+});
+
+test('a late draft read for another branch cannot replace the current recovery candidate',async()=>{
+ const {c}=harness();seed(c);let release;
+ c.gateway=async action=>action==='workflowList'?new Promise(resolve=>release=resolve):assert.fail('Stale branch must not fetch the draft');
+ const pending=c.careLoadPrivateDraft();await new Promise(setImmediate);
+ c.CARE.branch='matrouh';c.CARE.draftCandidate={id:'current-branch-draft'};
+ release({drafts:[{id:'old-branch-draft',kind:'medical',entity:c.CARE.selected.phone}]});await pending;
+ assert.equal(c.CARE.draftCandidate.id,'current-branch-draft');assert.equal(c.CARE.draftId,null);
+});
+
+test('refreshing the same medical file retains its recoverable private draft banner',async()=>{
+ const {c}=harness();seed(c);c.CARE.draftCandidate={id:'recoverable-draft',data:{n:'كتابة سابقة',rev:1}};c.CARE.draftId='recoverable-draft';
+ c.gateway=async()=>({bookings:[row()],checkins:{},selected:{phone:row().phone,file:{n:'نص أصلي',rev:1}}});
+ await c.careLoad(true);
+ assert.equal(c.CARE.draftCandidate.id,'recoverable-draft');assert.equal(c.CARE.draftId,'recoverable-draft');
+ assert.match(c.carePrivateDraftMarkup(),/مراجعة واستعادة المسودة/);
+});

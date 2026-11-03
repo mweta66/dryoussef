@@ -4,6 +4,9 @@ import * as schedule from './schedule.js';
 import * as branches from './branches.js';
 import * as names from './demo-names.js';
 import * as profiles from './demo-profiles.js';
+import * as management from './management.js';
+import * as provenance from './entry-provenance.js';
+import * as novemberCleanup from './november-cleanup.js';
 function authorize(s,uid,key){if(core.role(s,uid).r!=='admin')core.fail('هذه العملية للأدمن فقط',403);perms.requirePermission(core.role(s,uid),key);}
 function plan(s,uid){
  authorize(s,uid,'data.import');const from=core.today(),to=from.slice(0,4)+'-12-31',days=[],taggedBatches=new Set(Object.values(s.bookings||{}).flatMap(rows=>Object.values(rows).map(x=>x.trainingBatch)).filter(Boolean)),batches=Object.values(s.settings?.trainingYearBatches||{}).filter(x=>x.status==='active'||taggedBatches.has(x.id)).map(x=>({...x,status:'active'})),active=batches.find(x=>x.year===from.slice(0,4));
@@ -41,18 +44,23 @@ function seed(original,uid){
 }
 function purge(original,uid,batch){
  authorize(original,uid,'data.delete');const meta=original.settings?.trainingYearBatches?.[batch];if(!meta)core.fail('دفعة التدريب غير موجودة',404);
- const s=structuredClone(original),summary={patients:0,bookings:0,complaints:0,preservedSharedPatients:0};
- for(const rows of Object.values(s.bookings||{}))for(const [id,x]of Object.entries(rows))if(x.trainingBatch===batch){delete rows[id];summary.bookings++;}
- for(const [id,x]of Object.entries(s.deletedBookings||{}))if(x.booking?.trainingBatch===batch)delete s.deletedBookings[id];
+ const s=structuredClone(original),summary={patients:0,bookings:0,complaints:0,preservedSharedPatients:0},removed=[];
+ const bookingPhones=new Map(Object.values(original.bookings||{}).flatMap(Object.values).map(x=>[x.id,x.phone]));
+ const protectedPhones=new Set(provenance.entries(original).filter(item=>item.row.trainingBatch&&item.row.trainingBatch!==batch||item.row.booking?.trainingBatch&&item.row.booking.trainingBatch!==batch||novemberCleanup.protectedEntry(original,item)).map(item=>item.phone||bookingPhones.get(item.row.bookingId||item.row.sourceBookingId||item.path[1])).filter(Boolean));
+ for(const drafts of Object.values(original.drafts||{}))for(const x of Object.values(drafts||{}))if(x&&Date.parse(x.updatedAt)>=Date.parse('2026-10-31T22:00:00.000Z')){const phone=core.phone(x.data?.phone||x.entity);if(/^01[0125]\d{8}$/.test(phone))protectedPhones.add(phone);else if(bookingPhones.has(x.entity))protectedPhones.add(bookingPhones.get(x.entity));}
+ for(const rows of Object.values(s.bookings||{}))for(const [id,x]of Object.entries(rows))if(x.trainingBatch===batch){removed.push(x);delete rows[id];summary.bookings++;}
+ for(const [id,x]of Object.entries(s.deletedBookings||{}))if(x?.booking?.trainingBatch===batch){removed.push(x.booking);delete s.deletedBookings[id];}
  for(const [phone,patient]of Object.entries(s.patients||{})){
-  const shared=Object.values(s.bookings||{}).some(rows=>Object.values(rows).some(x=>x.phone===phone))||Object.values(s.deletedBookings||{}).some(x=>x.booking?.phone===phone);
+  const shared=protectedPhones.has(phone)||Object.values(s.bookings||{}).some(rows=>Object.values(rows).some(x=>x.phone===phone))||Object.values(s.deletedBookings||{}).some(x=>x?.booking?.phone===phone);
   for(const [id,x]of Object.entries(s.complaints?.[phone]||{}))if(x.trainingBatch===batch){delete s.complaints[phone][id];summary.complaints++;}
   if(patient.trainingBatch!==batch)continue;
   if(shared){summary.preservedSharedPatients++;continue;}
-  // All records on a dedicated training patient's file belong to that case. History retains removals.
-  delete s.patients[phone];delete s.files?.[phone];delete s.complaints?.[phone];delete s.attachments?.[phone];
-  for(const [id,x]of Object.entries(s.inbox||{}))if(x.p===phone)delete s.inbox[id];summary.patients++;
+  // Use the clinical deletion cascade only for this batch's exclusive, unprotected identity.
+  const counter=s.complaintSequences?.[phone];management.removePatientState(s,phone,core,removed.filter(x=>x.phone===phone));if(counter!==undefined)(s.complaintSequences||={})[phone]=counter;summary.patients++;
  }
+ const removedIds=new Set(removed.map(x=>x.id));
+ for(const root of ['checkins','bookingContacts','urgentReviews','appointmentRequests','waitingList','tasks'])for(const [id,x]of Object.entries(s[root]||{}))if((!x?.trainingBatch||x.trainingBatch===batch)&&(removedIds.has(x?.bookingId)||removedIds.has(x?.sourceBookingId)||['checkins','bookingContacts'].includes(root)&&removedIds.has(id)))delete s[root][id];
+ management.advanceRemovedBookings(s,removed,core);
  // Keep issued ticket/complaint high-water marks: real records must never be renumbered.
  s.settings.trainingYearBatches[batch]={...meta,status:'purged',purgedAt:new Date().toISOString(),purgedBy:uid};core.rebuild(s);return {state:s,summary};
 }

@@ -8,6 +8,66 @@ import * as history from './history.js';
 const stamp=()=>new Date().toISOString();
 const digest=x=>createHash('sha256').update(JSON.stringify(x)).digest('hex');
 const text=(x,max,label,required=false)=>{if(typeof x!=='string'||x.length>max||required&&!x.trim())core.fail('راجع '+label);return x.trim()};
+const MERGE_ROOTS=['patients','bookings','files','complaints','complaintSequences','attachments','inbox','tasks','followups','deletedBookings','followupPlans','clinicalVisits','urgentReviews','appointmentRequests','waitingList','checkins','bookingContacts','drafts','editingPresence','patientIdentities','patientPhoneIndex'];
+const mergeState=s=>Object.fromEntries(MERGE_ROOTS.map(root=>[root,s[root]||{}]));
+function mergeScope(s,source,target,sourceId,targetId){
+ const phones=new Set([source,target]),identities=new Set([sourceId,targetId].filter(Boolean)),bookingIds=new Set();
+ const related=row=>!!row&&typeof row==='object'&&(phones.has(core.phone(row.phone||row.p))||identities.has(row.patientId));
+ const scoped={};
+ for(const root of ['patients','files','complaints','complaintSequences','attachments','followups','editingPresence','patientPhoneIndex'])scoped[root]=Object.fromEntries(Object.entries(s[root]||{}).filter(([phone])=>phones.has(phone)));
+ scoped.patientIdentities=Object.fromEntries(Object.entries(s.patientIdentities||{}).filter(([id])=>identities.has(id)));
+ scoped.bookings={};for(const [date,rows]of Object.entries(s.bookings||{})){const matches=Object.entries(rows||{}).filter(([,row])=>related(row));if(matches.length)scoped.bookings[date]=Object.fromEntries(matches);for(const [id,row]of matches){bookingIds.add(id);bookingIds.add(row.id);}}
+ scoped.deletedBookings=Object.fromEntries(Object.entries(s.deletedBookings||{}).filter(([,item])=>related(item?.booking)));for(const [id,item]of Object.entries(scoped.deletedBookings)){bookingIds.add(id);if(item.booking?.id)bookingIds.add(item.booking.id);}
+ for(const root of ['inbox','tasks','followupPlans','clinicalVisits','urgentReviews','appointmentRequests','waitingList','checkins','bookingContacts'])scoped[root]=Object.fromEntries(Object.entries(s[root]||{}).filter(([id,row])=>related(row)||bookingIds.has(id)||bookingIds.has(row?.bookingId)||bookingIds.has(row?.sourceBookingId)));
+ scoped.drafts={};for(const [uid,rows]of Object.entries(s.drafts||{})){const matches=Object.entries(rows||{}).filter(([,draft])=>phones.has(draft?.entity)||identities.has(draft?.entity)||bookingIds.has(draft?.entity)||related(draft?.data)||phones.has(core.phone(draft?.data?.newPhone)));if(matches.length)scoped.drafts[uid]=Object.fromEntries(matches);}
+ return scoped;
+}
+function assertMergeBranch(s,r,source,target){
+ if(perms.allBranches(r))return;
+ const phones=new Set([source,target]),ids=new Set([patientIdentity.idForPhone(s,source),patientIdentity.idForPhone(s,target)].filter(Boolean));
+ const foreign=row=>row&&(phones.has(core.phone(row.phone||row.p))||ids.has(row.patientId))&&(row.branch||row.b)&&(row.branch||row.b)!==r.br;
+ if([source,target].some(phone=>s.patients?.[phone]?.br&&s.patients[phone].br!==r.br)||Object.values(s.bookings||{}).some(rows=>Object.values(rows||{}).some(foreign))||Object.values(s.deletedBookings||{}).some(item=>foreign(item?.booking))||['tasks','followupPlans','clinicalVisits','urgentReviews','appointmentRequests','waitingList','checkins','bookingContacts'].some(root=>Object.values(s[root]||{}).some(foreign)))core.fail('الملفان لهما بيانات في فرع آخر؛ الدمج والتراجع الكامل يحتاجان صلاحية جميع الفروع',403);
+}
+function assertLegacyUndoSafe(s,merge){
+ const targetId=patientIdentity.idForPhone(s,merge.target),targetRelated=row=>!!row&&(core.phone(row.phone||row.p)===merge.target||!!targetId&&row.patientId===targetId);
+ const modern=['followupPlans','clinicalVisits','urgentReviews','appointmentRequests','waitingList','bookingContacts'].some(root=>Object.values(s[root]||{}).some(targetRelated));
+ const drafts=Object.values(s.drafts||{}).some(rows=>Object.values(rows||{}).some(row=>row?.entity===merge.target||row?.entity===targetId||targetRelated(row?.data)||core.phone(row?.data?.newPhone)===merge.target));
+ if(modern||drafts)core.fail('عملية دمج قديمة وللملف بيانات متابعة أو مسودات لا تشملها نسخة التراجع؛ راجعها قبل فصل الملفين',409);
+}
+function mergeReferences(s,source,target,sourceId,targetId){
+ const name=s.patients[target].n;
+ const move=(row,revision=false)=>{
+  if(!row||typeof row!=='object'||!(core.phone(row.phone||row.p)===source||row.patientId===sourceId))return;
+  if(row.patientId===sourceId&&row.phone&&![source,target].includes(core.phone(row.phone))||core.phone(row.phone||row.p)===source&&row.patientId&&![sourceId,targetId].includes(row.patientId))core.fail('سجل مرتبط بهوية ورقم مختلفين؛ راجع الملف قبل الدمج',409);
+  row.phone=target;row.patientId=targetId;if(Object.hasOwn(row,'p'))row.p=target;if(Object.hasOwn(row,'name'))row.name=name;
+  if(revision){if(Number.isInteger(row.rev))row.rev++;if(Number.isInteger(row.revision))row.revision++;}
+ };
+ for(const rows of Object.values(s.bookings||{}))for(const row of Object.values(rows||{}))move(row,true);
+ for(const item of Object.values(s.deletedBookings||{}))move(item?.booking,true);
+ for(const root of ['tasks','followupPlans','clinicalVisits','urgentReviews','appointmentRequests','waitingList','checkins','bookingContacts'])for(const row of Object.values(s[root]||{}))move(row,root!=='clinicalVisits');
+ for(const row of Object.values(s.inbox||{}))if(row?.p===source){row.p=target;row.n=name;}
+ if(s.followups?.[source]){
+  const incoming=s.followups[source],current=s.followups[target]||{};
+  if(!incoming||Array.isArray(incoming)||typeof incoming!=='object'||Array.isArray(current)||typeof current!=='object')core.fail('بيانات متابعة قديمة تحتاج المراجعة قبل الدمج',409);
+  if(Object.keys(incoming).some(id=>Object.hasOwn(current,id)&&JSON.stringify(current[id])!==JSON.stringify(incoming[id])))core.fail('تعارض في سجلات المتابعة القديمة؛ راجعها قبل الدمج',409);
+  s.followups[target]={...incoming,...current};delete s.followups[source];
+ }
+ for(const drafts of Object.values(s.drafts||{}))for(const [oldId,draft]of Object.entries(drafts||{})){
+  if(!draft||typeof draft!=='object')continue;
+  const entity=draft.entity===source?target:draft.entity===sourceId?targetId:draft.entity;
+  const phone=draft.data&&core.phone(draft.data.phone)===source,newPhone=draft.data&&core.phone(draft.data.newPhone)===source;
+  if(entity===draft.entity&&!phone&&newPhone)core.fail('توجد مسودة لتغيير رقم أحد الملفين؛ راجعها قبل الدمج',409);
+  if(entity===draft.entity&&!phone&&!newPhone)continue;
+  const id=entity===draft.entity?oldId:digest({kind:draft.kind,entity:String(entity||'new').slice(0,128)}).slice(0,32);
+  if(id!==oldId&&Object.hasOwn(drafts,id))core.fail('توجد مسودتان لنفس الملف في حساب واحد؛ راجعهما أو احذف إحداهما قبل الدمج',409);
+  const next={...draft,id,entity,data:structuredClone(draft.data||{})};if(phone)next.data.phone=target;if(newPhone)next.data.newPhone=target;
+  delete drafts[oldId];drafts[id]=next;
+ }
+ if(s.editingPresence?.[source]){
+  s.editingPresence[target]||={};for(const [uid,presence]of Object.entries(s.editingPresence[source]))if(!s.editingPresence[target][uid]||(presence?.at||0)>(s.editingPresence[target][uid]?.at||0))s.editingPresence[target][uid]=presence;
+  delete s.editingPresence[source];
+ }
+}
 function branch(s,r,b){if(!core.branchIds(s).includes(b))core.fail('فرع غير صحيح');core.allowed(r,b);return b;}
 function access(s,r,p){if(!/^01[0125]\d{8}$/.test(p)||!s.patients?.[p])core.fail('الحالة غير موجودة',404);cases.assertAccess(s,r,p);}
 function timeline(s,r,p){access(s,r,p);const rows=[];if(perms.can(r,'bookings.read'))for(const list of Object.values(s.bookings||{}))for(const x of Object.values(list))if(x.phone===p&&(perms.allBranches(r)||x.b===r.br)){rows.push({kind:'booking',id:x.id,at:x.createdAt||x.date+'T00:00:00Z',by:x.createdBy||'',updatedBy:x.updatedBy||'',updatedAt:x.updatedAt,date:x.date,no:x.no,branch:x.b,status:x.s,arrival:s.checkins?.[x.id]?.status||'not_arrived'});const check=s.checkins?.[x.id];if(check)rows.push({kind:'arrival',id:x.id,at:check.at,status:check.status,by:check.by});}
@@ -16,7 +76,15 @@ function timeline(s,r,p){access(s,r,p);const rows=[];if(perms.can(r,'bookings.re
  if(perms.can(r,'notes.read')&&s.files?.[p])rows.push({kind:'medical',id:'medical',at:s.files[p].t||s.patients[p].d+'T00:00:00Z',text:s.files[p].n||'',by:s.files[p].by||'',diagnosis:s.files[p].diagnosis||'',treatment:s.files[p].treatment||''});
  if(perms.can(r,'notes.read'))for(const [i,x]of (s.files?.[p]?.importedRecords||[]).entries())rows.push({kind:'medical',id:'merged-'+i,at:x.t||x.mergedAt,text:x.n||'',diagnosis:x.diagnosis||'',treatment:x.treatment||'',by:x.by||'',sourcePhone:x.sourcePhone});
  return rows.sort((a,b)=>String(b.at).localeCompare(String(a.at))||(b.no||0)-(a.no||0));}
-function mergePlan(s,uid,input){const r=core.role(s,uid);perms.requirePermission(r,'patients.merge');const source=core.phone(input.source),target=core.phone(input.target);if(source===target)core.fail('اختر ملفين مختلفين');access(s,r,source);access(s,r,target);for(const rows of Object.values(s.bookings||{})){const list=Object.values(rows);if(list.some(x=>x.phone===source)&&list.some(x=>x.phone===target))core.fail('يوجد حجز للملفين في اليوم نفسه؛ راجع الحجوزات قبل الدمج',409);}if(Object.keys(s.attachments?.[source]||{}).some(id=>Object.hasOwn(s.attachments?.[target]||{},id)))core.fail('تعارض في معرفات الصور؛ راجع المرفقات قبل الدمج',409);if(Object.keys(s.attachments?.[source]||{}).length+Object.keys(s.attachments?.[target]||{}).length>20)core.fail('الملفان يتجاوزان حد 20 صورة؛ راجع المرفقات قبل الدمج',409);const summary={source,target,sourceName:s.patients[source].n,targetName:s.patients[target].n,complaints:Object.keys(s.complaints?.[source]||{}).length,images:Object.keys(s.attachments?.[source]||{}).length,bookings:Object.values(s.bookings||{}).flatMap(Object.values).filter(x=>x.phone===source).length};return {summary,token:digest({uid,source,target,patients:s.patients,bookings:s.bookings,files:s.files,complaints:s.complaints,attachments:s.attachments,complaintSequences:s.complaintSequences,tasks:s.tasks,checkins:s.checkins})};}
+function mergePlan(s,uid,input){
+ const r=core.role(s,uid);perms.requirePermission(r,'patients.merge');const source=core.phone(input.source),target=core.phone(input.target);
+ if(source===target)core.fail('اختر ملفين مختلفين');access(s,r,source);access(s,r,target);assertMergeBranch(s,r,source,target);
+ for(const rows of Object.values(s.bookings||{})){const list=Object.values(rows);if(list.some(x=>x.phone===source)&&list.some(x=>x.phone===target))core.fail('يوجد حجز للملفين في اليوم نفسه؛ راجع الحجوزات قبل الدمج',409);}
+ if(Object.keys(s.attachments?.[source]||{}).some(id=>Object.hasOwn(s.attachments?.[target]||{},id)))core.fail('تعارض في معرفات الصور؛ راجع المرفقات قبل الدمج',409);
+ if(Object.keys(s.attachments?.[source]||{}).length+Object.keys(s.attachments?.[target]||{}).length>20)core.fail('الملفان يتجاوزان حد 20 صورة؛ راجع المرفقات قبل الدمج',409);
+ const summary={source,target,sourceName:s.patients[source].n,targetName:s.patients[target].n,complaints:Object.keys(s.complaints?.[source]||{}).length,images:Object.keys(s.attachments?.[source]||{}).length,bookings:Object.values(s.bookings||{}).flatMap(Object.values).filter(x=>x.phone===source).length};
+ return {summary,token:digest({uid,source,target,state:mergeState(s)})};
+}
 const draftKinds={booking:'bookings.create',complaint:'complaints.create',medical:'notes.edit',patient:'patients.edit',about:'site.manage',task:'tasks.manage'};
 const draftFields={booking:['name','phone','b','date','v','s','nt','spouseName','spouseJob','spousePhone'],complaint:['date','text','reason','tx'],medical:['n','diagnosis','treatment','allergies','chronic','rev'],patient:['name','phone','newPhone','spouseName','spouseJob','spousePhone'],about:['text','design'],task:['title','description','due','assignee','phone','branch']};
 function draftAccess(s,r,x){if(!Object.hasOwn(draftKinds,x.kind))core.fail('مسودة غير صحيحة');perms.requirePermission(r,draftKinds[x.kind]);if(x.branch)branch(s,r,x.branch);if(['complaint','medical'].includes(x.kind))access(s,r,core.phone(x.entity));}
@@ -36,9 +104,46 @@ async function handle(adapter,input,uid){const action=input.action;
  if(action==='daySummary'||action==='dayClose'){const build=s=>{const r=core.role(s,uid);perms.requirePermission(r,'bookings.read');const b=branch(s,r,input.branch),d=core.date(input.date),rawRows=Object.values(s.bookings?.[d]||{}).filter(x=>x.b===b),filtered=patientIdentity.filterOperationalBookings(s,rawRows,{includeTraining:input.includeTraining===true,role:r}),rows=filtered.bookings,counts={total:rows.length,arrived:rows.filter(x=>s.checkins?.[x.id]?.status==='arrived').length,waiting:rows.filter(x=>x.s==='wait').length,exam:rows.filter(x=>x.s==='exam').length,done:rows.filter(x=>x.s==='done').length,cancelled:rows.filter(x=>x.s==='cx').length,absent:rows.filter(x=>x.s==='no').length};const elapsed=rows.map(x=>{const arrived=s.checkins?.[x.id];return arrived?.status==='arrived'&&x.startedAt?Math.max(0,Date.parse(x.startedAt)-Date.parse(arrived.arrivalAt||arrived.at))/60000:null}).filter(x=>Number.isFinite(x));return {branch:b,date:d,counts,excludedTraining:filtered.excludedTraining,includesTraining:filtered.includesTraining,averageWaitMinutes:elapsed.length?Math.round(elapsed.reduce((a,b)=>a+b,0)/elapsed.length):null,generatedAt:stamp(),pending:rawRows.filter(x=>['wait','exam'].includes(x.s)).map(x=>({id:x.id,no:x.no,status:x.s})),closed:s.dayClosures?.[d+'_'+b]||null}};if(action==='daySummary')return build(await adapter.read());let summary;await adapter.mutate(original=>{const s=structuredClone(original),r=core.role(s,uid);perms.requirePermission(r,'day.close');summary=build(s);if(input.date>core.today())core.fail('لا يمكن إقفال يوم مستقبلي');if(input.confirmation!=='CLOSE_DAY')core.fail('راجع ملخص اليوم وأكد الإقفال');if(summary.pending.some(x=>x.status==='exam'))core.fail('أنه جلسة الكشف أولًا',409);s.dayClosures||={};s.dayClosures[input.date+'_'+input.branch]={...summary,closed:null,by:r.u,at:stamp(),note:text(input.note||'',1000,'ملاحظات الإقفال')};return s});return summary;}
  if(action==='similarPatients'){const s=await adapter.read(),r=core.role(s,uid);perms.requirePermission(r,'patients.merge');const normalize=x=>String(x||'').replace(/[أإآ]/g,'ا').replace(/ى/g,'ي').replace(/ة/g,'ه').replace(/\s+/g,' ').trim();const result=[],groups=new Map();for(const [p,x]of Object.entries(s.patients||{})){if(!cases.canAccess(s,r,p))continue;const keys=[normalize(x.n),x.spousePhone?'spouse:'+core.phone(x.spousePhone):''].filter(Boolean);for(const key of keys){if(!groups.has(key))groups.set(key,[]);groups.get(key).push({phone:p,name:x.n,branch:x.br});}}for(const [key,items]of groups)if(items.length>1)result.push({reason:key.startsWith('spouse:')?'موبايل زوج متطابق':'اسم متشابه',patients:items});return result.slice(0,100);}
  if(action==='patientMergePreview')return mergePlan(await adapter.read(),uid,input);
- if(action==='patientMergeApply'){let id;await adapter.mutate(original=>{const plan=mergePlan(original,uid,input);if(input.previewToken!==plan.token||input.confirmation!=='MERGE_PATIENTS')core.fail('تغيرت البيانات؛ أعد المعاينة',409);const s=structuredClone(original),{source,target}=plan.summary,patient=s.patients[source],dest=s.patients[target];for(const key of ['spouseName','spouseJob','spousePhone'])if(!dest[key]&&patient[key])dest[key]=patient[key];for(const rows of Object.values(s.bookings||{}))for(const x of Object.values(rows))if(x.phone===source){x.phone=target;x.name=dest.n;x.rev=(x.rev||0)+1;}s.files||={};if(s.files[source]){const from=s.files[source],to=s.files[target]||{n:'',rev:0};const {importedRecords:archives,...originalFile}=from;to.importedRecords=[...(to.importedRecords||[]),...(archives||[]),{...originalFile,sourcePhone:source,mergedAt:stamp()}];if(to.importedRecords.length>100)core.fail('أرشيف الملفات المدمجة تجاوز الحد المسموح',409);to.n=[to.n,from.n?('سجل مدمج بتاريخ '+core.today()+':\n'+from.n):''].filter(Boolean).join('\n\n');if(to.n.length>5000)to.n=to.n.slice(0,5000);for(const k of ['allergies','chronic','diagnosis','treatment'])if(!to[k]&&from[k])to[k]=from[k];to.rev=(to.rev||0)+1;to.t=stamp();s.files[target]=to;delete s.files[source];}s.complaints||={};s.complaints[target]||={};s.complaintSequences||={};let seq=Math.max(s.complaintSequences[target]||0,...Object.values(s.complaints[target]).map(x=>x.no||0));for(const x of Object.values(s.complaints[source]||{}).sort((a,b)=>(a.no||0)-(b.no||0))){const key=s.complaints[target][x.id]?randomUUID():x.id;s.complaints[target][key]={...x,id:key,no:++seq,originalNo:x.no,sourcePhone:source};}s.complaintSequences[target]=seq;delete s.complaints[source];delete s.complaintSequences[source];s.attachments||={};s.attachments[target]={...s.attachments[target],...s.attachments[source]};delete s.attachments[source];for(const x of Object.values(s.inbox||{}))if(x.p===source){x.p=target;x.n=dest.n;}for(const x of Object.values(s.tasks||{}))if(x.phone===source)x.phone=target;delete s.patients[source];core.rebuild(s);id=randomUUID();s.patientMerges||={};const changes=[];for(const key of ['patients','bookings','files','complaints','complaintSequences','attachments','inbox','tasks'])history.diff(original[key]||{},s[key]||{},[key],changes);s.patientMerges[id]={id,source,target,at:stamp(),by:uid,changes:structuredClone(changes)};return s});return {ok:true,id};}
- if(action==='patientMergeList'){const s=await adapter.read();perms.requirePermission(core.role(s,uid),'patients.merge');return Object.values(s.patientMerges||{}).map(({changes,...x})=>x);}
- if(action==='patientMergeUndo'){await adapter.mutate(original=>{const s=structuredClone(original),r=core.role(s,uid);perms.requirePermission(r,'patients.merge');const m=s.patientMerges?.[input.id];if(!m||m.undoneAt)core.fail('عملية الدمج غير موجودة',404);access(s,r,m.target);for(const x of m.changes){let value=s;for(const k of x.path)value=value?.[k];if(JSON.stringify(value)!==JSON.stringify(x.removed?undefined:x.after))core.fail('توجد تعديلات أحدث؛ لا يمكن التراجع دون مراجعتها',409);}for(const x of m.changes){let node=s;for(const k of x.path.slice(0,-1))node=node[k]||={};if(x.added)delete node[x.path.at(-1)];else node[x.path.at(-1)]=structuredClone(x.before);}m.undoneAt=stamp();m.undoneBy=uid;core.rebuild(s);return s});return {ok:true};}
+ if(action==='patientMergeApply'){
+  let id;await adapter.mutate(original=>{
+   const plan=mergePlan(original,uid,input);if(input.previewToken!==plan.token||input.confirmation!=='MERGE_PATIENTS')core.fail('تغيرت البيانات؛ أعد المعاينة',409);
+   const s=structuredClone(original),{source,target}=plan.summary;patientIdentity.ensure(s);
+   const sourceId=patientIdentity.idForPhone(s,source),targetId=patientIdentity.idForPhone(s,target),patient=s.patients[source],dest=s.patients[target];
+   if(!sourceId||!targetId||sourceId===targetId)core.fail('تعذر فصل هويتي الملفين؛ راجع البيانات قبل الدمج',409);
+   dest.id=targetId;dest.patientId=targetId;
+   for(const key of ['spouseName','spouseJob','spousePhone'])if(!dest[key]&&patient[key])dest[key]=patient[key];
+   mergeReferences(s,source,target,sourceId,targetId);
+   s.files||={};if(s.files[source]){
+    const from=s.files[source],to=s.files[target]||{n:'',rev:0};const {importedRecords:archives,...originalFile}=from;
+    to.importedRecords=[...(to.importedRecords||[]),...(archives||[]),{...originalFile,sourcePhone:source,mergedAt:stamp()}];
+    if(to.importedRecords.length>100)core.fail('أرشيف الملفات المدمجة تجاوز الحد المسموح',409);
+    to.n=[to.n,from.n?('سجل مدمج بتاريخ '+core.today()+':\n'+from.n):''].filter(Boolean).join('\n\n');if(to.n.length>5000)to.n=to.n.slice(0,5000);
+    for(const key of ['allergies','chronic','diagnosis','treatment'])if(!to[key]&&from[key])to[key]=from[key];
+    to.rev=(to.rev||0)+1;to.t=stamp();s.files[target]=to;delete s.files[source];
+   }
+   s.complaints||={};s.complaints[target]||={};s.complaintSequences||={};let seq=Math.max(s.complaintSequences[target]||0,...Object.values(s.complaints[target]).map(x=>x.no||0));
+   for(const row of Object.values(s.complaints[source]||{}).sort((a,b)=>(a.no||0)-(b.no||0))){const key=s.complaints[target][row.id]?randomUUID():row.id;s.complaints[target][key]={...row,id:key,no:++seq,originalNo:row.no,sourcePhone:source};}
+   s.complaintSequences[target]=seq;delete s.complaints[source];delete s.complaintSequences[source];
+   s.attachments||={};s.attachments[target]={...s.attachments[target],...s.attachments[source]};delete s.attachments[source];
+   delete s.patients[source];patientIdentity.ensure(s);s.patientIdentities[sourceId].mergedInto=targetId;core.rebuild(s);
+   id=randomUUID();s.patientMerges||={};const changes=[];for(const root of MERGE_ROOTS)history.diff(original[root]||{},s[root]||{},[root],changes);
+   s.patientMerges[id]={id,source,target,sourceId,targetId,at:stamp(),by:uid,changes:structuredClone(changes),afterFingerprint:digest(mergeScope(s,source,target,sourceId,targetId))};
+   return s;
+  });return {ok:true,id};
+ }
+ if(action==='patientMergeList'){const s=await adapter.read(),r=core.role(s,uid);perms.requirePermission(r,'patients.merge');return Object.values(s.patientMerges||{}).filter(row=>perms.allBranches(r)||cases.canAccess(s,r,row.target)&&(!row.undoneAt||cases.canAccess(s,r,row.source))).map(({changes,afterFingerprint,...x})=>x);}
+ if(action==='patientMergeUndo'){
+  await adapter.mutate(original=>{
+   const s=structuredClone(original),r=core.role(s,uid);perms.requirePermission(r,'patients.merge');const m=s.patientMerges?.[input.id];
+   if(!m||m.undoneAt)core.fail('عملية الدمج غير موجودة',404);access(s,r,m.target);assertMergeBranch(s,r,m.source,m.target);
+   if(m.afterFingerprint){if(m.afterFingerprint!==digest(mergeScope(s,m.source,m.target,m.sourceId,m.targetId)))core.fail('توجد تعديلات أحدث؛ لا يمكن التراجع دون مراجعتها',409);}else assertLegacyUndoSafe(s,m);
+   for(const change of m.changes){let value=s;for(const key of change.path)value=value?.[key];if(JSON.stringify(value)!==JSON.stringify(change.removed?undefined:change.after))core.fail('توجد تعديلات أحدث؛ لا يمكن التراجع دون مراجعتها',409);}
+   for(const change of m.changes){let node=s;for(const key of change.path.slice(0,-1))node=node[key]||={};if(change.added)delete node[change.path.at(-1)];else node[change.path.at(-1)]=structuredClone(change.before);}
+   // Old merge records did not capture identity indexes. Revive their unique original identity before ensure runs.
+   if(!m.sourceId&&s.patients?.[m.source]&&!s.patientPhoneIndex?.[m.source]){const retired=Object.values(s.patientIdentities||{}).filter(row=>row.phone===m.source&&row.deletedAt);if(retired.length===1){const row=retired[0];s.patientPhoneIndex||={};s.patientPhoneIndex[m.source]=row.id;delete row.deletedAt;delete row.mergedInto;}}
+   m.undoneAt=stamp();m.undoneBy=uid;patientIdentity.ensure(s);core.rebuild(s);return s;
+  });return {ok:true};
+ }
  core.fail('عملية غير مسموحة',403);
 }
 const actions=['nurseRequestAccessUpgrade','preferencesGet','preferencesSave','timeline','workflowList','checkinSet','taskSave','draftSave','draftGet','draftDelete','editingPresence','daySummary','dayClose','similarPatients','patientMergePreview','patientMergeApply','patientMergeList','patientMergeUndo'];

@@ -1,0 +1,47 @@
+{
+  "release": "2026.11.03.1",
+  "productionDeployment": "pending manual gateway deployment, then main frontend update",
+  "productionPreviousVersion": "2026.11.01.3 confirmed by user",
+  "unit": {
+    "passed": 531,
+    "failed": 0,
+    "skipped": 0
+  },
+  "postgres": {
+    "passed": 59,
+    "scope": "isolated PostgreSQL17.6"
+  },
+  "finalQueueBrowser": {
+    "doctor": 8,
+    "admin": 8,
+    "failed": 0,
+    "rateLimitedResponses": 0
+  },
+  "finalMergeBrowser": {
+    "passed": 6,
+    "failed": 0
+  },
+  "finalDiskRecovery": {
+    "passed": 19,
+    "failed": 0
+  },
+  "broaderReviewCohort": {
+    "functional": 147,
+    "navigation": 107,
+    "controlOpeningOrCancelledConfirmation": 85,
+    "responsiveGeometry": 680,
+    "contactHrefOnly": 16,
+    "fontInspections": 24,
+    "accounts": 8,
+    "note": "Executed during the broader review before final combined package; kept distinct from final package checks."
+  },
+  "build": "passed",
+  "syntaxFiles": 265,
+  "vercelFilteredPackage": "passed",
+  "limitations": [
+    "No direct production access: restricted network and no deployment credentials",
+    "Native iPhone Safari, Firefox and Edge not executed; responsive browser checks use Chromium",
+    "No claim of every possible input, concurrency order or future outage",
+    "Provider Auth passwords/sessions and hosting secrets not included in recovery exports"
+  ]
+}

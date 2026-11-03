@@ -3,6 +3,7 @@ const consultation=require('./consultation.cjs');
 const followupPlans=require('./followup-plans.cjs');
 const patientSearch=require('./patient-search.cjs');
 const patientIdentity=require('./patient-identity.cjs');
+const entryProvenance=require('./entry-provenance.cjs');
 const mutationContract=require('./mutation-contract.cjs');
 const novemberCleanup=require('./november-cleanup.cjs');
 const yearEndTraining=require('./year-end-training.cjs');
@@ -119,7 +120,15 @@ function createService(baseAdapter) {
   if(action==='schedulePreview'){const state=await adapter.read();perms.requirePermission(core.role(state,uid),'clinic.manage');return {...scheduleReview.review(state,input.branch,input.schedule),...scheduleTransfers.preview(state,input.branch,input.schedule)}}
   if(action==='branchDaysSet'){await adapter.mutate(original=>{perms.requirePermission(core.role(original,uid),'clinic.manage');if(!Object.hasOwn(branchConfig.branches(original),input.branch))core.fail('الفرع غير موجود',404);const s=structuredClone(original);s.settings||={};s.settings.sched||={};s.settings.sched[input.branch]=core.schedule({mode:'days',d:input.days,exceptions:s.settings.sched[input.branch]?.exceptions||{}});return s;});return {ok:true};}
   if(action==='branchSave'){await adapter.mutate(s=>branchConfig.save(s,uid,input,core,perms));return {ok:true};}
-  if(action==='publicQueue'){const d=core.date(input.date||core.today());if(!branchConfig.validId(input.branch))core.fail('اختر الفرع');await adapter.limit?.(client,'display:'+input.branch);return features.publicQueue(await (adapter.readDay?adapter.readDay(d):adapter.read()),input.branch,d);}
+  if(action==='publicQueue'){
+   const d=core.date(input.date||core.today());if(!branchConfig.validId(input.branch))core.fail('اختر الفرع');
+   // Each display window polls independently. Keep the shared IP/subject budgets,
+   // but do not make two normal screens spend the same twenty-request allowance.
+   if(input.screenId!==undefined&&(typeof input.screenId!=='string'||!/^[A-Za-z0-9_-]{16,64}$/.test(input.screenId)))core.fail('معرف شاشة الدور غير صحيح');
+   const subject='display:'+input.branch+(input.screenId?':'+input.screenId:'');
+   await adapter.limit?.(client,subject);
+   return features.publicQueue(await (adapter.readDay?adapter.readDay(d):adapter.read()),input.branch,d);
+  }
   if(action==='followups'||action==='followupContact')core.fail('تم إلغاء مواعيد المتابعة',410);
   if(action==='retryAttachmentCleanup'){perms.requirePermission(core.role(await adapter.read(),uid),'data.delete');return {cleanupPending:await cleanup.drain(adapter)}}
   if(action==='systemHealth'||action==='backupDownload'){const s=await readFields(['roles']);perms.requirePermission(core.role(s,uid),'data.export');if(action==='systemHealth'){const health=adapter.systemHealth?await adapter.systemHealth():{lastBackup:null,retentionDays:14,errors:[]};const current=await adapter.read();return {...health,lastSuccessfulReadAt:new Date().toISOString(),lastConfirmedWriteAt:current.audit?.at(-1)?.at||null,frontCompatibleVersion:release.version,operationalWrites:adapter.operationalCapabilities?.()||{deltaWrites:false},restoreRehearsal:current.backupRehearsal||null,cleanupPending:Object.keys(current.attachmentGarbage||{}).length}}const backup=await adapter.latestBackup?.();if(!backup)core.fail('لا توجد نسخة آلية بعد',404);return backup;}
@@ -162,13 +171,23 @@ function createService(baseAdapter) {
   if(action==='patch'){await adapter.mutate(s=>core.patch(s,uid,input.updates));return {ok:true};}
   if(action==='purgeDemo'){
    await adapter.mutate(original=>{
-    perms.requirePermission(core.role(original,uid),'data.delete');const state=structuredClone(original),phones=new Set();
-    for(const rows of Object.values(state.bookings||{}))for(const [id,x] of Object.entries(rows))if(!x.trainingBatch&&/^demo[-_]/.test(id)&&/^010000\d{5}$/.test(x.phone)){phones.add(x.phone);delete rows[id];}
+    perms.requirePermission(core.role(original,uid),'data.delete');const state=structuredClone(original),phones=new Set(),removed=[];
+    const bookingPhones=new Map(Object.values(original.bookings||{}).flatMap(Object.values).map(x=>[x.id,x.phone]));
+    const protectedPhones=new Set(entryProvenance.entries(original).filter(item=>item.row.trainingBatch||item.row.booking?.trainingBatch||novemberCleanup.protectedEntry(original,item)).map(item=>item.phone||bookingPhones.get(item.row.bookingId||item.row.sourceBookingId||item.path[1])).filter(Boolean));
+    // A legacy demo identity may now contain real work. Keep that work and its source graph.
+    for(const drafts of Object.values(original.drafts||{}))for(const x of Object.values(drafts||{}))if(x&&Date.parse(x.updatedAt)>=Date.parse('2026-10-31T22:00:00.000Z')){
+     const phone=core.phone(x.data?.phone||x.entity);if(/^01[0125]\d{8}$/.test(phone))protectedPhones.add(phone);else if(bookingPhones.has(x.entity))protectedPhones.add(bookingPhones.get(x.entity));
+    }
+    for(const rows of Object.values(state.bookings||{}))for(const [id,x] of Object.entries(rows))if(!x.trainingBatch&&!protectedPhones.has(x.phone)&&/^demo[-_]/.test(id)&&/^010000\d{5}$/.test(x.phone)){phones.add(x.phone);removed.push(x);delete rows[id];}
+    const removedIds=new Set(removed.map(x=>x.id));
     for(const p of phones){
      if(Object.values(state.bookings||{}).some(rows=>Object.values(rows).some(x=>x.phone===p)))continue;
-     delete state.patients?.[p];delete state.files?.[p];delete state.complaints?.[p];
-     for(const [id,n] of Object.entries(state.inbox||{}))if(n.p===p)delete state.inbox[id];
+     management.removePatientState(state,p,core,removed.filter(x=>x.phone===p));
     }
+    // A mixed real/demo patient remains intact; only obsolete per-booking operational rows go.
+    for(const root of ['checkins','bookingContacts','urgentReviews','appointmentRequests','waitingList','tasks'])for(const [id,x]of Object.entries(state[root]||{}))if(!x?.trainingBatch&&(removedIds.has(x?.bookingId)||removedIds.has(x?.sourceBookingId)||['checkins','bookingContacts'].includes(root)&&removedIds.has(id)))delete state[root][id];
+    for(const drafts of Object.values(state.drafts||{}))for(const [id,x]of Object.entries(drafts||{}))if(x&&(removedIds.has(x.entity)||removedIds.has(x.data?.bookingId)||removedIds.has(x.data?.sourceBookingId)))delete drafts[id];
+    management.advanceRemovedBookings(state,removed,core);
     // Remove synthetic ticket counters only for queues emptied by this purge.
     // Real queues retain their high-water mark, so issued tickets are never reused.
     for(const key of Object.keys(state.sequences||{})){

@@ -1,4 +1,4 @@
-// CLINIC_API_BUNDLE_START 2026.11.01.3
+// CLINIC_API_BUNDLE_START 2026.11.03.1
 var __defProp = Object.defineProperty;
 var __export = (target, all) => {
   for (var name in all)
@@ -1548,25 +1548,6 @@ async function handle4(adapter2, input, uid) {
   return history(await adapter2.read(), uid, input);
 }
 
-// supabase/functions/clinic-api/mutation-contract.js
-import { createHash as createHash3 } from "node:crypto";
-var operationalActions = /* @__PURE__ */ new Set(["commit", "patch", "sessionSet", "presenceSet", "checkinSet", "consultationComplete", "consultationUrgentReview", "consultationUrgentResolve", "followupPlanSave", "followupPlanBook", "bookingContactSet", "requestAssign", "requestDecide"]);
-var receiptActions = /* @__PURE__ */ new Set(["commit", "patch", "sessionSet", "presenceSet", "checkinSet", "consultationComplete", "consultationUrgentReview", "consultationUrgentResolve", "bookingContactSet", "requestAssign", "requestDecide"]);
-function canonical(x) {
-  if (Array.isArray(x)) return x.map(canonical);
-  if (x && typeof x === "object") return Object.fromEntries(Object.keys(x).sort().filter((k) => k !== "operationId").map((k) => [k, canonical(x[k])]));
-  return x;
-}
-function mutationOptions(input, uid) {
-  const operational = operationalActions.has(input?.action);
-  let receipt = null;
-  if (operational && uid && receiptActions.has(input.action) && typeof input.operationId === "string" && /^[A-Za-z0-9_-]{8,128}$/.test(input.operationId)) receipt = { key: input.operationId, uid, action: input.action, requestHash: createHash3("sha256").update(JSON.stringify(canonical(input))).digest("hex") };
-  return { operational, receipt };
-}
-function publicReceipt(value) {
-  return value?.status === "saved" ? { status: "saved", action: value.action, committedAt: value.committedAt, version: value.version } : { status: "missing" };
-}
-
 // supabase/functions/clinic-api/entry-provenance.js
 var ROOTS = ["patients", "files", "complaints", "attachments", "bookings", "inbox", "followups", "deletedBookings", "tasks", "checkins", "appointmentRequests", "waitingList", "slotOpenings", "dayClosures", "patientMerges", "followupPlans", "bookingContacts", "urgentReviews", "clinicalVisits"];
 var NESTED = /* @__PURE__ */ new Set(["complaints", "attachments", "bookings"]);
@@ -1617,6 +1598,25 @@ function stamp(before, next, input, uid, at) {
     next.recordProvenance[item.key] = meta;
   }
   return next;
+}
+
+// supabase/functions/clinic-api/mutation-contract.js
+import { createHash as createHash3 } from "node:crypto";
+var operationalActions = /* @__PURE__ */ new Set(["commit", "patch", "sessionSet", "presenceSet", "checkinSet", "consultationComplete", "consultationUrgentReview", "consultationUrgentResolve", "followupPlanSave", "followupPlanBook", "bookingContactSet", "requestAssign", "requestDecide"]);
+var receiptActions = /* @__PURE__ */ new Set(["commit", "patch", "sessionSet", "presenceSet", "checkinSet", "consultationComplete", "consultationUrgentReview", "consultationUrgentResolve", "bookingContactSet", "requestAssign", "requestDecide"]);
+function canonical(x) {
+  if (Array.isArray(x)) return x.map(canonical);
+  if (x && typeof x === "object") return Object.fromEntries(Object.keys(x).sort().filter((k) => k !== "operationId").map((k) => [k, canonical(x[k])]));
+  return x;
+}
+function mutationOptions(input, uid) {
+  const operational = operationalActions.has(input?.action);
+  let receipt = null;
+  if (operational && uid && receiptActions.has(input.action) && typeof input.operationId === "string" && /^[A-Za-z0-9_-]{8,128}$/.test(input.operationId)) receipt = { key: input.operationId, uid, action: input.action, requestHash: createHash3("sha256").update(JSON.stringify(canonical(input))).digest("hex") };
+  return { operational, receipt };
+}
+function publicReceipt(value) {
+  return value?.status === "saved" ? { status: "saved", action: value.action, committedAt: value.committedAt, version: value.version } : { status: "missing" };
 }
 
 // supabase/functions/clinic-api/november-cleanup.js
@@ -1814,176 +1814,8 @@ function normalize2(original, uid) {
   return { state: s, summary };
 }
 
-// supabase/functions/clinic-api/year-end-training.js
-function authorize2(s, uid, key) {
-  if (role(s, uid).r !== "admin") fail3("\u0647\u0630\u0647 \u0627\u0644\u0639\u0645\u0644\u064A\u0629 \u0644\u0644\u0623\u062F\u0645\u0646 \u0641\u0642\u0637", 403);
-  requirePermission(role(s, uid), key);
-}
-function plan(s, uid) {
-  authorize2(s, uid, "data.import");
-  const from = today(), to = from.slice(0, 4) + "-12-31", days = [], taggedBatches = new Set(Object.values(s.bookings || {}).flatMap((rows) => Object.values(rows).map((x) => x.trainingBatch)).filter(Boolean)), batches = Object.values(s.settings?.trainingYearBatches || {}).filter((x) => x.status === "active" || taggedBatches.has(x.id)).map((x) => ({ ...x, status: "active" })), active = batches.find((x) => x.year === from.slice(0, 4));
-  if (active) return { from, to, days, bookings: active.bookings, patients: active.patients, existingBatch: active, batches };
-  for (let d = from; d <= to; ) {
-    const available3 = availability(branches(s), s.settings?.sched || {}, d);
-    if (available3.scheduled.length > 1) fail3("\u062A\u0639\u0627\u0631\u0636 \u0641\u064A \u062C\u062F\u0648\u0644 \u0627\u0644\u0637\u0628\u064A\u0628 \u064A\u0648\u0645 " + d + "\u061B \u062D\u062F\u062F \u0641\u0631\u0639\u064B\u0627 \u0648\u0627\u062D\u062F\u064B\u0627 \u0642\u0628\u0644 \u0625\u0636\u0627\u0641\u0629 \u0627\u0644\u0628\u064A\u0627\u0646\u0627\u062A", 409);
-    for (const item of available3.scheduled) {
-      const limit = branches(s)[item.id].maxBookings || 0, existing = Object.values(s.bookings?.[d] || {}).filter((x) => x.b === item.id && x.s !== "cx").length, count = Math.max(0, Math.min(10, limit ? limit - existing : 10));
-      if (count) days.push({ date: d, branch: item.id, count });
-    }
-    const next = /* @__PURE__ */ new Date(d + "T12:00:00Z");
-    next.setUTCDate(next.getUTCDate() + 1);
-    d = next.toISOString().slice(0, 10);
-  }
-  return { from, to, days, bookings: days.reduce((n, d) => n + d.count, 0), patients: days.reduce((n, d) => n + d.count, 0), existingBatch: null, batches };
-}
-function seed(original, uid) {
-  const p = plan(original, uid);
-  if (p.existingBatch) return { state: original, summary: { ...p.existingBatch, alreadyExists: true } };
-  if (!p.bookings) fail3("\u0644\u0627 \u062A\u0648\u062C\u062F \u0623\u064A\u0627\u0645 \u0639\u0645\u0644 \u0645\u0639\u0644\u0646\u0629 \u0645\u062A\u0627\u062D\u0629 \u062D\u062A\u0649 \u0646\u0647\u0627\u064A\u0629 \u0627\u0644\u0639\u0627\u0645\u061B \u0631\u0627\u062C\u0639 \u0645\u0648\u0627\u0639\u064A\u062F \u0627\u0644\u0641\u0631\u0648\u0639", 409);
-  const s = structuredClone(original), at = (/* @__PURE__ */ new Date()).toISOString(), batch = "year-end-" + p.from.slice(0, 4) + "-" + Date.now() + "-" + Object.keys(original.settings?.trainingYearBatches || {}).length, by = role(s, uid).u;
-  for (const key of ["patients", "files", "complaints", "complaintSequences", "bookings", "sequences"]) s[key] ||= {};
-  const used = /* @__PURE__ */ new Set([...Object.keys(s.patients), ...Object.keys(s.files), ...Object.keys(s.complaints), ...Object.keys(s.attachments || {}), ...Object.values(s.bookings).flatMap((rows) => Object.values(rows).map((x) => x.phone)), ...Object.values(s.deletedBookings || {}).map((x) => x.booking?.phone)]);
-  for (const group of Object.values(s.recycleBin || {})) for (const item of group.items || []) {
-    if (["patients", "files", "complaints", "attachments"].includes(item.path?.[0])) used.add(item.path[1]);
-    if (item.path?.[0] === "bookings") {
-      if (item.before?.phone) used.add(item.before.phone);
-      else for (const x of Object.values(item.before || {})) if (x?.phone) used.add(x.phone);
-    }
-  }
-  let serial = 6e4, index = 0;
-  for (const day of p.days) for (let i = 0; i < day.count; i++) {
-    let phone3;
-    do {
-      phone3 = "010000" + String(++serial).padStart(5, "0");
-      if (serial > 99999) fail3("\u0646\u0641\u062F\u062A \u0623\u0631\u0642\u0627\u0645 \u0627\u0644\u062A\u062F\u0631\u064A\u0628 \u0627\u0644\u0645\u062A\u0627\u062D\u0629", 409);
-    } while (used.has(phone3));
-    used.add(phone3);
-    const name = egyptianName(index), spouse2 = spouse(phone3), { file } = clinicalProfile(index), id2 = "demo-year-" + batch + "-" + index, key = day.date + "_" + day.branch, rows = s.bookings[day.date] ||= {}, no = Math.max(s.sequences[key] || 0, 0, ...Object.values(rows).filter((x) => x.b === day.branch).map((x) => x.no || 0)) + 1;
-    rows[id2] = { id: id2, date: day.date, b: day.branch, no, name, phone: phone3, v: ["exam", "cons", "follow"][index % 3], s: "wait", nt: "", rev: 1, trainingBatch: batch, ...spouse2 };
-    s.sequences[key] = no;
-    s.patients[phone3] = { n: name, d: p.from, ...spouse2, trainingBatch: batch, rev: 1 };
-    s.files[phone3] = { ...file, t: at, rev: 1, trainingBatch: batch };
-    s.complaints[phone3] = {};
-    for (let visit = 0; visit < 3; visit++) {
-      const dt = /* @__PURE__ */ new Date(p.from + "T12:00:00Z");
-      dt.setUTCDate(dt.getUTCDate() - 42 + visit * 14);
-      const date2 = dt.toISOString().slice(0, 10), cid = id2 + "-visit-" + (visit + 1), profile = clinicalProfile(index + visit).profile;
-      s.complaints[phone3][cid] = { id: cid, no: visit + 1, date: date2, reason: profile.reason, text: profile.text, tx: profile.treatment, at: date2 + "T12:00:00.000Z", by, byUid: uid, trainingBatch: batch };
-    }
-    s.complaintSequences[phone3] = 3;
-    index++;
-  }
-  const summary = { id: batch, year: p.from.slice(0, 4), from: p.from, to: p.to, patients: index, bookings: index, complaints: index * 3, workingDays: p.days.length, status: "active", createdAt: at, createdBy: uid };
-  s.settings ||= {};
-  s.settings.trainingYearBatches ||= {};
-  s.settings.trainingYearBatches[batch] = summary;
-  rebuild(s);
-  return { state: s, summary };
-}
-function purge(original, uid, batch) {
-  authorize2(original, uid, "data.delete");
-  const meta = original.settings?.trainingYearBatches?.[batch];
-  if (!meta) fail3("\u062F\u0641\u0639\u0629 \u0627\u0644\u062A\u062F\u0631\u064A\u0628 \u063A\u064A\u0631 \u0645\u0648\u062C\u0648\u062F\u0629", 404);
-  const s = structuredClone(original), summary = { patients: 0, bookings: 0, complaints: 0, preservedSharedPatients: 0 };
-  for (const rows of Object.values(s.bookings || {})) for (const [id2, x] of Object.entries(rows)) if (x.trainingBatch === batch) {
-    delete rows[id2];
-    summary.bookings++;
-  }
-  for (const [id2, x] of Object.entries(s.deletedBookings || {})) if (x.booking?.trainingBatch === batch) delete s.deletedBookings[id2];
-  for (const [phone3, patient] of Object.entries(s.patients || {})) {
-    const shared = Object.values(s.bookings || {}).some((rows) => Object.values(rows).some((x) => x.phone === phone3)) || Object.values(s.deletedBookings || {}).some((x) => x.booking?.phone === phone3);
-    for (const [id2, x] of Object.entries(s.complaints?.[phone3] || {})) if (x.trainingBatch === batch) {
-      delete s.complaints[phone3][id2];
-      summary.complaints++;
-    }
-    if (patient.trainingBatch !== batch) continue;
-    if (shared) {
-      summary.preservedSharedPatients++;
-      continue;
-    }
-    delete s.patients[phone3];
-    delete s.files?.[phone3];
-    delete s.complaints?.[phone3];
-    delete s.attachments?.[phone3];
-    for (const [id2, x] of Object.entries(s.inbox || {})) if (x.p === phone3) delete s.inbox[id2];
-    summary.patients++;
-  }
-  s.settings.trainingYearBatches[batch] = { ...meta, status: "purged", purgedAt: (/* @__PURE__ */ new Date()).toISOString(), purgedBy: uid };
-  rebuild(s);
-  return { state: s, summary };
-}
-async function handle6(adapter2, input, uid) {
-  if (input.action === "trainingYearPreview") return plan(await adapter2.read(), uid);
-  const key = input.action === "trainingYearSeed" ? "SEED_YEAR_END_TRAINING" : "DELETE_YEAR_END_TRAINING";
-  if (input.confirmation !== key) fail3("\u0631\u0627\u062C\u0639 \u062A\u0623\u0643\u064A\u062F \u0627\u0644\u0639\u0645\u0644\u064A\u0629 \u0623\u0648\u0644\u064B\u0627");
-  let summary;
-  await adapter2.mutate((s) => {
-    const result = input.action === "trainingYearSeed" ? seed(s, uid) : purge(s, uid, input.batch);
-    summary = result.summary;
-    return result.state;
-  });
-  return { ok: true, ...summary };
-}
-
-// supabase/functions/clinic-api/release.js
-var release_default = { "version": "2026.11.01.3", "apiContract": 1, "capabilities": ["pdfReports", "splitBackup", "phoneChangeLookup", "patientRequestAlerts", "globalThemePresets", "patientNotificationCenter", "yearEndTrainingData", "novemberManualDataProtection", "sessionReadback", "emptySessionRecovery", "focusedConsultation", "followupPlans", "nextVisitBooking", "receptionArrival", "visitDurations", "requestAssignment", "bookingConfirmations", "appointmentCalendar", "patientIdentity", "patientPagination", "mutationReceipts", "operationalDeltaWrites", "completeRecoveryBundle", "trainingMetricsSeparation", "safePatientDeletion", "deleteReadback", "legacyArchiveTolerance", "staleRequestRejection", "secretaryClinicalRead"] };
-
-// supabase/functions/clinic-api/request-notifications.js
-import { createHash as createHash4 } from "node:crypto";
-var kinds = ["new", "reschedule", "cancel"];
-var actions4 = ["requestNotifications", "requestNotificationRead", "requestNotificationsReadAll"];
-var digest = (value) => createHash4("sha256").update(JSON.stringify(value)).digest("hex");
-function events(state, uid) {
-  const role3 = role(state, uid), readDetails = can(role3, "requests.read"), receipts = state.requestNotificationReads?.[uid] || {}, rows = [];
-  for (const request2 of Object.values(state.appointmentRequests || {})) {
-    if (!kinds.includes(request2.kind) || !allBranches(role3) && request2.branch !== role3.br) continue;
-    const common = { requestId: request2.id, kind: request2.kind, branch: request2.branch, date: request2.date, status: request2.status, canOpen: readDetails };
-    if (readDetails) Object.assign(common, { name: request2.name, phone: request2.phone, requestedDate: request2.requestedDate, requestedBranch: request2.requestedBranch });
-    const add = (suffix, event, at) => {
-      if (!Number.isFinite(Date.parse(at))) return;
-      const id2 = request2.id + ":" + suffix;
-      rows.push({ ...common, id: id2, event, at, readAt: receipts[id2] || null });
-    };
-    add("created", "created", request2.createdAt);
-    if (["confirmed", "rejected"].includes(request2.status) && request2.decidedAt) add("decision:" + request2.rev, request2.status, request2.decidedAt);
-  }
-  return rows.sort((a, b) => b.at.localeCompare(a.at) || b.id.localeCompare(a.id));
-}
-function readAllToken(rows, uid) {
-  return digest({ uid, ids: rows.map((x) => x.id) });
-}
-function list2(state, uid, input) {
-  const rows = events(state, uid), kind = input.kind || "all", status = input.status || "all";
-  if (!["all", ...kinds].includes(kind) || !["all", "pending", "confirmed", "rejected"].includes(status) || input.unread !== void 0 && typeof input.unread !== "boolean") fail3("\u0641\u0644\u062A\u0631 \u0625\u0634\u0639\u0627\u0631\u0627\u062A \u063A\u064A\u0631 \u0635\u062D\u064A\u062D");
-  const page = input.page ?? 0;
-  if (!Number.isSafeInteger(page) || page < 0 || page > 1e5) fail3("\u0635\u0641\u062D\u0629 \u063A\u064A\u0631 \u0635\u062D\u064A\u062D\u0629");
-  const filtered = rows.filter((x) => (kind === "all" || x.kind === kind) && (status === "all" || x.status === status) && (!input.unread || !x.readAt));
-  const currentPage = Math.min(page, Math.max(0, Math.ceil(filtered.length / 30) - 1));
-  const pending = rows.filter((x) => x.event === "created" && x.status === "pending"), minutes2 = state.settings?.bookingRequests?.requestOverdueMinutes || 60;
-  return { latestId: rows[0]?.id || null, items: filtered.slice(currentPage * 30, (currentPage + 1) * 30), total: filtered.length, page: currentPage, pageSize: 30, unread: rows.filter((x) => !x.readAt).length, pending: pending.length, overdue: pending.filter((x) => Date.now() - Date.parse(x.at) >= minutes2 * 6e4).length, newBookings: pending.filter((x) => x.kind === "new").length, reschedule: pending.filter((x) => x.kind === "reschedule").length, cancellations: pending.filter((x) => x.kind === "cancel").length, readAllToken: readAllToken(rows, uid), serverAt: (/* @__PURE__ */ new Date()).toISOString() };
-}
-async function handle7(adapter2, input, uid) {
-  if (input.action === "requestNotifications") return list2(await (adapter2.readRequestNotifications ? adapter2.readRequestNotifications() : adapter2.read()), uid, input);
-  if (input.action === "requestNotificationRead" && (typeof input.id !== "string" || input.id.length > 160 || typeof input.read !== "boolean")) fail3("\u0627\u062E\u062A\u0631 \u0625\u0634\u0639\u0627\u0631\u064B\u0627 \u0648\u062D\u0627\u0644\u0629 \u0642\u0631\u0627\u0621\u0629 \u0635\u062D\u064A\u062D\u0629");
-  if (input.action === "requestNotificationsReadAll" && typeof input.readAllToken !== "string") fail3("\u062D\u062F\u0651\u062B \u0627\u0644\u0625\u0634\u0639\u0627\u0631\u0627\u062A \u0623\u0648\u0644\u064B\u0627");
-  await adapter2.mutate((original) => {
-    const rows = events(original, uid), target = input.action === "requestNotificationRead" ? rows.filter((x) => x.id === input.id) : rows;
-    if (input.action === "requestNotificationRead" && !target.length) fail3("\u0627\u0644\u0625\u0634\u0639\u0627\u0631 \u063A\u064A\u0631 \u0645\u0648\u062C\u0648\u062F \u0641\u064A \u0646\u0637\u0627\u0642 \u062D\u0633\u0627\u0628\u0643", 404);
-    if (input.action === "requestNotificationsReadAll" && input.readAllToken !== readAllToken(rows, uid)) fail3("\u0648\u0635\u0644\u062A \u0625\u0634\u0639\u0627\u0631\u0627\u062A \u062C\u062F\u064A\u062F\u0629\u061B \u062D\u062F\u0651\u062B \u0627\u0644\u0642\u0627\u0626\u0645\u0629 \u0642\u0628\u0644 \u062A\u062D\u062F\u064A\u062F \u0627\u0644\u0643\u0644 \u0643\u0645\u0642\u0631\u0648\u0621", 409);
-    const state = structuredClone(original);
-    state.requestNotificationReads ||= {};
-    const reads = state.requestNotificationReads[uid] ||= {};
-    const at = (/* @__PURE__ */ new Date()).toISOString();
-    for (const x of target) {
-      if (input.read === false) delete reads[x.id];
-      else reads[x.id] = at;
-    }
-    const known = new Set(Object.values(state.appointmentRequests || {}).flatMap((x) => [x.id + ":created", x.id + ":decision:" + x.rev]));
-    for (const id2 of Object.keys(reads)) if (!known.has(id2)) delete reads[id2];
-    return state;
-  });
-  return { ok: true };
-}
+// supabase/functions/clinic-api/management.js
+import { Buffer as Buffer2 } from "node:buffer";
 
 // supabase/functions/clinic-api/display-options.js
 var numbers = [["currentShare", 71, 60, 85], ["currentScale", 72, 60, 85], ["nextScale", 24, 12, 28], ["radius", 22, 0, 40], ["gap", 18, 8, 40], ["pollSeconds", 5, 5, 30], ["musicVolume", 18, 0, 100], ["callVolume", 85, 0, 100], ["musicTrack", 0, 0, 113]];
@@ -2056,6 +1888,599 @@ function normalize3(input = {}, branches2 = []) {
   return out;
 }
 
+// supabase/functions/clinic-api/site-content.js
+var SECTION_KEYS = ["header", "contacts", "about", "branches", "lookup", "footer"];
+function validate(value, layout = {}, fail5) {
+  const rows = Array.isArray(value) ? value : Object.values(value || {});
+  if (rows.length > 24) fail5("\u0627\u0644\u062D\u062F \u0627\u0644\u0623\u0642\u0635\u0649 24 \u0642\u0633\u0645\u064B\u0627");
+  const sections = {};
+  for (const [order, x] of rows.entries()) {
+    if (!x || typeof x !== "object" || !/^[-_a-zA-Z0-9]{1,80}$/.test(x.id || "") || Object.hasOwn(sections, x.id) || ["__proto__", "constructor", "prototype"].includes(x.id)) fail5("\u0645\u0639\u0631\u0651\u0641 \u0642\u0633\u0645 \u063A\u064A\u0631 \u0635\u062D\u064A\u062D \u0623\u0648 \u0645\u0643\u0631\u0631");
+    const item = { id: x.id, order, visible: x.visible !== false };
+    for (const [key, max] of [["title", 120], ["body", 4e3], ["linkLabel", 80]]) {
+      if (x[key] !== void 0 && (typeof x[key] !== "string" || x[key].length > max)) fail5("\u0646\u0635 \u0627\u0644\u0642\u0633\u0645 \u0637\u0648\u064A\u0644 \u0623\u0648 \u063A\u064A\u0631 \u0635\u062D\u064A\u062D");
+      item[key] = x[key] || "";
+    }
+    if (x.visible !== void 0 && typeof x.visible !== "boolean") fail5("\u062D\u0627\u0644\u0629 \u0625\u0638\u0647\u0627\u0631 \u0627\u0644\u0642\u0633\u0645 \u063A\u064A\u0631 \u0635\u062D\u064A\u062D\u0629");
+    item.kind = x.kind || "text";
+    if (!["text", "notice", "image"].includes(item.kind)) fail5("\u0646\u0648\u0639 \u0627\u0644\u0642\u0633\u0645 \u063A\u064A\u0631 \u0635\u062D\u064A\u062D");
+    item.link = x.link || "";
+    if (typeof item.link !== "string" || item.link.length > 1e3) fail5("\u0631\u0627\u0628\u0637 \u063A\u064A\u0631 \u0635\u062D\u064A\u062D");
+    if (item.link) {
+      let valid = /^tel:\+?\d{7,15}$/.test(item.link);
+      try {
+        const url = new URL(item.link);
+        valid ||= url.protocol === "https:" && !url.username && !url.password;
+      } catch {
+      }
+      if (!valid) fail5("\u0627\u0644\u0631\u0627\u0628\u0637 \u064A\u062C\u0628 \u0623\u0646 \u064A\u0628\u062F\u0623 \u0628\u0640 https:// \u0623\u0648 tel:");
+    }
+    item.image = x.image || "";
+    if (item.image) {
+      const match = typeof item.image === "string" && item.image.match(/^data:image\/(png|jpeg|webp);base64,([A-Za-z0-9+/]+=*)$/);
+      if (!match || match[2].length > 267e3) fail5("\u0635\u0648\u0631\u0629 \u0627\u0644\u0642\u0633\u0645 \u064A\u062C\u0628 \u0623\u0646 \u062A\u0643\u0648\u0646 PNG \u0623\u0648 JPEG \u0623\u0648 WebP \u062D\u062A\u0649 200 \u0643\u064A\u0644\u0648\u0628\u0627\u064A\u062A");
+      let bytes;
+      try {
+        bytes = Uint8Array.from(atob(match[2]), (c) => c.charCodeAt(0));
+      } catch {
+        fail5("\u0645\u062D\u062A\u0648\u0649 \u0627\u0644\u0635\u0648\u0631\u0629 \u063A\u064A\u0631 \u0635\u062D\u064A\u062D");
+      }
+      const good = bytes.length >= 12 && bytes.length <= 2e5 && (match[1] === "png" ? [137, 80, 78, 71, 13, 10, 26, 10].every((v, i) => bytes[i] === v) : match[1] === "jpeg" ? bytes[0] === 255 && bytes[1] === 216 && bytes[2] === 255 : String.fromCharCode(...bytes.slice(0, 4)) === "RIFF" && String.fromCharCode(...bytes.slice(8, 12)) === "WEBP");
+      if (!good) fail5("\u0645\u062D\u062A\u0648\u0649 \u0627\u0644\u0635\u0648\u0631\u0629 \u0644\u0627 \u064A\u0637\u0627\u0628\u0642 \u0646\u0648\u0639\u0647\u0627");
+    }
+    sections[item.id] = item;
+  }
+  if (!layout || typeof layout !== "object" || Array.isArray(layout) || Object.entries(layout).some(([k, v]) => !SECTION_KEYS.includes(k) || typeof v !== "boolean")) fail5("\u0625\u0639\u062F\u0627\u062F\u0627\u062A \u0638\u0647\u0648\u0631 \u0627\u0644\u0623\u0642\u0633\u0627\u0645 \u063A\u064A\u0631 \u0635\u062D\u064A\u062D\u0629");
+  if (JSON.stringify(sections).length > 65e4) fail5("\u0635\u0648\u0631 \u0648\u0645\u062D\u062A\u0648\u0649 \u0627\u0644\u0623\u0642\u0633\u0627\u0645 \u0623\u0643\u0628\u0631 \u0645\u0646 \u0627\u0644\u062D\u062F \u0627\u0644\u0645\u0633\u0645\u0648\u062D");
+  return { sections, layout: { ...layout } };
+}
+
+// supabase/functions/clinic-api/design-options.js
+var fail4 = (message) => {
+  const e = Error(message);
+  e.status = 400;
+  throw e;
+};
+var COLOR_KEYS = ["background", "card", "text", "primary", "accent", "muted", "line", "headerBackground", "headerText"];
+function validate2(d) {
+  const out = {};
+  if (d.themePreset !== void 0) {
+    if (!Number.isInteger(d.themePreset) || d.themePreset < 0 || d.themePreset > 9) fail4("\u062B\u064A\u0645 \u063A\u064A\u0631 \u0635\u062D\u064A\u062D");
+    out.themePreset = d.themePreset;
+  }
+  if (d.defaultMode !== void 0) {
+    if (!["system", "light", "dark"].includes(d.defaultMode)) fail4("\u0648\u0636\u0639 \u063A\u064A\u0631 \u0635\u062D\u064A\u062D");
+    out.defaultMode = d.defaultMode;
+  }
+  for (const [k, min, max] of [["headerWidth", 50, 100], ["headerRadius", 0, 48], ["headerHeight", 80, 420], ["logoSize", 40, 180], ["photoSize", 40, 160], ["aboutFontSize", 16, 48], ["aboutBorderWidth", 0, 8], ["aboutRadius", 0, 48], ["aboutPadding", 8, 48], ["aboutNeonSize", 0, 40], ["watermarkOpacity", 0, 100], ["watermarkSize", 100, 1200], ["headerTitleSize", 18, 64], ["headerSubtitleSize", 12, 36], ["headerTextSize", 12, 36], ["headerPadding", 0, 60], ["headerGap", 0, 48]]) if (d[k] !== void 0) {
+    if (!Number.isInteger(d[k]) || d[k] < min || d[k] > max) fail4("\u0645\u0642\u0627\u0633 \u062A\u0635\u0645\u064A\u0645 \u063A\u064A\u0631 \u0635\u062D\u064A\u062D");
+    out[k] = d[k];
+  }
+  if (d.headerAlign !== void 0) {
+    if (!["start", "center", "end"].includes(d.headerAlign)) fail4("\u0645\u062D\u0627\u0630\u0627\u0629 \u0627\u0644\u0647\u064A\u062F\u0631 \u063A\u064A\u0631 \u0635\u062D\u064A\u062D\u0629");
+    out.headerAlign = d.headerAlign;
+  }
+  for (const key of ["aboutTextColor", "aboutBackground", "aboutBorderColor", "aboutNeonColor"]) if (d[key] !== void 0) {
+    if (!/^#[0-9a-f]{6}$/i.test(d[key])) fail4("\u0644\u0648\u0646 \u0627\u0644\u0646\u0628\u0630\u0629 \u063A\u064A\u0631 \u0635\u062D\u064A\u062D");
+    out[key] = d[key];
+  }
+  if (d.watermarkEnabled !== void 0) {
+    if (typeof d.watermarkEnabled !== "boolean") fail4("\u062E\u064A\u0627\u0631 \u0627\u0644\u0644\u0648\u062C\u0648 \u0627\u0644\u062E\u0644\u0641\u064A\u0629 \u063A\u064A\u0631 \u0635\u062D\u064A\u062D");
+    out.watermarkEnabled = d.watermarkEnabled;
+  }
+  if (d.watermarkPosition !== void 0) {
+    if (!["center", "top", "bottom"].includes(d.watermarkPosition)) fail4("\u0645\u0643\u0627\u0646 \u0627\u0644\u0644\u0648\u062C\u0648 \u0627\u0644\u062E\u0644\u0641\u064A\u0629 \u063A\u064A\u0631 \u0635\u062D\u064A\u062D");
+    out.watermarkPosition = d.watermarkPosition;
+  }
+  if (d.aboutNeonEnabled !== void 0) {
+    if (typeof d.aboutNeonEnabled !== "boolean") fail4("\u062E\u064A\u0627\u0631 \u0627\u0644\u0646\u064A\u0648\u0646 \u063A\u064A\u0631 \u0635\u062D\u064A\u062D");
+    out.aboutNeonEnabled = d.aboutNeonEnabled;
+  }
+  if (d.aboutAlign !== void 0) {
+    if (!["start", "center", "end"].includes(d.aboutAlign)) fail4("\u0645\u062D\u0627\u0630\u0627\u0629 \u063A\u064A\u0631 \u0635\u062D\u064A\u062D\u0629");
+    out.aboutAlign = d.aboutAlign;
+  }
+  if (d.headerColors !== void 0) {
+    if (!d.headerColors || typeof d.headerColors !== "object" || Array.isArray(d.headerColors)) fail4("\u0623\u0644\u0648\u0627\u0646 \u0627\u0644\u0647\u064A\u062F\u0631 \u063A\u064A\u0631 \u0635\u062D\u064A\u062D\u0629");
+    out.headerColors = {};
+    for (const mode of ["light", "dark"]) {
+      const p = d.headerColors[mode];
+      if (!p || !/^#[0-9a-f]{6}$/i.test(p.background) || !/^#[0-9a-f]{6}$/i.test(p.text)) fail4("\u0623\u0644\u0648\u0627\u0646 \u0627\u0644\u0647\u064A\u062F\u0631 \u063A\u064A\u0631 \u0635\u062D\u064A\u062D\u0629");
+      out.headerColors[mode] = { background: p.background, text: p.text };
+    }
+  }
+  if (d.palettes !== void 0) {
+    if (!d.palettes || typeof d.palettes !== "object") fail4("\u0623\u0644\u0648\u0627\u0646 \u063A\u064A\u0631 \u0635\u062D\u064A\u062D\u0629");
+    out.palettes = {};
+    for (const mode of ["light", "dark"]) {
+      if (!d.palettes[mode]) continue;
+      out.palettes[mode] = {};
+      for (const k of COLOR_KEYS) if (d.palettes[mode][k] !== void 0) {
+        if (!/^#[0-9a-f]{6}$/i.test(d.palettes[mode][k])) fail4("\u0644\u0648\u0646 \u063A\u064A\u0631 \u0635\u062D\u064A\u062D");
+        out.palettes[mode][k] = d.palettes[mode][k];
+      }
+    }
+  }
+  return out;
+}
+
+// supabase/functions/clinic-api/storage-cleanup.js
+function enqueue(state, items) {
+  state.attachmentGarbage ||= {};
+  for (const item of Object.values(items || {})) if (/^[0-9a-f-]{36}$/.test(item?.key)) state.attachmentGarbage[item.key] = { queuedAt: (/* @__PURE__ */ new Date()).toISOString() };
+}
+async function drain(adapter2) {
+  const snapshot = await adapter2.read(), keys2 = Object.keys(snapshot.attachmentGarbage || {});
+  for (const key of keys2) {
+    if (!adapter2.deleteAttachment) continue;
+    try {
+      await adapter2.deleteAttachment(key);
+      await adapter2.mutate((original) => {
+        const s = structuredClone(original);
+        delete s.attachmentGarbage?.[key];
+        return s;
+      });
+    } catch {
+    }
+  }
+  return Object.keys((await adapter2.read()).attachmentGarbage || {}).length;
+}
+
+// supabase/functions/clinic-api/management.js
+function site(value, fail5) {
+  if (!value || typeof value !== "object" || Array.isArray(value)) fail5("\u0628\u064A\u0627\u0646\u0627\u062A \u0627\u0644\u0645\u0648\u0642\u0639 \u063A\u064A\u0631 \u0635\u062D\u064A\u062D\u0629");
+  const result = {};
+  for (const k of ["doctorName", "specialty", "clinicName", "bookingPhone", "emergencyPhone", "whatsappPhone", "about", "footer", "headerTitle", "headerSubtitle", "headerText"]) {
+    if (value[k] !== void 0) {
+      if (typeof value[k] !== "string" || value[k].length > (["about", "footer", "headerTitle", "headerSubtitle", "headerText"].includes(k) ? 2e3 : 160)) fail5("\u0627\u0644\u0646\u0635 \u0637\u0648\u064A\u0644 \u0623\u0648 \u063A\u064A\u0631 \u0635\u062D\u064A\u062D");
+      result[k] = value[k];
+    }
+  }
+  for (const k of ["bookingPhone", "emergencyPhone", "whatsappPhone"]) if (result[k] && !/^\+?[0-9]{7,15}$/.test(result[k])) fail5("\u0631\u0642\u0645 \u0627\u0644\u0647\u0627\u062A\u0641 \u063A\u064A\u0631 \u0635\u062D\u064A\u062D");
+  result.branches = {};
+  for (const b of Object.keys(value.branches || {})) {
+    if (!validId2(b)) fail5("\u0631\u0645\u0632 \u0641\u0631\u0639 \u063A\u064A\u0631 \u0635\u062D\u064A\u062D");
+    const x = value.branches?.[b];
+    if (!x) continue;
+    result.branches[b] = {};
+    for (const k of ["name", "address", "phone"]) {
+      if (typeof x[k] !== "string" || x[k].length > 300) fail5("\u0628\u064A\u0627\u0646\u0627\u062A \u0627\u0644\u0641\u0631\u0639 \u063A\u064A\u0631 \u0635\u062D\u064A\u062D\u0629");
+      result.branches[b][k] = x[k];
+    }
+    if (x.phone && !/^\+?[0-9]{7,15}$/.test(x.phone)) fail5("\u0647\u0627\u062A\u0641 \u0627\u0644\u0641\u0631\u0639 \u063A\u064A\u0631 \u0635\u062D\u064A\u062D");
+  }
+  Object.assign(result, validate(value.sections, value.layout, fail5));
+  const d = value.design || {};
+  result.design = validate2(d);
+  for (const k of ["primary", "background", "text", "accent", "card"]) {
+    if (d[k] !== void 0) {
+      if (!/^#[0-9a-f]{6}$/i.test(d[k])) fail5("\u0644\u0648\u0646 \u063A\u064A\u0631 \u0635\u062D\u064A\u062D");
+      result.design[k] = d[k];
+    }
+  }
+  for (const [k, min, max] of [["radius", 0, 40], ["width", 600, 1200], ["fontSize", 14, 22]]) if (d[k] !== void 0) {
+    if (!Number.isInteger(d[k]) || d[k] < min || d[k] > max) fail5("\u0642\u064A\u0645\u0629 \u062A\u0635\u0645\u064A\u0645 \u063A\u064A\u0631 \u0635\u062D\u064A\u062D\u0629");
+    result.design[k] = d[k];
+  }
+  if (d.showBackground !== void 0) {
+    if (typeof d.showBackground !== "boolean") fail5("\u062E\u064A\u0627\u0631 \u0627\u0644\u062E\u0644\u0641\u064A\u0629 \u063A\u064A\u0631 \u0635\u062D\u064A\u062D");
+    result.design.showBackground = d.showBackground;
+  }
+  for (const k of ["logo", "doctorPhoto", "watermarkImage"]) if (d[k] !== void 0) {
+    if (d[k] === "") {
+      result.design[k] = "";
+      continue;
+    }
+    const match = String(d[k]).match(/^data:image\/(png|jpeg|webp);base64,([A-Za-z0-9+/]+=*)$/);
+    if (!match) fail5("\u0627\u0644\u0635\u0648\u0631\u0629 \u064A\u062C\u0628 \u0623\u0646 \u062A\u0643\u0648\u0646 PNG \u0623\u0648 JPEG \u0623\u0648 WebP");
+    const bytes = Buffer2.from(match[2], "base64");
+    if (bytes.length > 2e5 || bytes.length < 12) fail5("\u062D\u062C\u0645 \u0627\u0644\u0635\u0648\u0631\u0629 \u063A\u064A\u0631 \u0645\u0646\u0627\u0633\u0628");
+    const good = match[1] === "png" ? bytes.subarray(0, 8).equals(Buffer2.from([137, 80, 78, 71, 13, 10, 26, 10])) : match[1] === "jpeg" ? bytes[0] === 255 && bytes[1] === 216 : bytes.toString("ascii", 0, 4) === "RIFF" && bytes.toString("ascii", 8, 12) === "WEBP";
+    if (!good) fail5("\u0645\u062D\u062A\u0648\u0649 \u0627\u0644\u0635\u0648\u0631\u0629 \u063A\u064A\u0631 \u0635\u062D\u064A\u062D");
+    result.design[k] = d[k];
+  }
+  return result;
+}
+function advanceRemovedBookings(s, removed, core) {
+  const advance = new Set(removed.filter((x) => x.s === "exam").map((x) => x.date + "_" + x.b));
+  for (const key of advance) {
+    const date2 = key.slice(0, 10), branch2 = key.slice(11);
+    if (date2 !== core.today() || !core.canExamine(s, date2, branch2) || s.sessions?.[key] && s.sessions[key].status !== "running") continue;
+    const rows = Object.values(s.bookings?.[date2] || {}).filter((x) => x.b === branch2);
+    if (rows.some((x) => x.s === "exam")) continue;
+    const next = rows.filter((x) => x.s === "wait").sort(core.queueOrder)[0];
+    if (next) {
+      next.s = "exam";
+      next.startedAt = (/* @__PURE__ */ new Date()).toISOString();
+      next.rev = (next.rev || 0) + 1;
+    }
+  }
+}
+function removePatientState(s, p, core, removedBookings = []) {
+  const patientId = idForPhone(s, p), bookingIds = new Set(removedBookings.map((x) => x.id)), removed = [...removedBookings], matches = (x) => !!x && (core.phone(x.phone || x.p) === p || !!patientId && x.patientId === patientId);
+  enqueue(s, s.attachments?.[p]);
+  delete s.complaintSequences?.[p];
+  for (const [date2, rows] of Object.entries(s.bookings || {})) for (const [id2, x] of Object.entries(rows || {})) if (matches(x)) {
+    bookingIds.add(id2);
+    removed.push({ ...x, date: date2 });
+    delete rows[id2];
+  }
+  for (const [id2, x] of Object.entries(s.deletedBookings || {})) if (matches(x?.booking)) {
+    bookingIds.add(id2);
+    if (x.booking.id) bookingIds.add(x.booking.id);
+    delete s.deletedBookings[id2];
+  }
+  for (const kind of ["patients", "files", "complaints", "followups", "attachments", "complaintSequences"]) delete s[kind]?.[p];
+  for (const root of ["clinicalVisits", "followupPlans", "urgentReviews", "bookingContacts", "checkins", "appointmentRequests", "waitingList", "tasks", "inbox"]) for (const [id2, x] of Object.entries(s[root] || {})) if (matches(x) || bookingIds.has(x?.bookingId) || bookingIds.has(x?.sourceBookingId) || ["checkins", "bookingContacts"].includes(root) && bookingIds.has(id2)) delete s[root][id2];
+  for (const drafts of Object.values(s.drafts || {})) for (const [id2, x] of Object.entries(drafts || {})) if (x && (core.phone(x.entity) === p || x.entity === patientId || bookingIds.has(x.entity) || matches(x.data))) delete drafts[id2];
+  delete s.editingPresence?.[p];
+  advanceRemovedBookings(s, removed, core);
+  ensure(s);
+  core.rebuild(s);
+  return s;
+}
+function mutate(original, uid, input, core) {
+  const s = structuredClone(original), r = core.role(s, uid);
+  if (["watermarkSave", "aboutSave", "headerSave"].includes(input.action) && s.settings) delete s.settings.previousThemeDisplay;
+  if (input.action === "displaySave") {
+    requirePermission(r, "display.manage");
+    if (input.revision !== (s.settings?.displayRev || 0)) core.fail("\u062A\u063A\u064A\u0631\u062A \u0625\u0639\u062F\u0627\u062F\u0627\u062A \u0627\u0644\u0634\u0627\u0634\u0629 \u0645\u0646 \u062C\u0644\u0633\u0629 \u0623\u062E\u0631\u0649\u061B \u0623\u0639\u062F \u0627\u0644\u062A\u062D\u0645\u064A\u0644 \u0623\u0648\u0644\u064B\u0627", 409);
+    s.settings ||= {};
+    const normalized2 = normalize3(input.config, core.branchIds(s, true)), previous = normalize3(s.settings.display || {}, core.branchIds(s, true));
+    if (r.r !== "admin" && Object.keys(normalized2).some((key) => (key === "footerText" || key.startsWith("notice")) && JSON.stringify(normalized2[key]) !== JSON.stringify(previous[key]))) core.fail("\u062A\u0639\u062F\u064A\u0644 \u062A\u0635\u0645\u064A\u0645 \u0631\u0633\u0627\u0644\u0629 \u0627\u0644\u0637\u0648\u0627\u0631\u0626 \u0645\u062A\u0627\u062D \u0644\u0644\u0623\u062F\u0645\u0646 \u0641\u0642\u0637", 403);
+    s.settings.display = normalized2;
+    s.settings.displayRev = (s.settings.displayRev || 0) + 1;
+    return s;
+  }
+  if (input.action === "siteContentSave") {
+    requirePermission(r, "site.manage");
+    if (input.revision !== (s.settings?.contentRev || 0)) core.fail("\u062A\u0645 \u062A\u0639\u062F\u064A\u0644 \u0627\u0644\u0645\u062D\u062A\u0648\u0649 \u0645\u0646 \u062C\u0644\u0633\u0629 \u0623\u062E\u0631\u0649\u061B \u0623\u0639\u062F \u0627\u0644\u062A\u062D\u0645\u064A\u0644 \u0642\u0628\u0644 \u0627\u0644\u062D\u0641\u0638", 409);
+    const content = validate(input.sections, input.layout, core.fail);
+    s.settings ||= {};
+    s.settings.site = { ...s.settings.site, ...content };
+    s.settings.contentRev = (s.settings.contentRev || 0) + 1;
+    return s;
+  }
+  if (input.action === "watermarkSave") {
+    requirePermission(r, "site.manage");
+    if (input.revision !== (s.settings?.watermarkRev || 0)) core.fail("\u062A\u0645 \u062A\u0639\u062F\u064A\u0644 \u0627\u0644\u0644\u0648\u062C\u0648 \u0627\u0644\u062E\u0644\u0641\u064A\u0629 \u0645\u0646 \u062C\u0644\u0633\u0629 \u0623\u062E\u0631\u0649\u061B \u0623\u0639\u062F \u062A\u062D\u0645\u064A\u0644 \u0627\u0644\u0625\u0639\u062F\u0627\u062F\u0627\u062A \u0623\u0648\u0644\u064B\u0627", 409);
+    const incoming = site({ design: input.design }, core.fail);
+    s.settings ||= {};
+    const current = s.settings.site || {}, design = { ...current.design };
+    for (const key of Object.keys(design)) if (key.startsWith("watermark")) delete design[key];
+    for (const [key, value] of Object.entries(incoming.design)) if (key.startsWith("watermark")) design[key] = value;
+    s.settings.previousDesign = structuredClone(current.design || {});
+    s.settings.site = { ...current, design };
+    s.settings.watermarkRev = (s.settings.watermarkRev || 0) + 1;
+    return s;
+  }
+  if (input.action === "aboutSave") {
+    requirePermission(r, "site.manage");
+    if (input.revision !== (s.settings?.aboutRev || 0)) core.fail("\u062A\u0645 \u062A\u0639\u062F\u064A\u0644 \u0646\u0628\u0630\u0629 \u0627\u0644\u0639\u064A\u0627\u062F\u0629 \u0645\u0646 \u062C\u0644\u0633\u0629 \u0623\u062E\u0631\u0649\u061B \u0623\u0639\u062F \u062A\u062D\u0645\u064A\u0644 \u0627\u0644\u0625\u0639\u062F\u0627\u062F\u0627\u062A \u0623\u0648\u0644\u064B\u0627", 409);
+    if (typeof input.text !== "string") core.fail("\u0646\u0635 \u0627\u0644\u0646\u0628\u0630\u0629 \u063A\u064A\u0631 \u0635\u062D\u064A\u062D");
+    const incoming = site({ about: input.text, design: input.design }, core.fail);
+    s.settings ||= {};
+    const current = s.settings.site || {}, design = { ...current.design };
+    for (const key of Object.keys(design)) if (key.startsWith("about")) delete design[key];
+    for (const [key, value] of Object.entries(incoming.design)) if (key.startsWith("about")) design[key] = value;
+    if (JSON.stringify(current.design) !== JSON.stringify(design)) s.settings.previousDesign = structuredClone(current.design || {});
+    s.settings.site = { ...current, about: incoming.about, design };
+    s.settings.aboutRev = (s.settings.aboutRev || 0) + 1;
+    return s;
+  }
+  if (input.action === "headerSave") {
+    requirePermission(r, "site.manage");
+    if (input.revision !== (s.settings?.headerRev || 0)) core.fail("\u062A\u0645 \u062A\u0639\u062F\u064A\u0644 \u0627\u0644\u0647\u064A\u062F\u0631 \u0645\u0646 \u062C\u0644\u0633\u0629 \u0623\u062E\u0631\u0649\u061B \u0623\u0639\u062F \u062A\u062D\u0645\u064A\u0644 \u0627\u0644\u0625\u0639\u062F\u0627\u062F\u0627\u062A \u0623\u0648\u0644\u064B\u0627", 409);
+    const incoming = site(input.site, core.fail);
+    s.settings ||= {};
+    const current = s.settings.site || {}, next = { ...current }, design = { ...current.design };
+    for (const key of ["headerTitle", "headerSubtitle", "headerText"]) if (incoming[key] !== void 0) next[key] = incoming[key];
+    for (const key of ["headerWidth", "headerRadius", "headerHeight", "headerTitleSize", "headerSubtitleSize", "headerTextSize", "logoSize", "photoSize", "headerPadding", "headerGap", "headerAlign", "logo", "doctorPhoto"]) if (incoming.design[key] !== void 0) design[key] = incoming.design[key];
+    if (incoming.design.headerColors) design.headerColors = incoming.design.headerColors;
+    if (incoming.design.palettes) {
+      design.palettes = structuredClone(current.design?.palettes || {});
+      for (const mode of ["light", "dark"]) if (incoming.design.palettes?.[mode]) {
+        const colors2 = incoming.design.palettes[mode];
+        design.palettes[mode] = { ...colors2, ...design.palettes[mode] };
+        for (const key of ["headerBackground", "headerText"]) if (colors2[key] !== void 0) design.palettes[mode][key] = colors2[key];
+      }
+    }
+    if (JSON.stringify(current.design) !== JSON.stringify(design)) s.settings.previousDesign = structuredClone(current.design || {});
+    next.design = design;
+    s.settings.site = next;
+    s.settings.headerRev = (s.settings.headerRev || 0) + 1;
+    return s;
+  }
+  if (input.action === "siteThemeSave") {
+    if (r.r !== "admin") core.fail("\u062A\u0637\u0628\u064A\u0642 \u062B\u064A\u0645 \u0627\u0644\u0645\u0648\u0642\u0639 \u0628\u0627\u0644\u0643\u0627\u0645\u0644 \u0645\u062A\u0627\u062D \u0644\u0644\u0623\u062F\u0645\u0646 \u0641\u0642\u0637", 403);
+    if (input.revision !== (s.settings?.displayRev || 0)) core.fail("\u062A\u063A\u064A\u0631\u062A \u0625\u0639\u062F\u0627\u062F\u0627\u062A \u0634\u0627\u0634\u0629 \u0627\u0644\u062F\u0648\u0631\u061B \u0623\u0639\u062F \u062A\u062D\u0645\u064A\u0644 \u0627\u0644\u062A\u0635\u0645\u064A\u0645 \u0642\u0628\u0644 \u062A\u0637\u0628\u064A\u0642 \u0627\u0644\u062B\u064A\u0645", 409);
+    const checked = site({ design: input.site?.design }, core.fail), next = structuredClone(s);
+    next.settings ||= {};
+    next.settings.site = { ...s.settings?.site, design: checked.design };
+    const design = next.settings.site.design, palettes = design.palettes;
+    for (const mode of ["light", "dark"]) for (const key of ["background", "card", "text", "primary", "accent", "muted", "line", "headerBackground", "headerText"]) if (!palettes?.[mode]?.[key]) core.fail("\u0627\u062E\u062A\u0631 \u062B\u064A\u0645\u064B\u0627 \u0643\u0627\u0645\u0644\u064B\u0627 \u0644\u0644\u0646\u0647\u0627\u0631 \u0648\u0627\u0644\u0644\u064A\u0644 \u0642\u0628\u0644 \u0627\u0644\u062D\u0641\u0638");
+    const previous = normalize3(s.settings?.display || {}, core.branchIds(s, true)), light2 = palettes.light;
+    next.settings.previousDesign = structuredClone(s.settings?.site?.design || {});
+    next.settings.previousThemeDisplay = Object.fromEntries(Object.entries(previous).filter(([key]) => key === "colors" || key === "customColors" || key.startsWith("notice") && key.endsWith("Color") || key === "noticeBackground"));
+    Object.assign(design, { primary: light2.primary, background: light2.background, text: light2.text, accent: light2.accent, card: light2.card, aboutTextColor: light2.text, aboutBackground: light2.card, aboutBorderColor: light2.primary, aboutNeonColor: light2.accent, headerColors: Object.fromEntries(["light", "dark"].map((mode) => [mode, { background: palettes[mode].headerBackground, text: palettes[mode].headerText }])) });
+    const colors2 = Object.fromEntries(["light", "dark"].map((mode) => {
+      const p = palettes[mode];
+      return [mode, { background: p.background, currentBackground: p.headerBackground, currentText: p.headerText, nextBackground: p.card, nextText: p.text, accent: p.accent }];
+    }));
+    next.settings.display = { ...previous, colors: colors2, customColors: true, noticeTextColor: light2.primary, noticeBackground: light2.card, noticeBorderColor: light2.primary, noticeNeonColor: light2.accent };
+    for (const key of ["displayRev", "headerRev", "aboutRev"]) next.settings[key] = (s.settings?.[key] || 0) + 1;
+    return next;
+  }
+  if (input.action === "siteSave") {
+    requirePermission(r, "site.manage");
+    s.settings ||= {};
+    const nextSite = site(input.site, core.fail);
+    nextSite.sections = s.settings.site?.sections || {};
+    nextSite.layout = s.settings.site?.layout || {};
+    if (JSON.stringify(s.settings.site?.design) !== JSON.stringify(nextSite.design)) {
+      s.settings.previousDesign = structuredClone(s.settings.site?.design || {});
+      delete s.settings.previousThemeDisplay;
+    }
+    s.settings.site = nextSite;
+    if (s.settings.branches) for (const [b, x] of Object.entries(s.settings.site.branches)) {
+      if (s.settings.branches[b]) s.settings.branches[b] = { ...s.settings.branches[b], ...x };
+    }
+    return s;
+  }
+  if (input.action === "userSave") {
+    requirePermission(r, "users.manage");
+    if (!s.roles[input.uid]) core.fail("\u0627\u0644\u0645\u0633\u062A\u062E\u062F\u0645 \u063A\u064A\u0631 \u0645\u0648\u062C\u0648\u062F", 404);
+    if (s.roles[input.uid].deletePending) core.fail("\u062D\u0630\u0641 \u0627\u0644\u062D\u0633\u0627\u0628 \u0645\u0639\u0644\u0642\u061B \u0627\u0633\u062A\u0643\u0645\u0644 \u0627\u0644\u062D\u0630\u0641 \u0623\u0648\u0644\u064B\u0627", 409);
+    const next = validateRole(input.role, core.fail, core.branchIds(s));
+    if (next.u !== s.roles[input.uid].u) core.fail("\u0627\u0633\u0645 \u0627\u0644\u062F\u062E\u0648\u0644 \u062B\u0627\u0628\u062A\u061B \u064A\u0645\u0643\u0646\u0643 \u062A\u0639\u062F\u064A\u0644 \u0627\u0644\u0627\u0633\u0645 \u0627\u0644\u0638\u0627\u0647\u0631");
+    if (s.roles[input.uid].r === "admin" && (next.r !== "admin" || next.enabled === false) && !Object.entries(s.roles).some(([id2, x]) => id2 !== input.uid && x.r === "admin" && x.enabled !== false)) core.fail("\u064A\u062C\u0628 \u0625\u0628\u0642\u0627\u0621 \u062D\u0633\u0627\u0628 \u0645\u062F\u064A\u0631 \u0641\u0639\u0627\u0644 \u0648\u0627\u062D\u062F \u0639\u0644\u0649 \u0627\u0644\u0623\u0642\u0644");
+    s.roles[input.uid] = next;
+    return s;
+  }
+  if (input.action === "patientSave") {
+    requirePermission(r, "patients.edit");
+    indexPatients(s);
+    const p = core.phone(input.phone), to = core.phone(input.newPhone || p), name = String(input.name || "").trim();
+    if (!/^01[0125]\d{8}$/.test(p) || !/^01[0125]\d{8}$/.test(to) || !name || name.length > 120) core.fail("\u0631\u0627\u062C\u0639 \u0627\u0633\u0645 \u0627\u0644\u062D\u0627\u0644\u0629 \u0648\u0627\u0644\u0647\u0627\u062A\u0641");
+    if (s.patients[p]) assertAccess(s, r, p);
+    if (p !== to && s.patients[to]) core.fail("\u0631\u0642\u0645 \u0627\u0644\u0647\u0627\u062A\u0641 \u0627\u0644\u062C\u062F\u064A\u062F \u0645\u0633\u062A\u062E\u062F\u0645 \u0644\u062D\u0627\u0644\u0629 \u0623\u062E\u0631\u0649", 409);
+    const spouse2 = {};
+    for (const k of ["spouseName", "spouseJob", "spousePhone"]) if (Object.hasOwn(input, k)) {
+      if (typeof input[k] !== "string" || input[k].length > 120) core.fail("\u0631\u0627\u062C\u0639 \u0628\u064A\u0627\u0646\u0627\u062A \u0627\u0644\u0632\u0648\u062C");
+      spouse2[k] = k === "spousePhone" ? core.phone(input[k]) : input[k].trim();
+      if (k === "spousePhone" && spouse2[k] && !/^01[0125]\d{8}$/.test(spouse2[k])) core.fail("\u0631\u0642\u0645 \u0645\u0648\u0628\u0627\u064A\u0644 \u0627\u0644\u0632\u0648\u062C \u063A\u064A\u0631 \u0635\u062D\u064A\u062D");
+    }
+    const stableId = rename(s, p, to);
+    s.patients[to] = { ...s.patients[p], ...stableId ? { id: stableId, patientId: stableId } : {}, ...spouse2, n: name, d: s.patients[p]?.d || core.today(), ...!allPatients(r) ? { br: r.br } : {} };
+    if (p !== to) delete s.patients[p];
+    for (const rows of Object.values(s.bookings || {})) for (const x of Object.values(rows)) if (x.phone === p) {
+      x.phone = to;
+      x.name = name;
+      x.rev = (x.rev || 0) + 1;
+    }
+    if (p !== to) {
+      for (const kind of ["files", "complaints", "followups", "attachments", "complaintSequences"]) if (s[kind]?.[p]) {
+        s[kind][to] = s[kind][p];
+        delete s[kind][p];
+      }
+    }
+    for (const n of Object.values(s.inbox || {})) if (n.p === p) {
+      n.p = to;
+      n.n = name;
+    }
+    ensure(s);
+    core.rebuild(s);
+    return s;
+  }
+  if (input.action === "patientDelete") {
+    requirePermission(r, "patients.delete");
+    const p = core.phone(input.phone);
+    if (!/^01[0125]\d{8}$/.test(p)) core.fail("\u0647\u0627\u062A\u0641 \u063A\u064A\u0631 \u0635\u062D\u064A\u062D");
+    assertAccess(s, r, p);
+    const patientId = idForPhone(s, p), matches = (x) => !!x && (core.phone(x.phone || x.p) === p || !!patientId && x.patientId === patientId);
+    if (!allPatients(r)) {
+      const records2 = [...Object.values(s.bookings || {}).flatMap((rows) => Object.values(rows || {})), ...Object.values(s.deletedBookings || {}).map((x) => x?.booking)];
+      if (s.patients?.[p]?.br && s.patients[p].br !== r.br || records2.some((x) => matches(x) && x.b !== r.br)) core.fail("\u0627\u0644\u062D\u0627\u0644\u0629 \u0644\u0647\u0627 \u0628\u064A\u0627\u0646\u0627\u062A \u0641\u064A \u0641\u0631\u0639 \u0622\u062E\u0631\u061B \u062D\u0630\u0641 \u0627\u0644\u0645\u0644\u0641 \u0627\u0644\u0643\u0627\u0645\u0644 \u064A\u062D\u062A\u0627\u062C \u0635\u0644\u0627\u062D\u064A\u0629 \u062C\u0645\u064A\u0639 \u0627\u0644\u0641\u0631\u0648\u0639", 403);
+    }
+    return removePatientState(s, p, core);
+  }
+  if (input.action === "dataClear") {
+    requirePermission(r, "data.delete");
+    if (input.confirmation !== "DELETE_CLINIC_DATA") core.fail("\u062A\u0623\u0643\u064A\u062F \u0627\u0644\u062D\u0630\u0641 \u0645\u0637\u0644\u0648\u0628");
+    ensure(s);
+    for (const items of Object.values(s.attachments || {})) enqueue(s, items);
+    for (const kind of ["bookings", "patients", "files", "complaints", "inbox", "track", "deletedBookings", "sessions", "followups", "attachments", "complaintSequences", "clinicalVisits", "followupPlans", "urgentReviews", "bookingContacts", "checkins", "appointmentRequests", "waitingList", "tasks", "slotOpenings", "dayClosures", "scheduleTransferPending", "editingPresence"]) s[kind] = {};
+    for (const drafts of Object.values(s.drafts || {})) for (const [id2, x] of Object.entries(drafts || {})) if (["booking", "complaint", "medical", "patient", "task"].includes(x?.kind)) delete drafts[id2];
+    for (const batch of Object.values(s.settings?.trainingYearBatches || {})) if (batch && batch.status !== "purged") Object.assign(batch, { status: "purged", purgedAt: (/* @__PURE__ */ new Date()).toISOString(), purgedBy: uid });
+    ensure(s);
+    return s;
+  }
+  core.fail("\u0639\u0645\u0644\u064A\u0629 \u063A\u064A\u0631 \u0645\u0633\u0645\u0648\u062D\u0629", 403);
+}
+
+// supabase/functions/clinic-api/year-end-training.js
+function authorize2(s, uid, key) {
+  if (role(s, uid).r !== "admin") fail3("\u0647\u0630\u0647 \u0627\u0644\u0639\u0645\u0644\u064A\u0629 \u0644\u0644\u0623\u062F\u0645\u0646 \u0641\u0642\u0637", 403);
+  requirePermission(role(s, uid), key);
+}
+function plan(s, uid) {
+  authorize2(s, uid, "data.import");
+  const from = today(), to = from.slice(0, 4) + "-12-31", days = [], taggedBatches = new Set(Object.values(s.bookings || {}).flatMap((rows) => Object.values(rows).map((x) => x.trainingBatch)).filter(Boolean)), batches = Object.values(s.settings?.trainingYearBatches || {}).filter((x) => x.status === "active" || taggedBatches.has(x.id)).map((x) => ({ ...x, status: "active" })), active = batches.find((x) => x.year === from.slice(0, 4));
+  if (active) return { from, to, days, bookings: active.bookings, patients: active.patients, existingBatch: active, batches };
+  for (let d = from; d <= to; ) {
+    const available3 = availability(branches(s), s.settings?.sched || {}, d);
+    if (available3.scheduled.length > 1) fail3("\u062A\u0639\u0627\u0631\u0636 \u0641\u064A \u062C\u062F\u0648\u0644 \u0627\u0644\u0637\u0628\u064A\u0628 \u064A\u0648\u0645 " + d + "\u061B \u062D\u062F\u062F \u0641\u0631\u0639\u064B\u0627 \u0648\u0627\u062D\u062F\u064B\u0627 \u0642\u0628\u0644 \u0625\u0636\u0627\u0641\u0629 \u0627\u0644\u0628\u064A\u0627\u0646\u0627\u062A", 409);
+    for (const item of available3.scheduled) {
+      const limit = branches(s)[item.id].maxBookings || 0, existing = Object.values(s.bookings?.[d] || {}).filter((x) => x.b === item.id && x.s !== "cx").length, count = Math.max(0, Math.min(10, limit ? limit - existing : 10));
+      if (count) days.push({ date: d, branch: item.id, count });
+    }
+    const next = /* @__PURE__ */ new Date(d + "T12:00:00Z");
+    next.setUTCDate(next.getUTCDate() + 1);
+    d = next.toISOString().slice(0, 10);
+  }
+  return { from, to, days, bookings: days.reduce((n, d) => n + d.count, 0), patients: days.reduce((n, d) => n + d.count, 0), existingBatch: null, batches };
+}
+function seed(original, uid) {
+  const p = plan(original, uid);
+  if (p.existingBatch) return { state: original, summary: { ...p.existingBatch, alreadyExists: true } };
+  if (!p.bookings) fail3("\u0644\u0627 \u062A\u0648\u062C\u062F \u0623\u064A\u0627\u0645 \u0639\u0645\u0644 \u0645\u0639\u0644\u0646\u0629 \u0645\u062A\u0627\u062D\u0629 \u062D\u062A\u0649 \u0646\u0647\u0627\u064A\u0629 \u0627\u0644\u0639\u0627\u0645\u061B \u0631\u0627\u062C\u0639 \u0645\u0648\u0627\u0639\u064A\u062F \u0627\u0644\u0641\u0631\u0648\u0639", 409);
+  const s = structuredClone(original), at = (/* @__PURE__ */ new Date()).toISOString(), batch = "year-end-" + p.from.slice(0, 4) + "-" + Date.now() + "-" + Object.keys(original.settings?.trainingYearBatches || {}).length, by = role(s, uid).u;
+  for (const key of ["patients", "files", "complaints", "complaintSequences", "bookings", "sequences"]) s[key] ||= {};
+  const used = /* @__PURE__ */ new Set([...Object.keys(s.patients), ...Object.keys(s.files), ...Object.keys(s.complaints), ...Object.keys(s.attachments || {}), ...Object.values(s.bookings).flatMap((rows) => Object.values(rows).map((x) => x.phone)), ...Object.values(s.deletedBookings || {}).map((x) => x.booking?.phone)]);
+  for (const group of Object.values(s.recycleBin || {})) for (const item of group.items || []) {
+    if (["patients", "files", "complaints", "attachments"].includes(item.path?.[0])) used.add(item.path[1]);
+    if (item.path?.[0] === "bookings") {
+      if (item.before?.phone) used.add(item.before.phone);
+      else for (const x of Object.values(item.before || {})) if (x?.phone) used.add(x.phone);
+    }
+  }
+  let serial = 6e4, index = 0;
+  for (const day of p.days) for (let i = 0; i < day.count; i++) {
+    let phone3;
+    do {
+      phone3 = "010000" + String(++serial).padStart(5, "0");
+      if (serial > 99999) fail3("\u0646\u0641\u062F\u062A \u0623\u0631\u0642\u0627\u0645 \u0627\u0644\u062A\u062F\u0631\u064A\u0628 \u0627\u0644\u0645\u062A\u0627\u062D\u0629", 409);
+    } while (used.has(phone3));
+    used.add(phone3);
+    const name = egyptianName(index), spouse2 = spouse(phone3), { file } = clinicalProfile(index), id2 = "demo-year-" + batch + "-" + index, key = day.date + "_" + day.branch, rows = s.bookings[day.date] ||= {}, no = Math.max(s.sequences[key] || 0, 0, ...Object.values(rows).filter((x) => x.b === day.branch).map((x) => x.no || 0)) + 1;
+    rows[id2] = { id: id2, date: day.date, b: day.branch, no, name, phone: phone3, v: ["exam", "cons", "follow"][index % 3], s: "wait", nt: "", rev: 1, trainingBatch: batch, ...spouse2 };
+    s.sequences[key] = no;
+    s.patients[phone3] = { n: name, d: p.from, ...spouse2, trainingBatch: batch, rev: 1 };
+    s.files[phone3] = { ...file, t: at, rev: 1, trainingBatch: batch };
+    s.complaints[phone3] = {};
+    for (let visit = 0; visit < 3; visit++) {
+      const dt = /* @__PURE__ */ new Date(p.from + "T12:00:00Z");
+      dt.setUTCDate(dt.getUTCDate() - 42 + visit * 14);
+      const date2 = dt.toISOString().slice(0, 10), cid = id2 + "-visit-" + (visit + 1), profile = clinicalProfile(index + visit).profile;
+      s.complaints[phone3][cid] = { id: cid, no: visit + 1, date: date2, reason: profile.reason, text: profile.text, tx: profile.treatment, at: date2 + "T12:00:00.000Z", by, byUid: uid, trainingBatch: batch };
+    }
+    s.complaintSequences[phone3] = 3;
+    index++;
+  }
+  const summary = { id: batch, year: p.from.slice(0, 4), from: p.from, to: p.to, patients: index, bookings: index, complaints: index * 3, workingDays: p.days.length, status: "active", createdAt: at, createdBy: uid };
+  s.settings ||= {};
+  s.settings.trainingYearBatches ||= {};
+  s.settings.trainingYearBatches[batch] = summary;
+  rebuild(s);
+  return { state: s, summary };
+}
+function purge(original, uid, batch) {
+  authorize2(original, uid, "data.delete");
+  const meta = original.settings?.trainingYearBatches?.[batch];
+  if (!meta) fail3("\u062F\u0641\u0639\u0629 \u0627\u0644\u062A\u062F\u0631\u064A\u0628 \u063A\u064A\u0631 \u0645\u0648\u062C\u0648\u062F\u0629", 404);
+  const s = structuredClone(original), summary = { patients: 0, bookings: 0, complaints: 0, preservedSharedPatients: 0 }, removed = [];
+  const bookingPhones = new Map(Object.values(original.bookings || {}).flatMap(Object.values).map((x) => [x.id, x.phone]));
+  const protectedPhones = new Set(entries(original).filter((item) => item.row.trainingBatch && item.row.trainingBatch !== batch || item.row.booking?.trainingBatch && item.row.booking.trainingBatch !== batch || protectedEntry(original, item)).map((item) => item.phone || bookingPhones.get(item.row.bookingId || item.row.sourceBookingId || item.path[1])).filter(Boolean));
+  for (const drafts of Object.values(original.drafts || {})) for (const x of Object.values(drafts || {})) if (x && Date.parse(x.updatedAt) >= Date.parse("2026-10-31T22:00:00.000Z")) {
+    const phone3 = phone(x.data?.phone || x.entity);
+    if (/^01[0125]\d{8}$/.test(phone3)) protectedPhones.add(phone3);
+    else if (bookingPhones.has(x.entity)) protectedPhones.add(bookingPhones.get(x.entity));
+  }
+  for (const rows of Object.values(s.bookings || {})) for (const [id2, x] of Object.entries(rows)) if (x.trainingBatch === batch) {
+    removed.push(x);
+    delete rows[id2];
+    summary.bookings++;
+  }
+  for (const [id2, x] of Object.entries(s.deletedBookings || {})) if (x?.booking?.trainingBatch === batch) {
+    removed.push(x.booking);
+    delete s.deletedBookings[id2];
+  }
+  for (const [phone3, patient] of Object.entries(s.patients || {})) {
+    const shared = protectedPhones.has(phone3) || Object.values(s.bookings || {}).some((rows) => Object.values(rows).some((x) => x.phone === phone3)) || Object.values(s.deletedBookings || {}).some((x) => x?.booking?.phone === phone3);
+    for (const [id2, x] of Object.entries(s.complaints?.[phone3] || {})) if (x.trainingBatch === batch) {
+      delete s.complaints[phone3][id2];
+      summary.complaints++;
+    }
+    if (patient.trainingBatch !== batch) continue;
+    if (shared) {
+      summary.preservedSharedPatients++;
+      continue;
+    }
+    const counter = s.complaintSequences?.[phone3];
+    removePatientState(s, phone3, core_exports, removed.filter((x) => x.phone === phone3));
+    if (counter !== void 0) (s.complaintSequences ||= {})[phone3] = counter;
+    summary.patients++;
+  }
+  const removedIds = new Set(removed.map((x) => x.id));
+  for (const root of ["checkins", "bookingContacts", "urgentReviews", "appointmentRequests", "waitingList", "tasks"]) for (const [id2, x] of Object.entries(s[root] || {})) if ((!x?.trainingBatch || x.trainingBatch === batch) && (removedIds.has(x?.bookingId) || removedIds.has(x?.sourceBookingId) || ["checkins", "bookingContacts"].includes(root) && removedIds.has(id2))) delete s[root][id2];
+  advanceRemovedBookings(s, removed, core_exports);
+  s.settings.trainingYearBatches[batch] = { ...meta, status: "purged", purgedAt: (/* @__PURE__ */ new Date()).toISOString(), purgedBy: uid };
+  rebuild(s);
+  return { state: s, summary };
+}
+async function handle6(adapter2, input, uid) {
+  if (input.action === "trainingYearPreview") return plan(await adapter2.read(), uid);
+  const key = input.action === "trainingYearSeed" ? "SEED_YEAR_END_TRAINING" : "DELETE_YEAR_END_TRAINING";
+  if (input.confirmation !== key) fail3("\u0631\u0627\u062C\u0639 \u062A\u0623\u0643\u064A\u062F \u0627\u0644\u0639\u0645\u0644\u064A\u0629 \u0623\u0648\u0644\u064B\u0627");
+  let summary;
+  await adapter2.mutate((s) => {
+    const result = input.action === "trainingYearSeed" ? seed(s, uid) : purge(s, uid, input.batch);
+    summary = result.summary;
+    return result.state;
+  });
+  return { ok: true, ...summary };
+}
+
+// supabase/functions/clinic-api/release.js
+var release_default = { "version": "2026.11.03.1", "apiContract": 1, "capabilities": ["pdfReports", "splitBackup", "phoneChangeLookup", "patientRequestAlerts", "globalThemePresets", "patientNotificationCenter", "yearEndTrainingData", "novemberManualDataProtection", "sessionReadback", "emptySessionRecovery", "focusedConsultation", "followupPlans", "nextVisitBooking", "receptionArrival", "visitDurations", "requestAssignment", "bookingConfirmations", "appointmentCalendar", "patientIdentity", "patientPagination", "mutationReceipts", "operationalDeltaWrites", "completeRecoveryBundle", "trainingMetricsSeparation", "safePatientDeletion", "deleteReadback", "legacyArchiveTolerance", "staleRequestRejection", "secretaryClinicalRead", "queueDisplaySync"] };
+
+// supabase/functions/clinic-api/request-notifications.js
+import { createHash as createHash4 } from "node:crypto";
+var kinds = ["new", "reschedule", "cancel"];
+var actions4 = ["requestNotifications", "requestNotificationRead", "requestNotificationsReadAll"];
+var digest = (value) => createHash4("sha256").update(JSON.stringify(value)).digest("hex");
+function events(state, uid) {
+  const role3 = role(state, uid), readDetails = can(role3, "requests.read"), receipts = state.requestNotificationReads?.[uid] || {}, rows = [];
+  for (const request2 of Object.values(state.appointmentRequests || {})) {
+    if (!kinds.includes(request2.kind) || !allBranches(role3) && request2.branch !== role3.br) continue;
+    const common = { requestId: request2.id, kind: request2.kind, branch: request2.branch, date: request2.date, status: request2.status, canOpen: readDetails };
+    if (readDetails) Object.assign(common, { name: request2.name, phone: request2.phone, requestedDate: request2.requestedDate, requestedBranch: request2.requestedBranch });
+    const add = (suffix, event, at) => {
+      if (!Number.isFinite(Date.parse(at))) return;
+      const id2 = request2.id + ":" + suffix;
+      rows.push({ ...common, id: id2, event, at, readAt: receipts[id2] || null });
+    };
+    add("created", "created", request2.createdAt);
+    if (["confirmed", "rejected"].includes(request2.status) && request2.decidedAt) add("decision:" + request2.rev, request2.status, request2.decidedAt);
+  }
+  return rows.sort((a, b) => b.at.localeCompare(a.at) || b.id.localeCompare(a.id));
+}
+function readAllToken(rows, uid) {
+  return digest({ uid, ids: rows.map((x) => x.id) });
+}
+function list2(state, uid, input) {
+  const rows = events(state, uid), kind = input.kind || "all", status = input.status || "all";
+  if (!["all", ...kinds].includes(kind) || !["all", "pending", "confirmed", "rejected"].includes(status) || input.unread !== void 0 && typeof input.unread !== "boolean") fail3("\u0641\u0644\u062A\u0631 \u0625\u0634\u0639\u0627\u0631\u0627\u062A \u063A\u064A\u0631 \u0635\u062D\u064A\u062D");
+  const page = input.page ?? 0;
+  if (!Number.isSafeInteger(page) || page < 0 || page > 1e5) fail3("\u0635\u0641\u062D\u0629 \u063A\u064A\u0631 \u0635\u062D\u064A\u062D\u0629");
+  const filtered = rows.filter((x) => (kind === "all" || x.kind === kind) && (status === "all" || x.status === status) && (!input.unread || !x.readAt));
+  const currentPage = Math.min(page, Math.max(0, Math.ceil(filtered.length / 30) - 1));
+  const pending = rows.filter((x) => x.event === "created" && x.status === "pending"), minutes2 = state.settings?.bookingRequests?.requestOverdueMinutes || 60;
+  return { latestId: rows[0]?.id || null, items: filtered.slice(currentPage * 30, (currentPage + 1) * 30), total: filtered.length, page: currentPage, pageSize: 30, unread: rows.filter((x) => !x.readAt).length, pending: pending.length, overdue: pending.filter((x) => Date.now() - Date.parse(x.at) >= minutes2 * 6e4).length, newBookings: pending.filter((x) => x.kind === "new").length, reschedule: pending.filter((x) => x.kind === "reschedule").length, cancellations: pending.filter((x) => x.kind === "cancel").length, readAllToken: readAllToken(rows, uid), serverAt: (/* @__PURE__ */ new Date()).toISOString() };
+}
+async function handle7(adapter2, input, uid) {
+  if (input.action === "requestNotifications") return list2(await (adapter2.readRequestNotifications ? adapter2.readRequestNotifications() : adapter2.read()), uid, input);
+  if (input.action === "requestNotificationRead" && (typeof input.id !== "string" || input.id.length > 160 || typeof input.read !== "boolean")) fail3("\u0627\u062E\u062A\u0631 \u0625\u0634\u0639\u0627\u0631\u064B\u0627 \u0648\u062D\u0627\u0644\u0629 \u0642\u0631\u0627\u0621\u0629 \u0635\u062D\u064A\u062D\u0629");
+  if (input.action === "requestNotificationsReadAll" && typeof input.readAllToken !== "string") fail3("\u062D\u062F\u0651\u062B \u0627\u0644\u0625\u0634\u0639\u0627\u0631\u0627\u062A \u0623\u0648\u0644\u064B\u0627");
+  await adapter2.mutate((original) => {
+    const rows = events(original, uid), target = input.action === "requestNotificationRead" ? rows.filter((x) => x.id === input.id) : rows;
+    if (input.action === "requestNotificationRead" && !target.length) fail3("\u0627\u0644\u0625\u0634\u0639\u0627\u0631 \u063A\u064A\u0631 \u0645\u0648\u062C\u0648\u062F \u0641\u064A \u0646\u0637\u0627\u0642 \u062D\u0633\u0627\u0628\u0643", 404);
+    if (input.action === "requestNotificationsReadAll" && input.readAllToken !== readAllToken(rows, uid)) fail3("\u0648\u0635\u0644\u062A \u0625\u0634\u0639\u0627\u0631\u0627\u062A \u062C\u062F\u064A\u062F\u0629\u061B \u062D\u062F\u0651\u062B \u0627\u0644\u0642\u0627\u0626\u0645\u0629 \u0642\u0628\u0644 \u062A\u062D\u062F\u064A\u062F \u0627\u0644\u0643\u0644 \u0643\u0645\u0642\u0631\u0648\u0621", 409);
+    const state = structuredClone(original);
+    state.requestNotificationReads ||= {};
+    const reads = state.requestNotificationReads[uid] ||= {};
+    const at = (/* @__PURE__ */ new Date()).toISOString();
+    for (const x of target) {
+      if (input.read === false) delete reads[x.id];
+      else reads[x.id] = at;
+    }
+    const known = new Set(Object.values(state.appointmentRequests || {}).flatMap((x) => [x.id + ":created", x.id + ":decision:" + x.rev]));
+    for (const id2 of Object.keys(reads)) if (!known.has(id2)) delete reads[id2];
+    return state;
+  });
+  return { ok: true };
+}
+
 // supabase/functions/clinic-api/color-refresh.js
 var light = { background: "#f2f5f6", card: "#ffffff", text: "#243543", primary: "#315468", accent: "#976471", muted: "#536779", line: "#bdcbd4", headerBackground: "#315468", headerText: "#ffffff" };
 var dark = { background: "#151c24", card: "#202b35", text: "#e1e8ed", primary: "#b7c9d4", accent: "#b89ca5", muted: "#adbac5", line: "#50606e", headerBackground: "#202e3a", headerText: "#e1e8ed" };
@@ -2079,28 +2504,6 @@ async function handle8(adapter2, input, uid) {
     return s;
   });
   return { ok: true, changed, colorSystemVersion: 1 };
-}
-
-// supabase/functions/clinic-api/storage-cleanup.js
-function enqueue(state, items) {
-  state.attachmentGarbage ||= {};
-  for (const item of Object.values(items || {})) if (/^[0-9a-f-]{36}$/.test(item?.key)) state.attachmentGarbage[item.key] = { queuedAt: (/* @__PURE__ */ new Date()).toISOString() };
-}
-async function drain(adapter2) {
-  const snapshot = await adapter2.read(), keys2 = Object.keys(snapshot.attachmentGarbage || {});
-  for (const key of keys2) {
-    if (!adapter2.deleteAttachment) continue;
-    try {
-      await adapter2.deleteAttachment(key);
-      await adapter2.mutate((original) => {
-        const s = structuredClone(original);
-        delete s.attachmentGarbage?.[key];
-        return s;
-      });
-    } catch {
-    }
-  }
-  return Object.keys((await adapter2.read()).attachmentGarbage || {}).length;
 }
 
 // supabase/functions/clinic-api/attachments.js
@@ -2217,6 +2620,7 @@ async function handleAttachments(adapter2, input, uid) {
 // supabase/functions/clinic-api/complete-backup.js
 var MAX_RECOVERY_BYTES = 256e6;
 var UUID = /^[0-9a-f-]{36}$/i;
+var PATIENT_ID = /^pat_[a-f0-9]{32}$/;
 var recoveryActions = ["recoveryBackupExport", "recoveryFileExport", "recoveryBackupVerify"];
 var clone = (x) => JSON.parse(JSON.stringify(x));
 var byteLength = (x) => new TextEncoder().encode(JSON.stringify(x)).length;
@@ -2256,6 +2660,10 @@ function graphCheck(state) {
   const counts = { patients: Object.keys(state.patients || {}).length, bookings: 0, files: Object.keys(state.files || {}).length, complaints: 0, roles: Object.keys(state.roles || {}).length, audit: (state.audit || []).length, trash: Object.keys(state.recycleBin || {}).length, followupPlans: Object.keys(state.followupPlans || {}).length, bookingContacts: Object.keys(state.bookingContacts || {}).length };
   const branchIds2 = new Set(branchIds(state)), ids2 = /* @__PURE__ */ new Set(), patientIds = /* @__PURE__ */ new Set();
   let admins = 0;
+  const identityFor = (phone3) => {
+    const patient = state.patients?.[phone3];
+    return patient?.patientId || patient?.id || state.patientPhoneIndex?.[phone3] || legacyId(phone3);
+  };
   for (const [uid, r] of Object.entries(state.roles || {})) {
     if (!uid || !r || !["admin", "doctor", "nurse", "sec", "staff"].includes(r.r) || typeof r.u !== "string" || r.br && !branchIds2.has(r.br) || r.permissions && Object.entries(r.permissions).some(([key, value]) => !keys.includes(key) || typeof value !== "boolean")) fail3("\u062D\u0633\u0627\u0628 \u0623\u0648 \u0635\u0644\u0627\u062D\u064A\u0627\u062A \u063A\u064A\u0631 \u0645\u062A\u0633\u0642\u0629 \u0641\u064A \u0627\u0644\u0646\u0633\u062E\u0629", 409);
     if (r.r === "admin" && r.enabled !== false) admins++;
@@ -2265,6 +2673,7 @@ function graphCheck(state) {
     if (!/^01[0125]\d{8}$/.test(phone3) || !p || typeof p.n !== "string") fail3("\u0647\u0648\u064A\u0629 \u062D\u0627\u0644\u0629 \u063A\u064A\u0631 \u0645\u062A\u0633\u0642\u0629 \u0641\u064A \u0627\u0644\u0646\u0633\u062E\u0629", 409);
     const patientId = p.patientId || p.id;
     if (patientId) {
+      if (!PATIENT_ID.test(patientId)) fail3("\u0635\u064A\u063A\u0629 \u0627\u0644\u0647\u0648\u064A\u0629 \u0627\u0644\u062F\u0627\u062E\u0644\u064A\u0629 \u063A\u064A\u0631 \u0635\u062D\u064A\u062D\u0629 \u0641\u064A \u0627\u0644\u0646\u0633\u062E\u0629", 409);
       if (patientIds.has(patientId)) fail3("\u0647\u0648\u064A\u0629 \u062F\u0627\u062E\u0644\u064A\u0629 \u0645\u0643\u0631\u0631\u0629 \u0641\u064A \u0627\u0644\u0646\u0633\u062E\u0629", 409);
       patientIds.add(patientId);
     }
@@ -2280,7 +2689,8 @@ function graphCheck(state) {
       ids2.add(id2);
       counts.bookings++;
       if (state.sequences?.[date2 + "_" + row.b] !== void 0 && state.sequences[date2 + "_" + row.b] < row.no) fail3("\u0639\u062F\u0627\u062F \u0627\u0644\u062A\u0630\u0627\u0643\u0631 \u0623\u0635\u063A\u0631 \u0645\u0646 \u062A\u0630\u0643\u0631\u0629 \u0635\u0627\u062F\u0631\u0629", 409);
-      if (row.patientId && state.patients[row.phone].patientId && row.patientId !== state.patients[row.phone].patientId) fail3("\u0627\u0644\u062D\u062C\u0632 \u064A\u0634\u064A\u0631 \u0625\u0644\u0649 \u0647\u0648\u064A\u0629 \u062F\u0627\u062E\u0644\u064A\u0629 \u0645\u062E\u062A\u0644\u0641\u0629", 409);
+      if (row.patientId && !PATIENT_ID.test(row.patientId)) fail3("\u0635\u064A\u063A\u0629 \u0647\u0648\u064A\u0629 \u0627\u0644\u062D\u062C\u0632 \u0627\u0644\u062F\u0627\u062E\u0644\u064A\u0629 \u063A\u064A\u0631 \u0635\u062D\u064A\u062D\u0629", 409);
+      if (row.patientId && row.patientId !== identityFor(row.phone)) fail3("\u0627\u0644\u062D\u062C\u0632 \u064A\u0634\u064A\u0631 \u0625\u0644\u0649 \u0647\u0648\u064A\u0629 \u062F\u0627\u062E\u0644\u064A\u0629 \u0645\u062E\u062A\u0644\u0641\u0629", 409);
     }
   }
   for (const phone3 of Object.keys(state.files || {})) if (!state.patients?.[phone3]) fail3("\u0645\u0644\u0641 \u0637\u0628\u064A \u0628\u0644\u0627 \u0647\u0648\u064A\u0629 \u062D\u0627\u0644\u0629", 409);
@@ -2301,13 +2711,13 @@ function graphCheck(state) {
   for (const [phone3, rows] of Object.entries(state.attachments || {})) if (Object.keys(rows || {}).length && !state.patients?.[phone3]) fail3("\u062A\u0642\u0627\u0631\u064A\u0631 \u0646\u0634\u0637\u0629 \u0628\u0644\u0627 \u0647\u0648\u064A\u0629 \u062D\u0627\u0644\u0629", 409);
   for (const [phone3, id2] of Object.entries(state.patientPhoneIndex || {})) {
     const person = state.patients?.[phone3], entry = state.patientIdentities?.[id2];
-    if (!person || !entry || entry.id !== id2 || entry.phone !== phone3 || entry.deletedAt || (person.patientId || person.id) && id2 !== (person.patientId || person.id)) fail3("\u0641\u0647\u0631\u0633 \u0627\u0644\u0647\u0648\u064A\u0629 \u0627\u0644\u062F\u0627\u062E\u0644\u064A\u0629 \u0644\u0627 \u064A\u0637\u0627\u0628\u0642 \u0645\u0644\u0641 \u0627\u0644\u062D\u0627\u0644\u0629", 409);
+    if (!PATIENT_ID.test(id2) || !person || !entry || entry.id !== id2 || entry.phone !== phone3 || entry.deletedAt || (person.patientId || person.id) && id2 !== (person.patientId || person.id)) fail3("\u0641\u0647\u0631\u0633 \u0627\u0644\u0647\u0648\u064A\u0629 \u0627\u0644\u062F\u0627\u062E\u0644\u064A\u0629 \u0644\u0627 \u064A\u0637\u0627\u0628\u0642 \u0645\u0644\u0641 \u0627\u0644\u062D\u0627\u0644\u0629", 409);
   }
   for (const [id2, entry] of Object.entries(state.patientIdentities || {})) {
-    if (entry.id !== id2 || typeof entry.phone !== "string") fail3("\u0633\u062C\u0644 \u0647\u0648\u064A\u0629 \u062F\u0627\u062E\u0644\u064A\u0629 \u063A\u064A\u0631 \u0635\u062D\u064A\u062D", 409);
+    if (!PATIENT_ID.test(id2) || !entry || entry.id !== id2 || typeof entry.phone !== "string") fail3("\u0633\u062C\u0644 \u0647\u0648\u064A\u0629 \u062F\u0627\u062E\u0644\u064A\u0629 \u063A\u064A\u0631 \u0635\u062D\u064A\u062D", 409);
     if (!entry.deletedAt) {
       const patient = state.patients?.[entry.phone];
-      if (!patient || (patient.patientId || patient.id) !== id2 || state.patientPhoneIndex?.[entry.phone] !== id2) fail3("\u0647\u0648\u064A\u0629 \u0646\u0634\u0637\u0629 \u0628\u0644\u0627 \u0645\u0644\u0641 \u0645\u0637\u0627\u0628\u0642", 409);
+      if (!patient || (patient.patientId || patient.id) && (patient.patientId || patient.id) !== id2 || state.patientPhoneIndex?.[entry.phone] !== id2) fail3("\u0647\u0648\u064A\u0629 \u0646\u0634\u0637\u0629 \u0628\u0644\u0627 \u0645\u0644\u0641 \u0645\u0637\u0627\u0628\u0642", 409);
     }
   }
   const knownBookings = new Set(ids2);
@@ -2319,7 +2729,8 @@ function graphCheck(state) {
   for (const plan3 of Object.values(state.followupPlans || {})) {
     if (plan3.phone && !state.patients?.[plan3.phone]) fail3("\u062E\u0637\u0629 \u0645\u062A\u0627\u0628\u0639\u0629 \u0628\u0644\u0627 \u0647\u0648\u064A\u0629 \u062D\u0627\u0644\u0629", 409);
     const patient = state.patients?.[plan3.phone];
-    if (plan3.patientId && patient && (patient.patientId || patient.id) && plan3.patientId !== (patient.patientId || patient.id)) fail3("\u062E\u0637\u0629 \u0627\u0644\u0645\u062A\u0627\u0628\u0639\u0629 \u0645\u0631\u062A\u0628\u0637\u0629 \u0628\u0647\u0648\u064A\u0629 \u0645\u062E\u062A\u0644\u0641\u0629", 409);
+    if (plan3.patientId && !PATIENT_ID.test(plan3.patientId)) fail3("\u0635\u064A\u063A\u0629 \u0647\u0648\u064A\u0629 \u062E\u0637\u0629 \u0627\u0644\u0645\u062A\u0627\u0628\u0639\u0629 \u063A\u064A\u0631 \u0635\u062D\u064A\u062D\u0629", 409);
+    if (plan3.patientId && patient && plan3.patientId !== identityFor(plan3.phone)) fail3("\u062E\u0637\u0629 \u0627\u0644\u0645\u062A\u0627\u0628\u0639\u0629 \u0645\u0631\u062A\u0628\u0637\u0629 \u0628\u0647\u0648\u064A\u0629 \u0645\u062E\u062A\u0644\u0641\u0629", 409);
     for (const id2 of [plan3.sourceBookingId, plan3.linkedBookingId || plan3.bookingId].filter(Boolean)) if (!knownBookings.has(id2)) fail3("\u062E\u0637\u0629 \u0645\u062A\u0627\u0628\u0639\u0629 \u0645\u0631\u062A\u0628\u0637\u0629 \u0628\u062D\u062C\u0632 \u063A\u064A\u0631 \u0645\u0648\u062C\u0648\u062F", 409);
   }
   for (const [id2, contact] of Object.entries(state.bookingContacts || {})) if (!knownBookings.has(contact.bookingId || id2)) fail3("\u0645\u062A\u0627\u0628\u0639\u0629 \u062A\u0623\u0643\u064A\u062F \u0628\u0644\u0627 \u062D\u062C\u0632 \u0623\u0635\u0644\u064A \u0623\u0648 \u0645\u0624\u0631\u0634\u0641", 409);
@@ -2435,7 +2846,7 @@ async function handle9(adapter2, input, uid) {
 }
 
 // supabase/functions/clinic-api/workflow.js
-import { Buffer as Buffer2 } from "node:buffer";
+import { Buffer as Buffer3 } from "node:buffer";
 import { createHash as createHash5, randomUUID as randomUUID2 } from "node:crypto";
 
 // supabase/functions/clinic-api/history.js
@@ -2450,7 +2861,7 @@ function diff(before, after, path = [], out = []) {
   return out;
 }
 function safe(value) {
-  if (Array.isArray(value)) return value.map(safe);
+  if (Array.isArray(value)) return value.filter((x) => !Array.isArray(x?.path) || x.path[0] !== "drafts").map(safe);
   if (object(value)) return Object.fromEntries(Object.entries(value).filter(([k]) => !/(password|token|secret|hash|salt)/i.test(k)).map(([k, v]) => [k, safe(v)]));
   return typeof value === "string" && value.startsWith("data:image/") ? "[\u0635\u0648\u0631\u0629 \u0645\u0636\u0645\u0651\u0646\u0629]" : value;
 }
@@ -2498,7 +2909,7 @@ function context(before, next, changes, input = {}) {
 }
 function record(before, next, input, uid) {
   const changes = [];
-  const tracked = ROOTS2.concat(["patientDelete", "dataClear"].includes(input.action) ? ["drafts"] : []);
+  const tracked = ROOTS2.concat(["patientDelete", "dataClear", "purgeDemo", "trainingYearPurge"].includes(input.action) ? ["drafts"] : []);
   for (const root of tracked) diff(before[root] || {}, next[root] || {}, [root], changes);
   const id2 = crypto.randomUUID(), at = (/* @__PURE__ */ new Date()).toISOString(), branches2 = [...new Set((input.puts || []).map((x) => x.n?.b).concat((input.dels || []).map((x) => x.b)).filter(Boolean))];
   stamp(before, next, input, uid, at);
@@ -2533,7 +2944,7 @@ function record(before, next, input, uid) {
   }
   const entry = { id: id2, at, actor: uid, actorName: before.roles?.[uid]?.displayName || before.roles?.[uid]?.u, action: input.action, target: input.uid, branch: input.branch || (branches2.length === 1 ? branches2[0] : void 0), branches: branches2, changeCount: changes.length };
   next.audit = [...before.audit || [], entry];
-  next.activityDetails = { ...next.activityDetails || {}, [id2]: changes.map((x) => safe(x)) };
+  next.activityDetails = { ...next.activityDetails || {}, [id2]: safe(changes) };
   next.activityContext = { ...next.activityContext || {}, [id2]: context(before, next, changes, { ...input, actor: uid }) };
   if (input.action === "bookingRestore") for (const group of Object.values(next.recycleBin || {})) {
     if (!group || !Array.isArray(group.items)) continue;
@@ -2541,7 +2952,7 @@ function record(before, next, input, uid) {
     if (!group.items.length) group.restoredAt = at;
   }
   const removed = changes.filter((x) => x.removed && !["roles", "sessions", "complaintSequences"].includes(x.path[0]));
-  if (removed.length && !["trashRestore", "bookingRestore", "patientSave", "userCredentials"].includes(input.action)) {
+  if (removed.length && !["trashRestore", "bookingRestore", "patientSave", "userCredentials", "patientMergeApply", "patientMergeUndo"].includes(input.action)) {
     next.recycleBin = { ...next.recycleBin || {}, [id2]: { ...entry, items: structuredClone(removed) } };
   }
   for (const group of Object.values(next.recycleBin || {})) if (group && !group.restoredAt && Array.isArray(group.items)) {
@@ -2564,11 +2975,41 @@ function get(state, path) {
   for (const k of path) x = x?.[k];
   return x;
 }
+function referencesRetiredMerge(state, items) {
+  const retired = Object.values(state.patientIdentities || {}).filter((row) => row?.deletedAt && row.mergedInto);
+  if (!retired.length) return false;
+  const phones = /* @__PURE__ */ new Set(), ids2 = /* @__PURE__ */ new Set(), bound = /* @__PURE__ */ new Map(), validPhone2 = (value) => /^01[0125]\d{8}$/.test(value || "");
+  const bind = (phone3, id2) => {
+    if (validPhone2(phone3)) phones.add(phone3);
+    if (typeof id2 === "string" && /^pat_[a-f0-9]{32}$/.test(id2)) {
+      ids2.add(id2);
+      if (validPhone2(phone3)) {
+        if (!bound.has(phone3)) bound.set(phone3, /* @__PURE__ */ new Set());
+        bound.get(phone3).add(id2);
+      }
+    }
+  };
+  const visit = (value, hint) => {
+    if (!value || typeof value !== "object") return;
+    const phone3 = phone(value.phone || value.p || hint), id2 = value.patientId || (/^pat_[a-f0-9]{32}$/.test(value.id || "") ? value.id : null);
+    bind(phone3, id2);
+    if (validPhone2(value.entity)) bind(value.entity, null);
+    for (const [key, child] of Object.entries(value)) visit(child, validPhone2(key) ? key : hint);
+  };
+  for (const item of items) {
+    const [root, key] = item.path;
+    const hint = ["patients", "files", "complaints", "attachments", "followups", "patientPhoneIndex"].includes(root) && validPhone2(key) ? key : null;
+    if (hint) bind(hint, root === "patientPhoneIndex" ? item.before : null);
+    visit(item.before, hint);
+  }
+  return retired.some((row) => ids2.has(row.id) || phones.has(row.phone) && !bound.get(row.phone)?.size);
+}
 function restore(original, uid, id2) {
   admin(original, uid);
   const s = structuredClone(original), group = s.recycleBin?.[id2];
   if (!group || group.restoredAt || !Array.isArray(group.items)) fail3("\u0627\u0644\u0645\u062D\u0630\u0648\u0641\u0627\u062A \u063A\u064A\u0631 \u0645\u0648\u062C\u0648\u062F\u0629 \u0623\u0648 \u0633\u0628\u0642 \u0627\u0633\u062A\u0639\u0627\u062F\u062A\u0647\u0627", 404);
   if (group.items.some((x) => !x || !Array.isArray(x.path) || !x.path.length || x.path.some((k) => typeof k !== "string" || ["__proto__", "constructor", "prototype"].includes(k)))) fail3("\u0628\u064A\u0627\u0646\u0627\u062A \u0627\u0644\u0623\u0631\u0634\u064A\u0641 \u063A\u064A\u0631 \u0645\u0643\u062A\u0645\u0644\u0629\u061B \u0644\u0645 \u062A\u062A\u0645 \u0627\u0644\u0627\u0633\u062A\u0639\u0627\u062F\u0629", 409);
+  if (["patientMergeApply", "patientMergeUndo"].includes(group.action) || referencesRetiredMerge(s, group.items)) fail3("\u0627\u0644\u0623\u0631\u0634\u064A\u0641 \u0645\u0631\u062A\u0628\u0637 \u0628\u0645\u0644\u0641 \u062A\u0645 \u062F\u0645\u062C\u0647\u061B \u0627\u0633\u062A\u062E\u062F\u0645 \u0627\u0644\u062A\u0631\u0627\u062C\u0639 \u0645\u0646 \u0633\u062C\u0644 \u062F\u0645\u062C \u0627\u0644\u0645\u0644\u0641\u0627\u062A \u0644\u0644\u062D\u0641\u0627\u0638 \u0639\u0644\u0649 \u0627\u0644\u0633\u062C\u0644 \u0643\u0627\u0645\u0644\u064B\u0627", 409);
   for (const item of group.items) {
     if (get(s, item.path) !== void 0) fail3("\u062A\u0639\u0627\u0631\u0636 \u0645\u0639 \u0628\u064A\u0627\u0646\u0627\u062A \u062D\u0627\u0644\u064A\u0629 \u0641\u064A " + item.path.join("/") + "\u061B \u0644\u0645 \u064A\u062A\u0645 \u062A\u063A\u064A\u064A\u0631 \u0623\u064A \u0628\u064A\u0627\u0646\u0627\u062A", 409);
   }
@@ -2616,7 +3057,7 @@ function restore(original, uid, id2) {
 function list3(state, uid, input) {
   admin(state, uid);
   const page = Math.max(0, Math.floor(Number(input.page) || 0)), size = 30;
-  let rows = Object.values(state.recycleBin || {}).filter((x) => x && !x.restoredAt && Array.isArray(x.items)).sort((a, b) => String(b.at || "").localeCompare(String(a.at || "")));
+  let rows = Object.values(state.recycleBin || {}).filter((x) => x && !x.restoredAt && Array.isArray(x.items) && !["patientMergeApply", "patientMergeUndo"].includes(x.action)).sort((a, b) => String(b.at || "").localeCompare(String(a.at || "")));
   return { total: rows.length, page, rows: rows.slice(page * size, (page + 1) * size).map(({ items, ...entry }) => ({ ...entry, count: items.length, paths: items.filter((x) => Array.isArray(x?.path)).map((x) => x.path.join("/")) })) };
 }
 
@@ -2627,6 +3068,96 @@ var text2 = (x, max, label, required = false) => {
   if (typeof x !== "string" || x.length > max || required && !x.trim()) fail3("\u0631\u0627\u062C\u0639 " + label);
   return x.trim();
 };
+var MERGE_ROOTS = ["patients", "bookings", "files", "complaints", "complaintSequences", "attachments", "inbox", "tasks", "followups", "deletedBookings", "followupPlans", "clinicalVisits", "urgentReviews", "appointmentRequests", "waitingList", "checkins", "bookingContacts", "drafts", "editingPresence", "patientIdentities", "patientPhoneIndex"];
+var mergeState = (s) => Object.fromEntries(MERGE_ROOTS.map((root) => [root, s[root] || {}]));
+function mergeScope(s, source2, target, sourceId, targetId) {
+  const phones = /* @__PURE__ */ new Set([source2, target]), identities = new Set([sourceId, targetId].filter(Boolean)), bookingIds = /* @__PURE__ */ new Set();
+  const related = (row) => !!row && typeof row === "object" && (phones.has(phone(row.phone || row.p)) || identities.has(row.patientId));
+  const scoped = {};
+  for (const root of ["patients", "files", "complaints", "complaintSequences", "attachments", "followups", "editingPresence", "patientPhoneIndex"]) scoped[root] = Object.fromEntries(Object.entries(s[root] || {}).filter(([phone3]) => phones.has(phone3)));
+  scoped.patientIdentities = Object.fromEntries(Object.entries(s.patientIdentities || {}).filter(([id2]) => identities.has(id2)));
+  scoped.bookings = {};
+  for (const [date2, rows] of Object.entries(s.bookings || {})) {
+    const matches = Object.entries(rows || {}).filter(([, row]) => related(row));
+    if (matches.length) scoped.bookings[date2] = Object.fromEntries(matches);
+    for (const [id2, row] of matches) {
+      bookingIds.add(id2);
+      bookingIds.add(row.id);
+    }
+  }
+  scoped.deletedBookings = Object.fromEntries(Object.entries(s.deletedBookings || {}).filter(([, item]) => related(item?.booking)));
+  for (const [id2, item] of Object.entries(scoped.deletedBookings)) {
+    bookingIds.add(id2);
+    if (item.booking?.id) bookingIds.add(item.booking.id);
+  }
+  for (const root of ["inbox", "tasks", "followupPlans", "clinicalVisits", "urgentReviews", "appointmentRequests", "waitingList", "checkins", "bookingContacts"]) scoped[root] = Object.fromEntries(Object.entries(s[root] || {}).filter(([id2, row]) => related(row) || bookingIds.has(id2) || bookingIds.has(row?.bookingId) || bookingIds.has(row?.sourceBookingId)));
+  scoped.drafts = {};
+  for (const [uid, rows] of Object.entries(s.drafts || {})) {
+    const matches = Object.entries(rows || {}).filter(([, draft]) => phones.has(draft?.entity) || identities.has(draft?.entity) || bookingIds.has(draft?.entity) || related(draft?.data) || phones.has(phone(draft?.data?.newPhone)));
+    if (matches.length) scoped.drafts[uid] = Object.fromEntries(matches);
+  }
+  return scoped;
+}
+function assertMergeBranch(s, r, source2, target) {
+  if (allBranches(r)) return;
+  const phones = /* @__PURE__ */ new Set([source2, target]), ids2 = new Set([idForPhone(s, source2), idForPhone(s, target)].filter(Boolean));
+  const foreign = (row) => row && (phones.has(phone(row.phone || row.p)) || ids2.has(row.patientId)) && (row.branch || row.b) && (row.branch || row.b) !== r.br;
+  if ([source2, target].some((phone3) => s.patients?.[phone3]?.br && s.patients[phone3].br !== r.br) || Object.values(s.bookings || {}).some((rows) => Object.values(rows || {}).some(foreign)) || Object.values(s.deletedBookings || {}).some((item) => foreign(item?.booking)) || ["tasks", "followupPlans", "clinicalVisits", "urgentReviews", "appointmentRequests", "waitingList", "checkins", "bookingContacts"].some((root) => Object.values(s[root] || {}).some(foreign))) fail3("\u0627\u0644\u0645\u0644\u0641\u0627\u0646 \u0644\u0647\u0645\u0627 \u0628\u064A\u0627\u0646\u0627\u062A \u0641\u064A \u0641\u0631\u0639 \u0622\u062E\u0631\u061B \u0627\u0644\u062F\u0645\u062C \u0648\u0627\u0644\u062A\u0631\u0627\u062C\u0639 \u0627\u0644\u0643\u0627\u0645\u0644 \u064A\u062D\u062A\u0627\u062C\u0627\u0646 \u0635\u0644\u0627\u062D\u064A\u0629 \u062C\u0645\u064A\u0639 \u0627\u0644\u0641\u0631\u0648\u0639", 403);
+}
+function assertLegacyUndoSafe(s, merge) {
+  const targetId = idForPhone(s, merge.target), targetRelated = (row) => !!row && (phone(row.phone || row.p) === merge.target || !!targetId && row.patientId === targetId);
+  const modern = ["followupPlans", "clinicalVisits", "urgentReviews", "appointmentRequests", "waitingList", "bookingContacts"].some((root) => Object.values(s[root] || {}).some(targetRelated));
+  const drafts = Object.values(s.drafts || {}).some((rows) => Object.values(rows || {}).some((row) => row?.entity === merge.target || row?.entity === targetId || targetRelated(row?.data) || phone(row?.data?.newPhone) === merge.target));
+  if (modern || drafts) fail3("\u0639\u0645\u0644\u064A\u0629 \u062F\u0645\u062C \u0642\u062F\u064A\u0645\u0629 \u0648\u0644\u0644\u0645\u0644\u0641 \u0628\u064A\u0627\u0646\u0627\u062A \u0645\u062A\u0627\u0628\u0639\u0629 \u0623\u0648 \u0645\u0633\u0648\u062F\u0627\u062A \u0644\u0627 \u062A\u0634\u0645\u0644\u0647\u0627 \u0646\u0633\u062E\u0629 \u0627\u0644\u062A\u0631\u0627\u062C\u0639\u061B \u0631\u0627\u062C\u0639\u0647\u0627 \u0642\u0628\u0644 \u0641\u0635\u0644 \u0627\u0644\u0645\u0644\u0641\u064A\u0646", 409);
+}
+function mergeReferences(s, source2, target, sourceId, targetId) {
+  const name = s.patients[target].n;
+  const move = (row, revision = false) => {
+    if (!row || typeof row !== "object" || !(phone(row.phone || row.p) === source2 || row.patientId === sourceId)) return;
+    if (row.patientId === sourceId && row.phone && ![source2, target].includes(phone(row.phone)) || phone(row.phone || row.p) === source2 && row.patientId && ![sourceId, targetId].includes(row.patientId)) fail3("\u0633\u062C\u0644 \u0645\u0631\u062A\u0628\u0637 \u0628\u0647\u0648\u064A\u0629 \u0648\u0631\u0642\u0645 \u0645\u062E\u062A\u0644\u0641\u064A\u0646\u061B \u0631\u0627\u062C\u0639 \u0627\u0644\u0645\u0644\u0641 \u0642\u0628\u0644 \u0627\u0644\u062F\u0645\u062C", 409);
+    row.phone = target;
+    row.patientId = targetId;
+    if (Object.hasOwn(row, "p")) row.p = target;
+    if (Object.hasOwn(row, "name")) row.name = name;
+    if (revision) {
+      if (Number.isInteger(row.rev)) row.rev++;
+      if (Number.isInteger(row.revision)) row.revision++;
+    }
+  };
+  for (const rows of Object.values(s.bookings || {})) for (const row of Object.values(rows || {})) move(row, true);
+  for (const item of Object.values(s.deletedBookings || {})) move(item?.booking, true);
+  for (const root of ["tasks", "followupPlans", "clinicalVisits", "urgentReviews", "appointmentRequests", "waitingList", "checkins", "bookingContacts"]) for (const row of Object.values(s[root] || {})) move(row, root !== "clinicalVisits");
+  for (const row of Object.values(s.inbox || {})) if (row?.p === source2) {
+    row.p = target;
+    row.n = name;
+  }
+  if (s.followups?.[source2]) {
+    const incoming = s.followups[source2], current = s.followups[target] || {};
+    if (!incoming || Array.isArray(incoming) || typeof incoming !== "object" || Array.isArray(current) || typeof current !== "object") fail3("\u0628\u064A\u0627\u0646\u0627\u062A \u0645\u062A\u0627\u0628\u0639\u0629 \u0642\u062F\u064A\u0645\u0629 \u062A\u062D\u062A\u0627\u062C \u0627\u0644\u0645\u0631\u0627\u062C\u0639\u0629 \u0642\u0628\u0644 \u0627\u0644\u062F\u0645\u062C", 409);
+    if (Object.keys(incoming).some((id2) => Object.hasOwn(current, id2) && JSON.stringify(current[id2]) !== JSON.stringify(incoming[id2]))) fail3("\u062A\u0639\u0627\u0631\u0636 \u0641\u064A \u0633\u062C\u0644\u0627\u062A \u0627\u0644\u0645\u062A\u0627\u0628\u0639\u0629 \u0627\u0644\u0642\u062F\u064A\u0645\u0629\u061B \u0631\u0627\u062C\u0639\u0647\u0627 \u0642\u0628\u0644 \u0627\u0644\u062F\u0645\u062C", 409);
+    s.followups[target] = { ...incoming, ...current };
+    delete s.followups[source2];
+  }
+  for (const drafts of Object.values(s.drafts || {})) for (const [oldId, draft] of Object.entries(drafts || {})) {
+    if (!draft || typeof draft !== "object") continue;
+    const entity = draft.entity === source2 ? target : draft.entity === sourceId ? targetId : draft.entity;
+    const phone3 = draft.data && phone(draft.data.phone) === source2, newPhone = draft.data && phone(draft.data.newPhone) === source2;
+    if (entity === draft.entity && !phone3 && newPhone) fail3("\u062A\u0648\u062C\u062F \u0645\u0633\u0648\u062F\u0629 \u0644\u062A\u063A\u064A\u064A\u0631 \u0631\u0642\u0645 \u0623\u062D\u062F \u0627\u0644\u0645\u0644\u0641\u064A\u0646\u061B \u0631\u0627\u062C\u0639\u0647\u0627 \u0642\u0628\u0644 \u0627\u0644\u062F\u0645\u062C", 409);
+    if (entity === draft.entity && !phone3 && !newPhone) continue;
+    const id2 = entity === draft.entity ? oldId : digest2({ kind: draft.kind, entity: String(entity || "new").slice(0, 128) }).slice(0, 32);
+    if (id2 !== oldId && Object.hasOwn(drafts, id2)) fail3("\u062A\u0648\u062C\u062F \u0645\u0633\u0648\u062F\u062A\u0627\u0646 \u0644\u0646\u0641\u0633 \u0627\u0644\u0645\u0644\u0641 \u0641\u064A \u062D\u0633\u0627\u0628 \u0648\u0627\u062D\u062F\u061B \u0631\u0627\u062C\u0639\u0647\u0645\u0627 \u0623\u0648 \u0627\u062D\u0630\u0641 \u0625\u062D\u062F\u0627\u0647\u0645\u0627 \u0642\u0628\u0644 \u0627\u0644\u062F\u0645\u062C", 409);
+    const next = { ...draft, id: id2, entity, data: structuredClone(draft.data || {}) };
+    if (phone3) next.data.phone = target;
+    if (newPhone) next.data.newPhone = target;
+    delete drafts[oldId];
+    drafts[id2] = next;
+  }
+  if (s.editingPresence?.[source2]) {
+    s.editingPresence[target] ||= {};
+    for (const [uid, presence2] of Object.entries(s.editingPresence[source2])) if (!s.editingPresence[target][uid] || (presence2?.at || 0) > (s.editingPresence[target][uid]?.at || 0)) s.editingPresence[target][uid] = presence2;
+    delete s.editingPresence[source2];
+  }
+}
 function branch(s, r, b) {
   if (!branchIds(s).includes(b)) fail3("\u0641\u0631\u0639 \u063A\u064A\u0631 \u0635\u062D\u064A\u062D");
   allowed(r, b);
@@ -2659,6 +3190,7 @@ function mergePlan(s, uid, input) {
   if (source2 === target) fail3("\u0627\u062E\u062A\u0631 \u0645\u0644\u0641\u064A\u0646 \u0645\u062E\u062A\u0644\u0641\u064A\u0646");
   access2(s, r, source2);
   access2(s, r, target);
+  assertMergeBranch(s, r, source2, target);
   for (const rows of Object.values(s.bookings || {})) {
     const list4 = Object.values(rows);
     if (list4.some((x) => x.phone === source2) && list4.some((x) => x.phone === target)) fail3("\u064A\u0648\u062C\u062F \u062D\u062C\u0632 \u0644\u0644\u0645\u0644\u0641\u064A\u0646 \u0641\u064A \u0627\u0644\u064A\u0648\u0645 \u0646\u0641\u0633\u0647\u061B \u0631\u0627\u062C\u0639 \u0627\u0644\u062D\u062C\u0648\u0632\u0627\u062A \u0642\u0628\u0644 \u0627\u0644\u062F\u0645\u062C", 409);
@@ -2666,7 +3198,7 @@ function mergePlan(s, uid, input) {
   if (Object.keys(s.attachments?.[source2] || {}).some((id2) => Object.hasOwn(s.attachments?.[target] || {}, id2))) fail3("\u062A\u0639\u0627\u0631\u0636 \u0641\u064A \u0645\u0639\u0631\u0641\u0627\u062A \u0627\u0644\u0635\u0648\u0631\u061B \u0631\u0627\u062C\u0639 \u0627\u0644\u0645\u0631\u0641\u0642\u0627\u062A \u0642\u0628\u0644 \u0627\u0644\u062F\u0645\u062C", 409);
   if (Object.keys(s.attachments?.[source2] || {}).length + Object.keys(s.attachments?.[target] || {}).length > 20) fail3("\u0627\u0644\u0645\u0644\u0641\u0627\u0646 \u064A\u062A\u062C\u0627\u0648\u0632\u0627\u0646 \u062D\u062F 20 \u0635\u0648\u0631\u0629\u061B \u0631\u0627\u062C\u0639 \u0627\u0644\u0645\u0631\u0641\u0642\u0627\u062A \u0642\u0628\u0644 \u0627\u0644\u062F\u0645\u062C", 409);
   const summary = { source: source2, target, sourceName: s.patients[source2].n, targetName: s.patients[target].n, complaints: Object.keys(s.complaints?.[source2] || {}).length, images: Object.keys(s.attachments?.[source2] || {}).length, bookings: Object.values(s.bookings || {}).flatMap(Object.values).filter((x) => x.phone === source2).length };
-  return { summary, token: digest2({ uid, source: source2, target, patients: s.patients, bookings: s.bookings, files: s.files, complaints: s.complaints, attachments: s.attachments, complaintSequences: s.complaintSequences, tasks: s.tasks, checkins: s.checkins }) };
+  return { summary, token: digest2({ uid, source: source2, target, state: mergeState(s) }) };
 }
 var draftKinds = { booking: "bookings.create", complaint: "complaints.create", medical: "notes.edit", patient: "patients.edit", about: "site.manage", task: "tasks.manage" };
 var draftFields = { booking: ["name", "phone", "b", "date", "v", "s", "nt", "spouseName", "spouseJob", "spousePhone"], complaint: ["date", "text", "reason", "tx"], medical: ["n", "diagnosis", "treatment", "allergies", "chronic", "rev"], patient: ["name", "phone", "newPhone", "spouseName", "spouseJob", "spousePhone"], about: ["text", "design"], task: ["title", "description", "due", "assignee", "phone", "branch"] };
@@ -2769,7 +3301,7 @@ async function handle10(adapter2, input, uid) {
     await adapter2.mutate((original) => {
       const s = structuredClone(original), r = role(s, uid);
       draftAccess(s, r, input);
-      if (!input.data || Array.isArray(input.data) || typeof input.data !== "object" || Buffer2.byteLength(JSON.stringify(input.data)) > 2e4 || Object.entries(input.data).some(([k, v]) => !draftFields[input.kind].includes(k) || (k === "design" ? !v || Array.isArray(v) || typeof v !== "object" || Object.entries(v).some(([dk, dv]) => !/^about[A-Z][A-Za-z]+$/.test(dk) || !["string", "number", "boolean"].includes(typeof dv)) : k === "rev" ? !Number.isInteger(v) : typeof v !== "string"))) fail3("\u0628\u064A\u0627\u0646\u0627\u062A \u0627\u0644\u0645\u0633\u0648\u062F\u0629 \u063A\u064A\u0631 \u0635\u062D\u064A\u062D\u0629");
+      if (!input.data || Array.isArray(input.data) || typeof input.data !== "object" || Buffer3.byteLength(JSON.stringify(input.data)) > 2e4 || Object.entries(input.data).some(([k, v]) => !draftFields[input.kind].includes(k) || (k === "design" ? !v || Array.isArray(v) || typeof v !== "object" || Object.entries(v).some(([dk, dv]) => !/^about[A-Z][A-Za-z]+$/.test(dk) || !["string", "number", "boolean"].includes(typeof dv)) : k === "rev" ? !Number.isInteger(v) : typeof v !== "string"))) fail3("\u0628\u064A\u0627\u0646\u0627\u062A \u0627\u0644\u0645\u0633\u0648\u062F\u0629 \u063A\u064A\u0631 \u0635\u062D\u064A\u062D\u0629");
       const id2 = digest2({ kind: input.kind, entity: String(input.entity || "new").slice(0, 128) }).slice(0, 32);
       s.drafts ||= {};
       s.drafts[uid] ||= {};
@@ -2859,13 +3391,14 @@ async function handle10(adapter2, input, uid) {
     await adapter2.mutate((original) => {
       const plan3 = mergePlan(original, uid, input);
       if (input.previewToken !== plan3.token || input.confirmation !== "MERGE_PATIENTS") fail3("\u062A\u063A\u064A\u0631\u062A \u0627\u0644\u0628\u064A\u0627\u0646\u0627\u062A\u061B \u0623\u0639\u062F \u0627\u0644\u0645\u0639\u0627\u064A\u0646\u0629", 409);
-      const s = structuredClone(original), { source: source2, target } = plan3.summary, patient = s.patients[source2], dest = s.patients[target];
+      const s = structuredClone(original), { source: source2, target } = plan3.summary;
+      ensure(s);
+      const sourceId = idForPhone(s, source2), targetId = idForPhone(s, target), patient = s.patients[source2], dest = s.patients[target];
+      if (!sourceId || !targetId || sourceId === targetId) fail3("\u062A\u0639\u0630\u0631 \u0641\u0635\u0644 \u0647\u0648\u064A\u062A\u064A \u0627\u0644\u0645\u0644\u0641\u064A\u0646\u061B \u0631\u0627\u062C\u0639 \u0627\u0644\u0628\u064A\u0627\u0646\u0627\u062A \u0642\u0628\u0644 \u0627\u0644\u062F\u0645\u062C", 409);
+      dest.id = targetId;
+      dest.patientId = targetId;
       for (const key of ["spouseName", "spouseJob", "spousePhone"]) if (!dest[key] && patient[key]) dest[key] = patient[key];
-      for (const rows of Object.values(s.bookings || {})) for (const x of Object.values(rows)) if (x.phone === source2) {
-        x.phone = target;
-        x.name = dest.n;
-        x.rev = (x.rev || 0) + 1;
-      }
+      mergeReferences(s, source2, target, sourceId, targetId);
       s.files ||= {};
       if (s.files[source2]) {
         const from = s.files[source2], to = s.files[target] || { n: "", rev: 0 };
@@ -2874,7 +3407,7 @@ async function handle10(adapter2, input, uid) {
         if (to.importedRecords.length > 100) fail3("\u0623\u0631\u0634\u064A\u0641 \u0627\u0644\u0645\u0644\u0641\u0627\u062A \u0627\u0644\u0645\u062F\u0645\u062C\u0629 \u062A\u062C\u0627\u0648\u0632 \u0627\u0644\u062D\u062F \u0627\u0644\u0645\u0633\u0645\u0648\u062D", 409);
         to.n = [to.n, from.n ? "\u0633\u062C\u0644 \u0645\u062F\u0645\u062C \u0628\u062A\u0627\u0631\u064A\u062E " + today() + ":\n" + from.n : ""].filter(Boolean).join("\n\n");
         if (to.n.length > 5e3) to.n = to.n.slice(0, 5e3);
-        for (const k of ["allergies", "chronic", "diagnosis", "treatment"]) if (!to[k] && from[k]) to[k] = from[k];
+        for (const key of ["allergies", "chronic", "diagnosis", "treatment"]) if (!to[key] && from[key]) to[key] = from[key];
         to.rev = (to.rev || 0) + 1;
         to.t = stamp2();
         s.files[target] = to;
@@ -2884,9 +3417,9 @@ async function handle10(adapter2, input, uid) {
       s.complaints[target] ||= {};
       s.complaintSequences ||= {};
       let seq = Math.max(s.complaintSequences[target] || 0, ...Object.values(s.complaints[target]).map((x) => x.no || 0));
-      for (const x of Object.values(s.complaints[source2] || {}).sort((a, b) => (a.no || 0) - (b.no || 0))) {
-        const key = s.complaints[target][x.id] ? randomUUID2() : x.id;
-        s.complaints[target][key] = { ...x, id: key, no: ++seq, originalNo: x.no, sourcePhone: source2 };
+      for (const row of Object.values(s.complaints[source2] || {}).sort((a, b) => (a.no || 0) - (b.no || 0))) {
+        const key = s.complaints[target][row.id] ? randomUUID2() : row.id;
+        s.complaints[target][key] = { ...row, id: key, no: ++seq, originalNo: row.no, sourcePhone: source2 };
       }
       s.complaintSequences[target] = seq;
       delete s.complaints[source2];
@@ -2894,26 +3427,23 @@ async function handle10(adapter2, input, uid) {
       s.attachments ||= {};
       s.attachments[target] = { ...s.attachments[target], ...s.attachments[source2] };
       delete s.attachments[source2];
-      for (const x of Object.values(s.inbox || {})) if (x.p === source2) {
-        x.p = target;
-        x.n = dest.n;
-      }
-      for (const x of Object.values(s.tasks || {})) if (x.phone === source2) x.phone = target;
       delete s.patients[source2];
+      ensure(s);
+      s.patientIdentities[sourceId].mergedInto = targetId;
       rebuild(s);
       id2 = randomUUID2();
       s.patientMerges ||= {};
       const changes = [];
-      for (const key of ["patients", "bookings", "files", "complaints", "complaintSequences", "attachments", "inbox", "tasks"]) diff(original[key] || {}, s[key] || {}, [key], changes);
-      s.patientMerges[id2] = { id: id2, source: source2, target, at: stamp2(), by: uid, changes: structuredClone(changes) };
+      for (const root of MERGE_ROOTS) diff(original[root] || {}, s[root] || {}, [root], changes);
+      s.patientMerges[id2] = { id: id2, source: source2, target, sourceId, targetId, at: stamp2(), by: uid, changes: structuredClone(changes), afterFingerprint: digest2(mergeScope(s, source2, target, sourceId, targetId)) };
       return s;
     });
     return { ok: true, id: id2 };
   }
   if (action2 === "patientMergeList") {
-    const s = await adapter2.read();
-    requirePermission(role(s, uid), "patients.merge");
-    return Object.values(s.patientMerges || {}).map(({ changes, ...x }) => x);
+    const s = await adapter2.read(), r = role(s, uid);
+    requirePermission(r, "patients.merge");
+    return Object.values(s.patientMerges || {}).filter((row) => allBranches(r) || canAccess(s, r, row.target) && (!row.undoneAt || canAccess(s, r, row.source))).map(({ changes, afterFingerprint, ...x }) => x);
   }
   if (action2 === "patientMergeUndo") {
     await adapter2.mutate((original) => {
@@ -2922,19 +3452,34 @@ async function handle10(adapter2, input, uid) {
       const m = s.patientMerges?.[input.id];
       if (!m || m.undoneAt) fail3("\u0639\u0645\u0644\u064A\u0629 \u0627\u0644\u062F\u0645\u062C \u063A\u064A\u0631 \u0645\u0648\u062C\u0648\u062F\u0629", 404);
       access2(s, r, m.target);
-      for (const x of m.changes) {
+      assertMergeBranch(s, r, m.source, m.target);
+      if (m.afterFingerprint) {
+        if (m.afterFingerprint !== digest2(mergeScope(s, m.source, m.target, m.sourceId, m.targetId))) fail3("\u062A\u0648\u062C\u062F \u062A\u0639\u062F\u064A\u0644\u0627\u062A \u0623\u062D\u062F\u062B\u061B \u0644\u0627 \u064A\u0645\u0643\u0646 \u0627\u0644\u062A\u0631\u0627\u062C\u0639 \u062F\u0648\u0646 \u0645\u0631\u0627\u062C\u0639\u062A\u0647\u0627", 409);
+      } else assertLegacyUndoSafe(s, m);
+      for (const change of m.changes) {
         let value = s;
-        for (const k of x.path) value = value?.[k];
-        if (JSON.stringify(value) !== JSON.stringify(x.removed ? void 0 : x.after)) fail3("\u062A\u0648\u062C\u062F \u062A\u0639\u062F\u064A\u0644\u0627\u062A \u0623\u062D\u062F\u062B\u061B \u0644\u0627 \u064A\u0645\u0643\u0646 \u0627\u0644\u062A\u0631\u0627\u062C\u0639 \u062F\u0648\u0646 \u0645\u0631\u0627\u062C\u0639\u062A\u0647\u0627", 409);
+        for (const key of change.path) value = value?.[key];
+        if (JSON.stringify(value) !== JSON.stringify(change.removed ? void 0 : change.after)) fail3("\u062A\u0648\u062C\u062F \u062A\u0639\u062F\u064A\u0644\u0627\u062A \u0623\u062D\u062F\u062B\u061B \u0644\u0627 \u064A\u0645\u0643\u0646 \u0627\u0644\u062A\u0631\u0627\u062C\u0639 \u062F\u0648\u0646 \u0645\u0631\u0627\u062C\u0639\u062A\u0647\u0627", 409);
       }
-      for (const x of m.changes) {
+      for (const change of m.changes) {
         let node = s;
-        for (const k of x.path.slice(0, -1)) node = node[k] ||= {};
-        if (x.added) delete node[x.path.at(-1)];
-        else node[x.path.at(-1)] = structuredClone(x.before);
+        for (const key of change.path.slice(0, -1)) node = node[key] ||= {};
+        if (change.added) delete node[change.path.at(-1)];
+        else node[change.path.at(-1)] = structuredClone(change.before);
+      }
+      if (!m.sourceId && s.patients?.[m.source] && !s.patientPhoneIndex?.[m.source]) {
+        const retired = Object.values(s.patientIdentities || {}).filter((row) => row.phone === m.source && row.deletedAt);
+        if (retired.length === 1) {
+          const row = retired[0];
+          s.patientPhoneIndex ||= {};
+          s.patientPhoneIndex[m.source] = row.id;
+          delete row.deletedAt;
+          delete row.mergedInto;
+        }
       }
       m.undoneAt = stamp2();
       m.undoneBy = uid;
+      ensure(s);
       rebuild(s);
       return s;
     });
@@ -3272,391 +3817,6 @@ import { randomUUID as randomUUID4 } from "node:crypto";
 // supabase/functions/clinic-api/data-import.js
 import { Buffer as Buffer4 } from "node:buffer";
 import { createHash as createHash6 } from "node:crypto";
-
-// supabase/functions/clinic-api/management.js
-import { Buffer as Buffer3 } from "node:buffer";
-
-// supabase/functions/clinic-api/site-content.js
-var SECTION_KEYS = ["header", "contacts", "about", "branches", "lookup", "footer"];
-function validate(value, layout = {}, fail5) {
-  const rows = Array.isArray(value) ? value : Object.values(value || {});
-  if (rows.length > 24) fail5("\u0627\u0644\u062D\u062F \u0627\u0644\u0623\u0642\u0635\u0649 24 \u0642\u0633\u0645\u064B\u0627");
-  const sections = {};
-  for (const [order, x] of rows.entries()) {
-    if (!x || typeof x !== "object" || !/^[-_a-zA-Z0-9]{1,80}$/.test(x.id || "") || Object.hasOwn(sections, x.id) || ["__proto__", "constructor", "prototype"].includes(x.id)) fail5("\u0645\u0639\u0631\u0651\u0641 \u0642\u0633\u0645 \u063A\u064A\u0631 \u0635\u062D\u064A\u062D \u0623\u0648 \u0645\u0643\u0631\u0631");
-    const item = { id: x.id, order, visible: x.visible !== false };
-    for (const [key, max] of [["title", 120], ["body", 4e3], ["linkLabel", 80]]) {
-      if (x[key] !== void 0 && (typeof x[key] !== "string" || x[key].length > max)) fail5("\u0646\u0635 \u0627\u0644\u0642\u0633\u0645 \u0637\u0648\u064A\u0644 \u0623\u0648 \u063A\u064A\u0631 \u0635\u062D\u064A\u062D");
-      item[key] = x[key] || "";
-    }
-    if (x.visible !== void 0 && typeof x.visible !== "boolean") fail5("\u062D\u0627\u0644\u0629 \u0625\u0638\u0647\u0627\u0631 \u0627\u0644\u0642\u0633\u0645 \u063A\u064A\u0631 \u0635\u062D\u064A\u062D\u0629");
-    item.kind = x.kind || "text";
-    if (!["text", "notice", "image"].includes(item.kind)) fail5("\u0646\u0648\u0639 \u0627\u0644\u0642\u0633\u0645 \u063A\u064A\u0631 \u0635\u062D\u064A\u062D");
-    item.link = x.link || "";
-    if (typeof item.link !== "string" || item.link.length > 1e3) fail5("\u0631\u0627\u0628\u0637 \u063A\u064A\u0631 \u0635\u062D\u064A\u062D");
-    if (item.link) {
-      let valid = /^tel:\+?\d{7,15}$/.test(item.link);
-      try {
-        const url = new URL(item.link);
-        valid ||= url.protocol === "https:" && !url.username && !url.password;
-      } catch {
-      }
-      if (!valid) fail5("\u0627\u0644\u0631\u0627\u0628\u0637 \u064A\u062C\u0628 \u0623\u0646 \u064A\u0628\u062F\u0623 \u0628\u0640 https:// \u0623\u0648 tel:");
-    }
-    item.image = x.image || "";
-    if (item.image) {
-      const match = typeof item.image === "string" && item.image.match(/^data:image\/(png|jpeg|webp);base64,([A-Za-z0-9+/]+=*)$/);
-      if (!match || match[2].length > 267e3) fail5("\u0635\u0648\u0631\u0629 \u0627\u0644\u0642\u0633\u0645 \u064A\u062C\u0628 \u0623\u0646 \u062A\u0643\u0648\u0646 PNG \u0623\u0648 JPEG \u0623\u0648 WebP \u062D\u062A\u0649 200 \u0643\u064A\u0644\u0648\u0628\u0627\u064A\u062A");
-      let bytes;
-      try {
-        bytes = Uint8Array.from(atob(match[2]), (c) => c.charCodeAt(0));
-      } catch {
-        fail5("\u0645\u062D\u062A\u0648\u0649 \u0627\u0644\u0635\u0648\u0631\u0629 \u063A\u064A\u0631 \u0635\u062D\u064A\u062D");
-      }
-      const good = bytes.length >= 12 && bytes.length <= 2e5 && (match[1] === "png" ? [137, 80, 78, 71, 13, 10, 26, 10].every((v, i) => bytes[i] === v) : match[1] === "jpeg" ? bytes[0] === 255 && bytes[1] === 216 && bytes[2] === 255 : String.fromCharCode(...bytes.slice(0, 4)) === "RIFF" && String.fromCharCode(...bytes.slice(8, 12)) === "WEBP");
-      if (!good) fail5("\u0645\u062D\u062A\u0648\u0649 \u0627\u0644\u0635\u0648\u0631\u0629 \u0644\u0627 \u064A\u0637\u0627\u0628\u0642 \u0646\u0648\u0639\u0647\u0627");
-    }
-    sections[item.id] = item;
-  }
-  if (!layout || typeof layout !== "object" || Array.isArray(layout) || Object.entries(layout).some(([k, v]) => !SECTION_KEYS.includes(k) || typeof v !== "boolean")) fail5("\u0625\u0639\u062F\u0627\u062F\u0627\u062A \u0638\u0647\u0648\u0631 \u0627\u0644\u0623\u0642\u0633\u0627\u0645 \u063A\u064A\u0631 \u0635\u062D\u064A\u062D\u0629");
-  if (JSON.stringify(sections).length > 65e4) fail5("\u0635\u0648\u0631 \u0648\u0645\u062D\u062A\u0648\u0649 \u0627\u0644\u0623\u0642\u0633\u0627\u0645 \u0623\u0643\u0628\u0631 \u0645\u0646 \u0627\u0644\u062D\u062F \u0627\u0644\u0645\u0633\u0645\u0648\u062D");
-  return { sections, layout: { ...layout } };
-}
-
-// supabase/functions/clinic-api/design-options.js
-var fail4 = (message) => {
-  const e = Error(message);
-  e.status = 400;
-  throw e;
-};
-var COLOR_KEYS = ["background", "card", "text", "primary", "accent", "muted", "line", "headerBackground", "headerText"];
-function validate2(d) {
-  const out = {};
-  if (d.themePreset !== void 0) {
-    if (!Number.isInteger(d.themePreset) || d.themePreset < 0 || d.themePreset > 9) fail4("\u062B\u064A\u0645 \u063A\u064A\u0631 \u0635\u062D\u064A\u062D");
-    out.themePreset = d.themePreset;
-  }
-  if (d.defaultMode !== void 0) {
-    if (!["system", "light", "dark"].includes(d.defaultMode)) fail4("\u0648\u0636\u0639 \u063A\u064A\u0631 \u0635\u062D\u064A\u062D");
-    out.defaultMode = d.defaultMode;
-  }
-  for (const [k, min, max] of [["headerWidth", 50, 100], ["headerRadius", 0, 48], ["headerHeight", 80, 420], ["logoSize", 40, 180], ["photoSize", 40, 160], ["aboutFontSize", 16, 48], ["aboutBorderWidth", 0, 8], ["aboutRadius", 0, 48], ["aboutPadding", 8, 48], ["aboutNeonSize", 0, 40], ["watermarkOpacity", 0, 100], ["watermarkSize", 100, 1200], ["headerTitleSize", 18, 64], ["headerSubtitleSize", 12, 36], ["headerTextSize", 12, 36], ["headerPadding", 0, 60], ["headerGap", 0, 48]]) if (d[k] !== void 0) {
-    if (!Number.isInteger(d[k]) || d[k] < min || d[k] > max) fail4("\u0645\u0642\u0627\u0633 \u062A\u0635\u0645\u064A\u0645 \u063A\u064A\u0631 \u0635\u062D\u064A\u062D");
-    out[k] = d[k];
-  }
-  if (d.headerAlign !== void 0) {
-    if (!["start", "center", "end"].includes(d.headerAlign)) fail4("\u0645\u062D\u0627\u0630\u0627\u0629 \u0627\u0644\u0647\u064A\u062F\u0631 \u063A\u064A\u0631 \u0635\u062D\u064A\u062D\u0629");
-    out.headerAlign = d.headerAlign;
-  }
-  for (const key of ["aboutTextColor", "aboutBackground", "aboutBorderColor", "aboutNeonColor"]) if (d[key] !== void 0) {
-    if (!/^#[0-9a-f]{6}$/i.test(d[key])) fail4("\u0644\u0648\u0646 \u0627\u0644\u0646\u0628\u0630\u0629 \u063A\u064A\u0631 \u0635\u062D\u064A\u062D");
-    out[key] = d[key];
-  }
-  if (d.watermarkEnabled !== void 0) {
-    if (typeof d.watermarkEnabled !== "boolean") fail4("\u062E\u064A\u0627\u0631 \u0627\u0644\u0644\u0648\u062C\u0648 \u0627\u0644\u062E\u0644\u0641\u064A\u0629 \u063A\u064A\u0631 \u0635\u062D\u064A\u062D");
-    out.watermarkEnabled = d.watermarkEnabled;
-  }
-  if (d.watermarkPosition !== void 0) {
-    if (!["center", "top", "bottom"].includes(d.watermarkPosition)) fail4("\u0645\u0643\u0627\u0646 \u0627\u0644\u0644\u0648\u062C\u0648 \u0627\u0644\u062E\u0644\u0641\u064A\u0629 \u063A\u064A\u0631 \u0635\u062D\u064A\u062D");
-    out.watermarkPosition = d.watermarkPosition;
-  }
-  if (d.aboutNeonEnabled !== void 0) {
-    if (typeof d.aboutNeonEnabled !== "boolean") fail4("\u062E\u064A\u0627\u0631 \u0627\u0644\u0646\u064A\u0648\u0646 \u063A\u064A\u0631 \u0635\u062D\u064A\u062D");
-    out.aboutNeonEnabled = d.aboutNeonEnabled;
-  }
-  if (d.aboutAlign !== void 0) {
-    if (!["start", "center", "end"].includes(d.aboutAlign)) fail4("\u0645\u062D\u0627\u0630\u0627\u0629 \u063A\u064A\u0631 \u0635\u062D\u064A\u062D\u0629");
-    out.aboutAlign = d.aboutAlign;
-  }
-  if (d.headerColors !== void 0) {
-    if (!d.headerColors || typeof d.headerColors !== "object" || Array.isArray(d.headerColors)) fail4("\u0623\u0644\u0648\u0627\u0646 \u0627\u0644\u0647\u064A\u062F\u0631 \u063A\u064A\u0631 \u0635\u062D\u064A\u062D\u0629");
-    out.headerColors = {};
-    for (const mode of ["light", "dark"]) {
-      const p = d.headerColors[mode];
-      if (!p || !/^#[0-9a-f]{6}$/i.test(p.background) || !/^#[0-9a-f]{6}$/i.test(p.text)) fail4("\u0623\u0644\u0648\u0627\u0646 \u0627\u0644\u0647\u064A\u062F\u0631 \u063A\u064A\u0631 \u0635\u062D\u064A\u062D\u0629");
-      out.headerColors[mode] = { background: p.background, text: p.text };
-    }
-  }
-  if (d.palettes !== void 0) {
-    if (!d.palettes || typeof d.palettes !== "object") fail4("\u0623\u0644\u0648\u0627\u0646 \u063A\u064A\u0631 \u0635\u062D\u064A\u062D\u0629");
-    out.palettes = {};
-    for (const mode of ["light", "dark"]) {
-      if (!d.palettes[mode]) continue;
-      out.palettes[mode] = {};
-      for (const k of COLOR_KEYS) if (d.palettes[mode][k] !== void 0) {
-        if (!/^#[0-9a-f]{6}$/i.test(d.palettes[mode][k])) fail4("\u0644\u0648\u0646 \u063A\u064A\u0631 \u0635\u062D\u064A\u062D");
-        out.palettes[mode][k] = d.palettes[mode][k];
-      }
-    }
-  }
-  return out;
-}
-
-// supabase/functions/clinic-api/management.js
-function site(value, fail5) {
-  if (!value || typeof value !== "object" || Array.isArray(value)) fail5("\u0628\u064A\u0627\u0646\u0627\u062A \u0627\u0644\u0645\u0648\u0642\u0639 \u063A\u064A\u0631 \u0635\u062D\u064A\u062D\u0629");
-  const result = {};
-  for (const k of ["doctorName", "specialty", "clinicName", "bookingPhone", "emergencyPhone", "whatsappPhone", "about", "footer", "headerTitle", "headerSubtitle", "headerText"]) {
-    if (value[k] !== void 0) {
-      if (typeof value[k] !== "string" || value[k].length > (["about", "footer", "headerTitle", "headerSubtitle", "headerText"].includes(k) ? 2e3 : 160)) fail5("\u0627\u0644\u0646\u0635 \u0637\u0648\u064A\u0644 \u0623\u0648 \u063A\u064A\u0631 \u0635\u062D\u064A\u062D");
-      result[k] = value[k];
-    }
-  }
-  for (const k of ["bookingPhone", "emergencyPhone", "whatsappPhone"]) if (result[k] && !/^\+?[0-9]{7,15}$/.test(result[k])) fail5("\u0631\u0642\u0645 \u0627\u0644\u0647\u0627\u062A\u0641 \u063A\u064A\u0631 \u0635\u062D\u064A\u062D");
-  result.branches = {};
-  for (const b of Object.keys(value.branches || {})) {
-    if (!validId2(b)) fail5("\u0631\u0645\u0632 \u0641\u0631\u0639 \u063A\u064A\u0631 \u0635\u062D\u064A\u062D");
-    const x = value.branches?.[b];
-    if (!x) continue;
-    result.branches[b] = {};
-    for (const k of ["name", "address", "phone"]) {
-      if (typeof x[k] !== "string" || x[k].length > 300) fail5("\u0628\u064A\u0627\u0646\u0627\u062A \u0627\u0644\u0641\u0631\u0639 \u063A\u064A\u0631 \u0635\u062D\u064A\u062D\u0629");
-      result.branches[b][k] = x[k];
-    }
-    if (x.phone && !/^\+?[0-9]{7,15}$/.test(x.phone)) fail5("\u0647\u0627\u062A\u0641 \u0627\u0644\u0641\u0631\u0639 \u063A\u064A\u0631 \u0635\u062D\u064A\u062D");
-  }
-  Object.assign(result, validate(value.sections, value.layout, fail5));
-  const d = value.design || {};
-  result.design = validate2(d);
-  for (const k of ["primary", "background", "text", "accent", "card"]) {
-    if (d[k] !== void 0) {
-      if (!/^#[0-9a-f]{6}$/i.test(d[k])) fail5("\u0644\u0648\u0646 \u063A\u064A\u0631 \u0635\u062D\u064A\u062D");
-      result.design[k] = d[k];
-    }
-  }
-  for (const [k, min, max] of [["radius", 0, 40], ["width", 600, 1200], ["fontSize", 14, 22]]) if (d[k] !== void 0) {
-    if (!Number.isInteger(d[k]) || d[k] < min || d[k] > max) fail5("\u0642\u064A\u0645\u0629 \u062A\u0635\u0645\u064A\u0645 \u063A\u064A\u0631 \u0635\u062D\u064A\u062D\u0629");
-    result.design[k] = d[k];
-  }
-  if (d.showBackground !== void 0) {
-    if (typeof d.showBackground !== "boolean") fail5("\u062E\u064A\u0627\u0631 \u0627\u0644\u062E\u0644\u0641\u064A\u0629 \u063A\u064A\u0631 \u0635\u062D\u064A\u062D");
-    result.design.showBackground = d.showBackground;
-  }
-  for (const k of ["logo", "doctorPhoto", "watermarkImage"]) if (d[k] !== void 0) {
-    if (d[k] === "") {
-      result.design[k] = "";
-      continue;
-    }
-    const match = String(d[k]).match(/^data:image\/(png|jpeg|webp);base64,([A-Za-z0-9+/]+=*)$/);
-    if (!match) fail5("\u0627\u0644\u0635\u0648\u0631\u0629 \u064A\u062C\u0628 \u0623\u0646 \u062A\u0643\u0648\u0646 PNG \u0623\u0648 JPEG \u0623\u0648 WebP");
-    const bytes = Buffer3.from(match[2], "base64");
-    if (bytes.length > 2e5 || bytes.length < 12) fail5("\u062D\u062C\u0645 \u0627\u0644\u0635\u0648\u0631\u0629 \u063A\u064A\u0631 \u0645\u0646\u0627\u0633\u0628");
-    const good = match[1] === "png" ? bytes.subarray(0, 8).equals(Buffer3.from([137, 80, 78, 71, 13, 10, 26, 10])) : match[1] === "jpeg" ? bytes[0] === 255 && bytes[1] === 216 : bytes.toString("ascii", 0, 4) === "RIFF" && bytes.toString("ascii", 8, 12) === "WEBP";
-    if (!good) fail5("\u0645\u062D\u062A\u0648\u0649 \u0627\u0644\u0635\u0648\u0631\u0629 \u063A\u064A\u0631 \u0635\u062D\u064A\u062D");
-    result.design[k] = d[k];
-  }
-  return result;
-}
-function mutate(original, uid, input, core) {
-  const s = structuredClone(original), r = core.role(s, uid);
-  if (["watermarkSave", "aboutSave", "headerSave"].includes(input.action) && s.settings) delete s.settings.previousThemeDisplay;
-  if (input.action === "displaySave") {
-    requirePermission(r, "display.manage");
-    if (input.revision !== (s.settings?.displayRev || 0)) core.fail("\u062A\u063A\u064A\u0631\u062A \u0625\u0639\u062F\u0627\u062F\u0627\u062A \u0627\u0644\u0634\u0627\u0634\u0629 \u0645\u0646 \u062C\u0644\u0633\u0629 \u0623\u062E\u0631\u0649\u061B \u0623\u0639\u062F \u0627\u0644\u062A\u062D\u0645\u064A\u0644 \u0623\u0648\u0644\u064B\u0627", 409);
-    s.settings ||= {};
-    const normalized2 = normalize3(input.config, core.branchIds(s, true)), previous = normalize3(s.settings.display || {}, core.branchIds(s, true));
-    if (r.r !== "admin" && Object.keys(normalized2).some((key) => (key === "footerText" || key.startsWith("notice")) && JSON.stringify(normalized2[key]) !== JSON.stringify(previous[key]))) core.fail("\u062A\u0639\u062F\u064A\u0644 \u062A\u0635\u0645\u064A\u0645 \u0631\u0633\u0627\u0644\u0629 \u0627\u0644\u0637\u0648\u0627\u0631\u0626 \u0645\u062A\u0627\u062D \u0644\u0644\u0623\u062F\u0645\u0646 \u0641\u0642\u0637", 403);
-    s.settings.display = normalized2;
-    s.settings.displayRev = (s.settings.displayRev || 0) + 1;
-    return s;
-  }
-  if (input.action === "siteContentSave") {
-    requirePermission(r, "site.manage");
-    if (input.revision !== (s.settings?.contentRev || 0)) core.fail("\u062A\u0645 \u062A\u0639\u062F\u064A\u0644 \u0627\u0644\u0645\u062D\u062A\u0648\u0649 \u0645\u0646 \u062C\u0644\u0633\u0629 \u0623\u062E\u0631\u0649\u061B \u0623\u0639\u062F \u0627\u0644\u062A\u062D\u0645\u064A\u0644 \u0642\u0628\u0644 \u0627\u0644\u062D\u0641\u0638", 409);
-    const content = validate(input.sections, input.layout, core.fail);
-    s.settings ||= {};
-    s.settings.site = { ...s.settings.site, ...content };
-    s.settings.contentRev = (s.settings.contentRev || 0) + 1;
-    return s;
-  }
-  if (input.action === "watermarkSave") {
-    requirePermission(r, "site.manage");
-    if (input.revision !== (s.settings?.watermarkRev || 0)) core.fail("\u062A\u0645 \u062A\u0639\u062F\u064A\u0644 \u0627\u0644\u0644\u0648\u062C\u0648 \u0627\u0644\u062E\u0644\u0641\u064A\u0629 \u0645\u0646 \u062C\u0644\u0633\u0629 \u0623\u062E\u0631\u0649\u061B \u0623\u0639\u062F \u062A\u062D\u0645\u064A\u0644 \u0627\u0644\u0625\u0639\u062F\u0627\u062F\u0627\u062A \u0623\u0648\u0644\u064B\u0627", 409);
-    const incoming = site({ design: input.design }, core.fail);
-    s.settings ||= {};
-    const current = s.settings.site || {}, design = { ...current.design };
-    for (const key of Object.keys(design)) if (key.startsWith("watermark")) delete design[key];
-    for (const [key, value] of Object.entries(incoming.design)) if (key.startsWith("watermark")) design[key] = value;
-    s.settings.previousDesign = structuredClone(current.design || {});
-    s.settings.site = { ...current, design };
-    s.settings.watermarkRev = (s.settings.watermarkRev || 0) + 1;
-    return s;
-  }
-  if (input.action === "aboutSave") {
-    requirePermission(r, "site.manage");
-    if (input.revision !== (s.settings?.aboutRev || 0)) core.fail("\u062A\u0645 \u062A\u0639\u062F\u064A\u0644 \u0646\u0628\u0630\u0629 \u0627\u0644\u0639\u064A\u0627\u062F\u0629 \u0645\u0646 \u062C\u0644\u0633\u0629 \u0623\u062E\u0631\u0649\u061B \u0623\u0639\u062F \u062A\u062D\u0645\u064A\u0644 \u0627\u0644\u0625\u0639\u062F\u0627\u062F\u0627\u062A \u0623\u0648\u0644\u064B\u0627", 409);
-    if (typeof input.text !== "string") core.fail("\u0646\u0635 \u0627\u0644\u0646\u0628\u0630\u0629 \u063A\u064A\u0631 \u0635\u062D\u064A\u062D");
-    const incoming = site({ about: input.text, design: input.design }, core.fail);
-    s.settings ||= {};
-    const current = s.settings.site || {}, design = { ...current.design };
-    for (const key of Object.keys(design)) if (key.startsWith("about")) delete design[key];
-    for (const [key, value] of Object.entries(incoming.design)) if (key.startsWith("about")) design[key] = value;
-    if (JSON.stringify(current.design) !== JSON.stringify(design)) s.settings.previousDesign = structuredClone(current.design || {});
-    s.settings.site = { ...current, about: incoming.about, design };
-    s.settings.aboutRev = (s.settings.aboutRev || 0) + 1;
-    return s;
-  }
-  if (input.action === "headerSave") {
-    requirePermission(r, "site.manage");
-    if (input.revision !== (s.settings?.headerRev || 0)) core.fail("\u062A\u0645 \u062A\u0639\u062F\u064A\u0644 \u0627\u0644\u0647\u064A\u062F\u0631 \u0645\u0646 \u062C\u0644\u0633\u0629 \u0623\u062E\u0631\u0649\u061B \u0623\u0639\u062F \u062A\u062D\u0645\u064A\u0644 \u0627\u0644\u0625\u0639\u062F\u0627\u062F\u0627\u062A \u0623\u0648\u0644\u064B\u0627", 409);
-    const incoming = site(input.site, core.fail);
-    s.settings ||= {};
-    const current = s.settings.site || {}, next = { ...current }, design = { ...current.design };
-    for (const key of ["headerTitle", "headerSubtitle", "headerText"]) if (incoming[key] !== void 0) next[key] = incoming[key];
-    for (const key of ["headerWidth", "headerRadius", "headerHeight", "headerTitleSize", "headerSubtitleSize", "headerTextSize", "logoSize", "photoSize", "headerPadding", "headerGap", "headerAlign", "logo", "doctorPhoto"]) if (incoming.design[key] !== void 0) design[key] = incoming.design[key];
-    if (incoming.design.headerColors) design.headerColors = incoming.design.headerColors;
-    if (incoming.design.palettes) {
-      design.palettes = structuredClone(current.design?.palettes || {});
-      for (const mode of ["light", "dark"]) if (incoming.design.palettes?.[mode]) {
-        const colors2 = incoming.design.palettes[mode];
-        design.palettes[mode] = { ...colors2, ...design.palettes[mode] };
-        for (const key of ["headerBackground", "headerText"]) if (colors2[key] !== void 0) design.palettes[mode][key] = colors2[key];
-      }
-    }
-    if (JSON.stringify(current.design) !== JSON.stringify(design)) s.settings.previousDesign = structuredClone(current.design || {});
-    next.design = design;
-    s.settings.site = next;
-    s.settings.headerRev = (s.settings.headerRev || 0) + 1;
-    return s;
-  }
-  if (input.action === "siteThemeSave") {
-    if (r.r !== "admin") core.fail("\u062A\u0637\u0628\u064A\u0642 \u062B\u064A\u0645 \u0627\u0644\u0645\u0648\u0642\u0639 \u0628\u0627\u0644\u0643\u0627\u0645\u0644 \u0645\u062A\u0627\u062D \u0644\u0644\u0623\u062F\u0645\u0646 \u0641\u0642\u0637", 403);
-    if (input.revision !== (s.settings?.displayRev || 0)) core.fail("\u062A\u063A\u064A\u0631\u062A \u0625\u0639\u062F\u0627\u062F\u0627\u062A \u0634\u0627\u0634\u0629 \u0627\u0644\u062F\u0648\u0631\u061B \u0623\u0639\u062F \u062A\u062D\u0645\u064A\u0644 \u0627\u0644\u062A\u0635\u0645\u064A\u0645 \u0642\u0628\u0644 \u062A\u0637\u0628\u064A\u0642 \u0627\u0644\u062B\u064A\u0645", 409);
-    const checked = site({ design: input.site?.design }, core.fail), next = structuredClone(s);
-    next.settings ||= {};
-    next.settings.site = { ...s.settings?.site, design: checked.design };
-    const design = next.settings.site.design, palettes = design.palettes;
-    for (const mode of ["light", "dark"]) for (const key of ["background", "card", "text", "primary", "accent", "muted", "line", "headerBackground", "headerText"]) if (!palettes?.[mode]?.[key]) core.fail("\u0627\u062E\u062A\u0631 \u062B\u064A\u0645\u064B\u0627 \u0643\u0627\u0645\u0644\u064B\u0627 \u0644\u0644\u0646\u0647\u0627\u0631 \u0648\u0627\u0644\u0644\u064A\u0644 \u0642\u0628\u0644 \u0627\u0644\u062D\u0641\u0638");
-    const previous = normalize3(s.settings?.display || {}, core.branchIds(s, true)), light2 = palettes.light;
-    next.settings.previousDesign = structuredClone(s.settings?.site?.design || {});
-    next.settings.previousThemeDisplay = Object.fromEntries(Object.entries(previous).filter(([key]) => key === "colors" || key === "customColors" || key.startsWith("notice") && key.endsWith("Color") || key === "noticeBackground"));
-    Object.assign(design, { primary: light2.primary, background: light2.background, text: light2.text, accent: light2.accent, card: light2.card, aboutTextColor: light2.text, aboutBackground: light2.card, aboutBorderColor: light2.primary, aboutNeonColor: light2.accent, headerColors: Object.fromEntries(["light", "dark"].map((mode) => [mode, { background: palettes[mode].headerBackground, text: palettes[mode].headerText }])) });
-    const colors2 = Object.fromEntries(["light", "dark"].map((mode) => {
-      const p = palettes[mode];
-      return [mode, { background: p.background, currentBackground: p.headerBackground, currentText: p.headerText, nextBackground: p.card, nextText: p.text, accent: p.accent }];
-    }));
-    next.settings.display = { ...previous, colors: colors2, customColors: true, noticeTextColor: light2.primary, noticeBackground: light2.card, noticeBorderColor: light2.primary, noticeNeonColor: light2.accent };
-    for (const key of ["displayRev", "headerRev", "aboutRev"]) next.settings[key] = (s.settings?.[key] || 0) + 1;
-    return next;
-  }
-  if (input.action === "siteSave") {
-    requirePermission(r, "site.manage");
-    s.settings ||= {};
-    const nextSite = site(input.site, core.fail);
-    nextSite.sections = s.settings.site?.sections || {};
-    nextSite.layout = s.settings.site?.layout || {};
-    if (JSON.stringify(s.settings.site?.design) !== JSON.stringify(nextSite.design)) {
-      s.settings.previousDesign = structuredClone(s.settings.site?.design || {});
-      delete s.settings.previousThemeDisplay;
-    }
-    s.settings.site = nextSite;
-    if (s.settings.branches) for (const [b, x] of Object.entries(s.settings.site.branches)) {
-      if (s.settings.branches[b]) s.settings.branches[b] = { ...s.settings.branches[b], ...x };
-    }
-    return s;
-  }
-  if (input.action === "userSave") {
-    requirePermission(r, "users.manage");
-    if (!s.roles[input.uid]) core.fail("\u0627\u0644\u0645\u0633\u062A\u062E\u062F\u0645 \u063A\u064A\u0631 \u0645\u0648\u062C\u0648\u062F", 404);
-    if (s.roles[input.uid].deletePending) core.fail("\u062D\u0630\u0641 \u0627\u0644\u062D\u0633\u0627\u0628 \u0645\u0639\u0644\u0642\u061B \u0627\u0633\u062A\u0643\u0645\u0644 \u0627\u0644\u062D\u0630\u0641 \u0623\u0648\u0644\u064B\u0627", 409);
-    const next = validateRole(input.role, core.fail, core.branchIds(s));
-    if (next.u !== s.roles[input.uid].u) core.fail("\u0627\u0633\u0645 \u0627\u0644\u062F\u062E\u0648\u0644 \u062B\u0627\u0628\u062A\u061B \u064A\u0645\u0643\u0646\u0643 \u062A\u0639\u062F\u064A\u0644 \u0627\u0644\u0627\u0633\u0645 \u0627\u0644\u0638\u0627\u0647\u0631");
-    if (s.roles[input.uid].r === "admin" && (next.r !== "admin" || next.enabled === false) && !Object.entries(s.roles).some(([id2, x]) => id2 !== input.uid && x.r === "admin" && x.enabled !== false)) core.fail("\u064A\u062C\u0628 \u0625\u0628\u0642\u0627\u0621 \u062D\u0633\u0627\u0628 \u0645\u062F\u064A\u0631 \u0641\u0639\u0627\u0644 \u0648\u0627\u062D\u062F \u0639\u0644\u0649 \u0627\u0644\u0623\u0642\u0644");
-    s.roles[input.uid] = next;
-    return s;
-  }
-  if (input.action === "patientSave") {
-    requirePermission(r, "patients.edit");
-    indexPatients(s);
-    const p = core.phone(input.phone), to = core.phone(input.newPhone || p), name = String(input.name || "").trim();
-    if (!/^01[0125]\d{8}$/.test(p) || !/^01[0125]\d{8}$/.test(to) || !name || name.length > 120) core.fail("\u0631\u0627\u062C\u0639 \u0627\u0633\u0645 \u0627\u0644\u062D\u0627\u0644\u0629 \u0648\u0627\u0644\u0647\u0627\u062A\u0641");
-    if (s.patients[p]) assertAccess(s, r, p);
-    if (p !== to && s.patients[to]) core.fail("\u0631\u0642\u0645 \u0627\u0644\u0647\u0627\u062A\u0641 \u0627\u0644\u062C\u062F\u064A\u062F \u0645\u0633\u062A\u062E\u062F\u0645 \u0644\u062D\u0627\u0644\u0629 \u0623\u062E\u0631\u0649", 409);
-    const spouse2 = {};
-    for (const k of ["spouseName", "spouseJob", "spousePhone"]) if (Object.hasOwn(input, k)) {
-      if (typeof input[k] !== "string" || input[k].length > 120) core.fail("\u0631\u0627\u062C\u0639 \u0628\u064A\u0627\u0646\u0627\u062A \u0627\u0644\u0632\u0648\u062C");
-      spouse2[k] = k === "spousePhone" ? core.phone(input[k]) : input[k].trim();
-      if (k === "spousePhone" && spouse2[k] && !/^01[0125]\d{8}$/.test(spouse2[k])) core.fail("\u0631\u0642\u0645 \u0645\u0648\u0628\u0627\u064A\u0644 \u0627\u0644\u0632\u0648\u062C \u063A\u064A\u0631 \u0635\u062D\u064A\u062D");
-    }
-    const stableId = rename(s, p, to);
-    s.patients[to] = { ...s.patients[p], ...stableId ? { id: stableId, patientId: stableId } : {}, ...spouse2, n: name, d: s.patients[p]?.d || core.today(), ...!allPatients(r) ? { br: r.br } : {} };
-    if (p !== to) delete s.patients[p];
-    for (const rows of Object.values(s.bookings || {})) for (const x of Object.values(rows)) if (x.phone === p) {
-      x.phone = to;
-      x.name = name;
-      x.rev = (x.rev || 0) + 1;
-    }
-    if (p !== to) {
-      for (const kind of ["files", "complaints", "followups", "attachments", "complaintSequences"]) if (s[kind]?.[p]) {
-        s[kind][to] = s[kind][p];
-        delete s[kind][p];
-      }
-    }
-    for (const n of Object.values(s.inbox || {})) if (n.p === p) {
-      n.p = to;
-      n.n = name;
-    }
-    ensure(s);
-    core.rebuild(s);
-    return s;
-  }
-  if (input.action === "patientDelete") {
-    requirePermission(r, "patients.delete");
-    const p = core.phone(input.phone);
-    if (!/^01[0125]\d{8}$/.test(p)) core.fail("\u0647\u0627\u062A\u0641 \u063A\u064A\u0631 \u0635\u062D\u064A\u062D");
-    assertAccess(s, r, p);
-    const patientId = idForPhone(s, p), bookingIds = /* @__PURE__ */ new Set(), advance = /* @__PURE__ */ new Set(), matches = (x) => !!x && (core.phone(x.phone || x.p) === p || !!patientId && x.patientId === patientId);
-    if (!allPatients(r)) {
-      const records2 = [...Object.values(s.bookings || {}).flatMap((rows) => Object.values(rows || {})), ...Object.values(s.deletedBookings || {}).map((x) => x?.booking)];
-      if (s.patients?.[p]?.br && s.patients[p].br !== r.br || records2.some((x) => matches(x) && x.b !== r.br)) core.fail("\u0627\u0644\u062D\u0627\u0644\u0629 \u0644\u0647\u0627 \u0628\u064A\u0627\u0646\u0627\u062A \u0641\u064A \u0641\u0631\u0639 \u0622\u062E\u0631\u061B \u062D\u0630\u0641 \u0627\u0644\u0645\u0644\u0641 \u0627\u0644\u0643\u0627\u0645\u0644 \u064A\u062D\u062A\u0627\u062C \u0635\u0644\u0627\u062D\u064A\u0629 \u062C\u0645\u064A\u0639 \u0627\u0644\u0641\u0631\u0648\u0639", 403);
-    }
-    enqueue(s, s.attachments?.[p]);
-    delete s.complaintSequences?.[p];
-    for (const [date2, rows] of Object.entries(s.bookings || {})) for (const [id2, x] of Object.entries(rows || {})) if (matches(x)) {
-      bookingIds.add(id2);
-      if (x.s === "exam") advance.add(date2 + "_" + x.b);
-      delete rows[id2];
-    }
-    for (const [id2, x] of Object.entries(s.deletedBookings || {})) if (matches(x?.booking)) {
-      bookingIds.add(id2);
-      if (x.booking.id) bookingIds.add(x.booking.id);
-      delete s.deletedBookings[id2];
-    }
-    for (const kind of ["patients", "files", "complaints", "followups", "attachments", "complaintSequences"]) delete s[kind]?.[p];
-    for (const root of ["clinicalVisits", "followupPlans", "urgentReviews", "bookingContacts", "checkins", "appointmentRequests", "waitingList", "tasks", "inbox"]) for (const [id2, x] of Object.entries(s[root] || {})) if (matches(x) || bookingIds.has(x?.bookingId) || bookingIds.has(x?.sourceBookingId) || ["checkins", "bookingContacts"].includes(root) && bookingIds.has(id2)) delete s[root][id2];
-    for (const drafts of Object.values(s.drafts || {})) for (const [id2, x] of Object.entries(drafts || {})) if (x && (core.phone(x.entity) === p || x.entity === patientId || bookingIds.has(x.entity) || matches(x.data))) delete drafts[id2];
-    delete s.editingPresence?.[p];
-    for (const key of advance) {
-      const date2 = key.slice(0, 10), branch2 = key.slice(11);
-      if (date2 !== core.today() || !core.canExamine(s, date2, branch2) || s.sessions?.[key] && s.sessions[key].status !== "running") continue;
-      const rows = Object.values(s.bookings?.[date2] || {}).filter((x) => x.b === branch2);
-      if (rows.some((x) => x.s === "exam")) continue;
-      const next = rows.filter((x) => x.s === "wait").sort(core.queueOrder)[0];
-      if (next) {
-        next.s = "exam";
-        next.startedAt = (/* @__PURE__ */ new Date()).toISOString();
-        next.rev = (next.rev || 0) + 1;
-      }
-    }
-    ensure(s);
-    core.rebuild(s);
-    return s;
-  }
-  if (input.action === "dataClear") {
-    requirePermission(r, "data.delete");
-    if (input.confirmation !== "DELETE_CLINIC_DATA") core.fail("\u062A\u0623\u0643\u064A\u062F \u0627\u0644\u062D\u0630\u0641 \u0645\u0637\u0644\u0648\u0628");
-    ensure(s);
-    for (const items of Object.values(s.attachments || {})) enqueue(s, items);
-    for (const kind of ["bookings", "patients", "files", "complaints", "inbox", "track", "deletedBookings", "sessions", "followups", "attachments", "complaintSequences", "clinicalVisits", "followupPlans", "urgentReviews", "bookingContacts", "checkins", "appointmentRequests", "waitingList", "tasks", "slotOpenings", "dayClosures", "scheduleTransferPending", "editingPresence"]) s[kind] = {};
-    for (const drafts of Object.values(s.drafts || {})) for (const [id2, x] of Object.entries(drafts || {})) if (["booking", "complaint", "medical", "patient", "task"].includes(x?.kind)) delete drafts[id2];
-    for (const batch of Object.values(s.settings?.trainingYearBatches || {})) if (batch && batch.status !== "purged") Object.assign(batch, { status: "purged", purgedAt: (/* @__PURE__ */ new Date()).toISOString(), purgedBy: uid });
-    ensure(s);
-    return s;
-  }
-  core.fail("\u0639\u0645\u0644\u064A\u0629 \u063A\u064A\u0631 \u0645\u0633\u0645\u0648\u062D\u0629", 403);
-}
-
-// supabase/functions/clinic-api/data-import.js
 var bad2 = (path, message) => fail3("\u0645\u0644\u0641 \u0627\u0644\u0627\u0633\u062A\u064A\u0631\u0627\u062F: " + path + " - " + message);
 var object2 = (x) => !!x && typeof x === "object" && !Array.isArray(x);
 var safeId = (x) => typeof x === "string" && /^[A-Za-z0-9_-]{1,128}$/.test(x) && !Object.hasOwn(Object.prototype, x);
@@ -3998,6 +4158,53 @@ async function handle12(adapter2, input, uid) {
   fail3("\u0639\u0645\u0644\u064A\u0629 \u0627\u0633\u062A\u064A\u0631\u0627\u062F \u063A\u064A\u0631 \u0645\u0633\u0645\u0648\u062D\u0629", 403);
 }
 
+// supabase/functions/clinic-api/patient-print.js
+function build(state, uid, value) {
+  const r = role(state, uid);
+  requirePermission(r, "patients.print");
+  if (!can(r, "patients.read") && !can(r, "bookings.read")) fail3("\u064A\u0644\u0632\u0645 \u0627\u0644\u0633\u0645\u0627\u062D \u0628\u0639\u0631\u0636 \u0627\u0644\u062D\u0627\u0644\u0627\u062A \u0623\u0648 \u0627\u0644\u062D\u062C\u0648\u0632\u0627\u062A \u0644\u0644\u0637\u0628\u0627\u0639\u0629", 403);
+  const phone3 = phone(value);
+  if (!/^01[0125]\d{8}$/.test(phone3)) fail3("\u0631\u0642\u0645 \u0627\u0644\u0647\u0627\u062A\u0641 \u063A\u064A\u0631 \u0635\u062D\u064A\u062D");
+  assertAccess(state, r, phone3);
+  const source2 = state.patients?.[phone3], rows = Object.values(state.bookings || {}).flatMap(Object.values).filter((x) => x.phone === phone3 && (allPatients(r) || x.b === r.br));
+  if (!source2 && !rows.length) fail3("\u0627\u0644\u062D\u0627\u0644\u0629 \u063A\u064A\u0631 \u0645\u0648\u062C\u0648\u062F\u0629", 404);
+  const patient = { name: source2?.n || rows[0]?.name || "", phone: phone3 };
+  if (can(r, "patients.read")) for (const key of ["spouseName", "spouseJob", "spousePhone"]) patient[key] = source2?.[key] || "";
+  const notes = can(r, "notes.read"), bookings = can(r, "bookings.read") ? rows.map((x) => ({ date: x.date, no: x.no, b: x.b, v: x.v, s: x.s, ...notes ? { nt: x.nt || "" } : {} })).sort((a, b) => b.date.localeCompare(a.date) || a.no - b.no) : [];
+  let file = null;
+  if (notes && state.files?.[phone3]) {
+    file = {};
+    for (const key of ["n", "allergies", "chronic", "diagnosis", "treatment"]) file[key] = state.files[phone3][key] || "";
+  }
+  const complaints = can(r, "complaints.read") ? Object.values(numberComplaints(structuredClone({ complaints: { [phone3]: state.complaints?.[phone3] || {} }, complaintSequences: { [phone3]: state.complaintSequences?.[phone3] || 0 } })).complaints[phone3]).map((x) => ({ no: x.no, date: x.date, reason: x.reason || "", text: x.text || "", tx: x.tx || "", by: x.by || "", at: x.at || "" })).sort((a, b) => b.date.localeCompare(a.date) || b.no - a.no) : [];
+  const branches2 = branchIds(state).filter((b) => allPatients(r) || b === r.br), registry = state.settings?.branches || state.settings?.site?.branches || {};
+  return { patient, bookings, file, complaints, branches: Object.fromEntries(branches2.map((b) => [b, registry[b]?.name || b])), site: { clinicName: state.settings?.site?.clinicName || "\u0639\u064A\u0627\u062F\u0629 \u062F. \u064A\u0648\u0633\u0641 \u0639\u0632 \u0627\u0644\u0631\u062C\u0627\u0644", doctorName: state.settings?.site?.doctorName || "" }, generatedAt: (/* @__PURE__ */ new Date()).toISOString() };
+}
+
+// supabase/functions/clinic-api/staff-access.js
+var queueGrants = ["bookings.read", "bookings.create", "bookings.status", "patients.print", "patients.read", "patients.edit"];
+var nurseGrants = [...queueGrants, "requests.read", "patients.read", "complaints.read", "complaints.create", "attachments.read", "attachments.create", "attachments.own.delete"];
+function plan2(state, uid, core) {
+  if (core.role(state, uid).r !== "admin") core.fail("\u0636\u0628\u0637 \u062D\u0633\u0627\u0628\u0627\u062A \u0627\u0644\u0641\u0631\u0648\u0639 \u0645\u062A\u0627\u062D \u0644\u0644\u0623\u062F\u0645\u0646 \u0641\u0642\u0637", 403);
+  const registry = branches(state), roles = Object.entries(state.roles || {}), staff = [];
+  for (const [branch2, username] of [["alex", "alex-sec"], ["matrouh", "matrouh-sec"], ["dmn", "dmn-sec"], ["libya", "libya-sec"]]) {
+    if (!registry[branch2]) core.fail("\u0623\u0636\u0641 \u0641\u0631\u0639 " + branch2 + " \u0642\u0628\u0644 \u0636\u0628\u0637 \u062D\u0633\u0627\u0628\u0627\u062A\u0647", 409);
+    const named = roles.find(([, r]) => r.u === username);
+    if (named && (!["sec", "staff"].includes(named[1].r) || named[1].br !== branch2 || named[1].archivedAt || named[1].deletePending)) core.fail("\u0627\u0633\u0645 " + username + " \u0645\u0631\u062A\u0628\u0637 \u0628\u062D\u0633\u0627\u0628 \u0645\u062E\u062A\u0644\u0641 \u0623\u0648 \u0645\u0624\u0631\u0634\u0641\u061B \u0631\u0627\u062C\u0639\u0647 \u0645\u0646 \u0627\u0644\u0645\u0633\u062A\u062E\u062F\u0645\u064A\u0646 \u0623\u0648\u0644\u064B\u0627", 409);
+    const matches = roles.filter(([, r]) => r.r === "sec" && r.br === branch2 && r.enabled !== false && !r.archivedAt && !r.deletePending);
+    if (!named && matches.length > 1) core.fail("\u064A\u0648\u062C\u062F \u0623\u0643\u062B\u0631 \u0645\u0646 \u062D\u0633\u0627\u0628 \u0633\u0643\u0631\u062A\u0627\u0631\u064A\u0629 \u0644\u0644\u0641\u0631\u0639 " + registry[branch2].name + "\u061B \u062D\u062F\u0651\u062F \u0627\u0644\u062D\u0633\u0627\u0628 \u0627\u0644\u0645\u0637\u0644\u0648\u0628 \u0628\u062A\u0633\u0645\u064A\u062A\u0647 " + username + " \u0623\u0648\u0644\u064B\u0627", 409);
+    const dataMatches = roles.filter(([, r]) => r.r === "staff" && r.br === branch2 && r.enabled !== false && !r.archivedAt && !r.deletePending && /data/i.test(r.u));
+    if (!named && !matches.length && dataMatches.length > 1) core.fail("\u064A\u0648\u062C\u062F \u0623\u0643\u062B\u0631 \u0645\u0646 \u062D\u0633\u0627\u0628 \u062F\u0627\u062A\u0627 \u0644\u0644\u0641\u0631\u0639 " + registry[branch2].name + "\u061B \u0631\u0627\u062C\u0639 \u0627\u0644\u062D\u0633\u0627\u0628 \u0627\u0644\u0645\u0637\u0644\u0648\u0628 \u0623\u0648\u0644\u064B\u0627", 409);
+    const selected = named || matches[0] || dataMatches[0], old = selected?.[1] || {};
+    const role3 = { ...old, u: username, r: "sec", br: branch2, scope: "branch", enabled: true, displayName: old.displayName || "\u0633\u0643\u0631\u062A\u0627\u0631\u064A\u0629 " + registry[branch2].name, permissions: { ...old.permissions, ...Object.fromEntries([...queueGrants, ...secretaryReadGrants].map((key) => [key, true])) } };
+    staff.push({ before: selected?.[1] || null, uid: selected?.[0] || null, username, create: !selected, role: validateRole(role3, core.fail, Object.keys(registry)) });
+  }
+  for (const [id2, old] of roles.filter(([, r]) => r.r === "nurse" && r.enabled !== false && !r.archivedAt && !r.deletePending)) {
+    staff.push({ before: old, uid: id2, username: old.u, create: false, role: validateRole({ ...old, scope: "all", permissions: { ...old.permissions, ...Object.fromEntries(nurseGrants.map((key) => [key, true])) } }, core.fail, Object.keys(registry)) });
+  }
+  return { staff };
+}
+
 // supabase/functions/clinic-api/schedule-transfers.js
 function reconcile(before, next) {
   if (JSON.stringify(before.settings?.sched) === JSON.stringify(next.settings?.sched) && !Object.keys(next.scheduleTransferPending || {}).length) return next;
@@ -4098,53 +4305,6 @@ function organize(original, uid) {
   if (!branchIds(s).includes("libya")) fail3("\u0641\u0631\u0639 \u0644\u064A\u0628\u064A\u0627 \u063A\u064A\u0631 \u0645\u0648\u062C\u0648\u062F", 409);
   for (const [phone3, branch2] of Object.entries(assignments)) if (s.patients?.[phone3]) s.patients[phone3].br = branch2;
   return s;
-}
-
-// supabase/functions/clinic-api/staff-access.js
-var queueGrants = ["bookings.read", "bookings.create", "bookings.status", "patients.print", "patients.read", "patients.edit"];
-var nurseGrants = [...queueGrants, "requests.read", "patients.read", "complaints.read", "complaints.create", "attachments.read", "attachments.create", "attachments.own.delete"];
-function plan2(state, uid, core) {
-  if (core.role(state, uid).r !== "admin") core.fail("\u0636\u0628\u0637 \u062D\u0633\u0627\u0628\u0627\u062A \u0627\u0644\u0641\u0631\u0648\u0639 \u0645\u062A\u0627\u062D \u0644\u0644\u0623\u062F\u0645\u0646 \u0641\u0642\u0637", 403);
-  const registry = branches(state), roles = Object.entries(state.roles || {}), staff = [];
-  for (const [branch2, username] of [["alex", "alex-sec"], ["matrouh", "matrouh-sec"], ["dmn", "dmn-sec"], ["libya", "libya-sec"]]) {
-    if (!registry[branch2]) core.fail("\u0623\u0636\u0641 \u0641\u0631\u0639 " + branch2 + " \u0642\u0628\u0644 \u0636\u0628\u0637 \u062D\u0633\u0627\u0628\u0627\u062A\u0647", 409);
-    const named = roles.find(([, r]) => r.u === username);
-    if (named && (!["sec", "staff"].includes(named[1].r) || named[1].br !== branch2 || named[1].archivedAt || named[1].deletePending)) core.fail("\u0627\u0633\u0645 " + username + " \u0645\u0631\u062A\u0628\u0637 \u0628\u062D\u0633\u0627\u0628 \u0645\u062E\u062A\u0644\u0641 \u0623\u0648 \u0645\u0624\u0631\u0634\u0641\u061B \u0631\u0627\u062C\u0639\u0647 \u0645\u0646 \u0627\u0644\u0645\u0633\u062A\u062E\u062F\u0645\u064A\u0646 \u0623\u0648\u0644\u064B\u0627", 409);
-    const matches = roles.filter(([, r]) => r.r === "sec" && r.br === branch2 && r.enabled !== false && !r.archivedAt && !r.deletePending);
-    if (!named && matches.length > 1) core.fail("\u064A\u0648\u062C\u062F \u0623\u0643\u062B\u0631 \u0645\u0646 \u062D\u0633\u0627\u0628 \u0633\u0643\u0631\u062A\u0627\u0631\u064A\u0629 \u0644\u0644\u0641\u0631\u0639 " + registry[branch2].name + "\u061B \u062D\u062F\u0651\u062F \u0627\u0644\u062D\u0633\u0627\u0628 \u0627\u0644\u0645\u0637\u0644\u0648\u0628 \u0628\u062A\u0633\u0645\u064A\u062A\u0647 " + username + " \u0623\u0648\u0644\u064B\u0627", 409);
-    const dataMatches = roles.filter(([, r]) => r.r === "staff" && r.br === branch2 && r.enabled !== false && !r.archivedAt && !r.deletePending && /data/i.test(r.u));
-    if (!named && !matches.length && dataMatches.length > 1) core.fail("\u064A\u0648\u062C\u062F \u0623\u0643\u062B\u0631 \u0645\u0646 \u062D\u0633\u0627\u0628 \u062F\u0627\u062A\u0627 \u0644\u0644\u0641\u0631\u0639 " + registry[branch2].name + "\u061B \u0631\u0627\u062C\u0639 \u0627\u0644\u062D\u0633\u0627\u0628 \u0627\u0644\u0645\u0637\u0644\u0648\u0628 \u0623\u0648\u0644\u064B\u0627", 409);
-    const selected = named || matches[0] || dataMatches[0], old = selected?.[1] || {};
-    const role3 = { ...old, u: username, r: "sec", br: branch2, scope: "branch", enabled: true, displayName: old.displayName || "\u0633\u0643\u0631\u062A\u0627\u0631\u064A\u0629 " + registry[branch2].name, permissions: { ...old.permissions, ...Object.fromEntries([...queueGrants, ...secretaryReadGrants].map((key) => [key, true])) } };
-    staff.push({ before: selected?.[1] || null, uid: selected?.[0] || null, username, create: !selected, role: validateRole(role3, core.fail, Object.keys(registry)) });
-  }
-  for (const [id2, old] of roles.filter(([, r]) => r.r === "nurse" && r.enabled !== false && !r.archivedAt && !r.deletePending)) {
-    staff.push({ before: old, uid: id2, username: old.u, create: false, role: validateRole({ ...old, scope: "all", permissions: { ...old.permissions, ...Object.fromEntries(nurseGrants.map((key) => [key, true])) } }, core.fail, Object.keys(registry)) });
-  }
-  return { staff };
-}
-
-// supabase/functions/clinic-api/patient-print.js
-function build(state, uid, value) {
-  const r = role(state, uid);
-  requirePermission(r, "patients.print");
-  if (!can(r, "patients.read") && !can(r, "bookings.read")) fail3("\u064A\u0644\u0632\u0645 \u0627\u0644\u0633\u0645\u0627\u062D \u0628\u0639\u0631\u0636 \u0627\u0644\u062D\u0627\u0644\u0627\u062A \u0623\u0648 \u0627\u0644\u062D\u062C\u0648\u0632\u0627\u062A \u0644\u0644\u0637\u0628\u0627\u0639\u0629", 403);
-  const phone3 = phone(value);
-  if (!/^01[0125]\d{8}$/.test(phone3)) fail3("\u0631\u0642\u0645 \u0627\u0644\u0647\u0627\u062A\u0641 \u063A\u064A\u0631 \u0635\u062D\u064A\u062D");
-  assertAccess(state, r, phone3);
-  const source2 = state.patients?.[phone3], rows = Object.values(state.bookings || {}).flatMap(Object.values).filter((x) => x.phone === phone3 && (allPatients(r) || x.b === r.br));
-  if (!source2 && !rows.length) fail3("\u0627\u0644\u062D\u0627\u0644\u0629 \u063A\u064A\u0631 \u0645\u0648\u062C\u0648\u062F\u0629", 404);
-  const patient = { name: source2?.n || rows[0]?.name || "", phone: phone3 };
-  if (can(r, "patients.read")) for (const key of ["spouseName", "spouseJob", "spousePhone"]) patient[key] = source2?.[key] || "";
-  const notes = can(r, "notes.read"), bookings = can(r, "bookings.read") ? rows.map((x) => ({ date: x.date, no: x.no, b: x.b, v: x.v, s: x.s, ...notes ? { nt: x.nt || "" } : {} })).sort((a, b) => b.date.localeCompare(a.date) || a.no - b.no) : [];
-  let file = null;
-  if (notes && state.files?.[phone3]) {
-    file = {};
-    for (const key of ["n", "allergies", "chronic", "diagnosis", "treatment"]) file[key] = state.files[phone3][key] || "";
-  }
-  const complaints = can(r, "complaints.read") ? Object.values(numberComplaints(structuredClone({ complaints: { [phone3]: state.complaints?.[phone3] || {} }, complaintSequences: { [phone3]: state.complaintSequences?.[phone3] || 0 } })).complaints[phone3]).map((x) => ({ no: x.no, date: x.date, reason: x.reason || "", text: x.text || "", tx: x.tx || "", by: x.by || "", at: x.at || "" })).sort((a, b) => b.date.localeCompare(a.date) || b.no - a.no) : [];
-  const branches2 = branchIds(state).filter((b) => allPatients(r) || b === r.br), registry = state.settings?.branches || state.settings?.site?.branches || {};
-  return { patient, bookings, file, complaints, branches: Object.fromEntries(branches2.map((b) => [b, registry[b]?.name || b])), site: { clinicName: state.settings?.site?.clinicName || "\u0639\u064A\u0627\u062F\u0629 \u062F. \u064A\u0648\u0633\u0641 \u0639\u0632 \u0627\u0644\u0631\u062C\u0627\u0644", doctorName: state.settings?.site?.doctorName || "" }, generatedAt: (/* @__PURE__ */ new Date()).toISOString() };
 }
 
 // supabase/functions/clinic-api/clinic-features.js
@@ -4439,7 +4599,9 @@ function createService(baseAdapter) {
     if (action2 === "publicQueue") {
       const d = date(input.date || today());
       if (!validId2(input.branch)) fail3("\u0627\u062E\u062A\u0631 \u0627\u0644\u0641\u0631\u0639");
-      await adapter2.limit?.(client, "display:" + input.branch);
+      if (input.screenId !== void 0 && (typeof input.screenId !== "string" || !/^[A-Za-z0-9_-]{16,64}$/.test(input.screenId))) fail3("\u0645\u0639\u0631\u0641 \u0634\u0627\u0634\u0629 \u0627\u0644\u062F\u0648\u0631 \u063A\u064A\u0631 \u0635\u062D\u064A\u062D");
+      const subject = "display:" + input.branch + (input.screenId ? ":" + input.screenId : "");
+      await adapter2.limit?.(client, subject);
       return publicQueue(await (adapter2.readDay ? adapter2.readDay(d) : adapter2.read()), input.branch, d);
     }
     if (action2 === "followups" || action2 === "followupContact") fail3("\u062A\u0645 \u0625\u0644\u063A\u0627\u0621 \u0645\u0648\u0627\u0639\u064A\u062F \u0627\u0644\u0645\u062A\u0627\u0628\u0639\u0629", 410);
@@ -4592,18 +4754,27 @@ function createService(baseAdapter) {
     if (action2 === "purgeDemo") {
       await adapter2.mutate((original) => {
         requirePermission(role(original, uid), "data.delete");
-        const state = structuredClone(original), phones = /* @__PURE__ */ new Set();
-        for (const rows of Object.values(state.bookings || {})) for (const [id2, x] of Object.entries(rows)) if (!x.trainingBatch && /^demo[-_]/.test(id2) && /^010000\d{5}$/.test(x.phone)) {
+        const state = structuredClone(original), phones = /* @__PURE__ */ new Set(), removed = [];
+        const bookingPhones = new Map(Object.values(original.bookings || {}).flatMap(Object.values).map((x) => [x.id, x.phone]));
+        const protectedPhones = new Set(entries(original).filter((item) => item.row.trainingBatch || item.row.booking?.trainingBatch || protectedEntry(original, item)).map((item) => item.phone || bookingPhones.get(item.row.bookingId || item.row.sourceBookingId || item.path[1])).filter(Boolean));
+        for (const drafts of Object.values(original.drafts || {})) for (const x of Object.values(drafts || {})) if (x && Date.parse(x.updatedAt) >= Date.parse("2026-10-31T22:00:00.000Z")) {
+          const phone3 = phone(x.data?.phone || x.entity);
+          if (/^01[0125]\d{8}$/.test(phone3)) protectedPhones.add(phone3);
+          else if (bookingPhones.has(x.entity)) protectedPhones.add(bookingPhones.get(x.entity));
+        }
+        for (const rows of Object.values(state.bookings || {})) for (const [id2, x] of Object.entries(rows)) if (!x.trainingBatch && !protectedPhones.has(x.phone) && /^demo[-_]/.test(id2) && /^010000\d{5}$/.test(x.phone)) {
           phones.add(x.phone);
+          removed.push(x);
           delete rows[id2];
         }
+        const removedIds = new Set(removed.map((x) => x.id));
         for (const p of phones) {
           if (Object.values(state.bookings || {}).some((rows) => Object.values(rows).some((x) => x.phone === p))) continue;
-          delete state.patients?.[p];
-          delete state.files?.[p];
-          delete state.complaints?.[p];
-          for (const [id2, n] of Object.entries(state.inbox || {})) if (n.p === p) delete state.inbox[id2];
+          removePatientState(state, p, core_exports, removed.filter((x) => x.phone === p));
         }
+        for (const root of ["checkins", "bookingContacts", "urgentReviews", "appointmentRequests", "waitingList", "tasks"]) for (const [id2, x] of Object.entries(state[root] || {})) if (!x?.trainingBatch && (removedIds.has(x?.bookingId) || removedIds.has(x?.sourceBookingId) || ["checkins", "bookingContacts"].includes(root) && removedIds.has(id2))) delete state[root][id2];
+        for (const drafts of Object.values(state.drafts || {})) for (const [id2, x] of Object.entries(drafts || {})) if (x && (removedIds.has(x.entity) || removedIds.has(x.data?.bookingId) || removedIds.has(x.data?.sourceBookingId))) delete drafts[id2];
+        advanceRemovedBookings(state, removed, core_exports);
         for (const key of Object.keys(state.sequences || {})) {
           const d = key.slice(0, 10), b = key.slice(11);
           if (!Object.values(original.bookings?.[d] || {}).some((x) => x.b === b && phones.has(x.phone))) continue;
@@ -4804,4 +4975,4 @@ Deno.serve((req) => {
     }
   });
 });
-// CLINIC_API_BUNDLE_END 2026.11.01.3
+// CLINIC_API_BUNDLE_END 2026.11.03.1

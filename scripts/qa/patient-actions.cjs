@@ -4,6 +4,9 @@ const root=process.env.CLINIC_QA_ROOT||'/tmp/clinic-patient-actions',out=process
 if(path.resolve(root)===path.resolve(__dirname,'../..'))throw Error('Use an isolated fixture only');
 const accounts=JSON.parse(fs.readFileSync(root+'/.demo/accounts.json')),baseline=JSON.parse(fs.readFileSync(root+'/baseline-state.json')),core=require('../../server/core.cjs'),today=core.today(),plus=n=>{const d=new Date(today+'T12:00:00Z');d.setUTCDate(d.getUTCDate()+n);return d.toISOString().slice(0,10)},phone='01000070033';
 const dateA=plus(2),dateB=plus(4);baseline.settings.bookingRequests={leadDays:30,changeCutoffHours:0,enabled:true,changesEnabled:true,showPatientRequests:true};baseline.settings.site.whatsappPhone='01112223334';
+// The request cases below intentionally have one available branch on every day.
+// Keep their fixture schedule consistent with branchFor rather than depending on the runner's weekday.
+baseline.settings.sched.alex={mode:'days',d:[0,2,3,5,6]};baseline.settings.sched.matrouh={mode:'days',d:[1,4]};
 function branchFor(date){const dow=new Date(date+'T12:00:00Z').getUTCDay();return [1,4].includes(dow)?'matrouh':'alex'}
 for(const [date,id]of [[dateA,'qa_public_a'],[dateB,'qa_public_b']]){baseline.bookings[date]||={};baseline.bookings[date][id]={id,date,b:branchFor(date),phone,name:'مريضة الاستعلام',v:'follow',s:'wait',no:5,rev:1,nt:'PRIVATE-QA-BOOKING-NOTE'};baseline.sequences[date+'_'+branchFor(date)]=5;}
 baseline.files[phone].diagnosis='PRIVATE-QA-DIAGNOSIS';baseline.files[phone].n='PRIVATE-QA-MEDICAL-NOTE';core.rebuild(baseline);

@@ -1,7 +1,7 @@
 const {test}=require('node:test'),assert=require('node:assert/strict');
 const png='iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAIAAACQd1PeAAAADElEQVR4nGP4//8/AAX+Av4N70a4AAAAAElFTkSuQmCC',reportBytes=Buffer.from(png,'base64').length;
-const id='11111111-1111-4111-8111-111111111111',archivedId='22222222-2222-4222-8222-222222222222',phone='01011111111';
-function fixture(){return {roles:{admin:{u:'admin',r:'admin'},nurse:{u:'nurse',r:'nurse',scope:'all'}},settings:{branches:{alex:{name:'الإسكندرية',enabled:true}},avg:15},patients:{[phone]:{n:'مريم أحمد',patientId:'patient-fixed-1'}},bookings:{'2026-10-01':{visit:{id:'visit',phone,name:'مريم أحمد',patientId:'patient-fixed-1',date:'2026-10-01',b:'alex',no:1,v:'exam',s:'done'}}},sequences:{'2026-10-01_alex':1},files:{[phone]:{n:'ملاحظات'}},complaints:{[phone]:{c:{id:'c',date:'2026-10-01',text:'مراجعة',no:1}}},complaintSequences:{[phone]:1},attachments:{[phone]:{[id]:{id,key:id,name:'تقرير',mime:'image/png',size:reportBytes,createdAt:'2026-10-01T12:00:00Z'}}},audit:[{id:'a',action:'patientSave',actor:'admin'}],activityDetails:{a:[{path:['patients',phone],after:{n:'مريم'}}]},recycleBin:{trash:{items:[{path:['attachments',phone,archivedId],before:{id:archivedId,key:archivedId,name:'تقرير مؤرشف',mime:'image/png',size:reportBytes}}]}},followupPlans:{plan:{id:'plan',phone,targetDate:'2026-11-01'}},bookingContacts:{visit:{status:'confirmed'}},recordProvenance:{['bookings/visit']:{origin:'manual',createdAt:'2026-11-01T00:00:00Z'}}};}
+const id='11111111-1111-4111-8111-111111111111',archivedId='22222222-2222-4222-8222-222222222222',phone='01011111111',patientId=require('../server/patient-identity.cjs').legacyId(phone);
+function fixture(){return {roles:{admin:{u:'admin',r:'admin'},nurse:{u:'nurse',r:'nurse',scope:'all'}},settings:{branches:{alex:{name:'الإسكندرية',enabled:true}},avg:15},patients:{[phone]:{n:'مريم أحمد',patientId}},bookings:{'2026-10-01':{visit:{id:'visit',phone,name:'مريم أحمد',patientId,date:'2026-10-01',b:'alex',no:1,v:'exam',s:'done'}}},sequences:{'2026-10-01_alex':1},files:{[phone]:{n:'ملاحظات'}},complaints:{[phone]:{c:{id:'c',date:'2026-10-01',text:'مراجعة',no:1}}},complaintSequences:{[phone]:1},attachments:{[phone]:{[id]:{id,key:id,name:'تقرير',mime:'image/png',size:reportBytes,createdAt:'2026-10-01T12:00:00Z'}}},audit:[{id:'a',action:'patientSave',actor:'admin'}],activityDetails:{a:[{path:['patients',phone],after:{n:'مريم'}}]},recycleBin:{trash:{items:[{path:['attachments',phone,archivedId],before:{id:archivedId,key:archivedId,name:'تقرير مؤرشف',mime:'image/png',size:reportBytes}}]}},followupPlans:{plan:{id:'plan',phone,targetDate:'2026-11-01'}},bookingContacts:{visit:{status:'confirmed'}},recordProvenance:{['bookings/visit']:{origin:'manual',createdAt:'2026-11-01T00:00:00Z'}}};}
 for(const runtime of ['Node','Edge'])test(runtime+': recovery roundtrip verifies current and archived files, patient identity, roles and complete history without changing the source',async()=>{
  const recovery=runtime==='Node'?require('../server/complete-backup.cjs'):await import('../supabase/functions/clinic-api/complete-backup.js'),state=fixture(),original=structuredClone(state),reads=[];
  const bundle=await recovery.buildRecoveryBundle({readAttachmentBytes:async key=>{reads.push(key);return {data:png}}},state);
@@ -33,3 +33,42 @@ test('identity indexes and follow-up/contact graph survive roundtrip, while mism
 test('current rehearsal works without an automatic backup and clearly retains provider-account limitations',async()=>{const rehearsal=require('../server/backup-rehearsal.cjs');let reads=0,writes=0;const state=fixture(),result=await rehearsal.handle({read:async()=>state,readAttachmentBytes:async()=>{reads++;return {data:png}},mutate:async()=>{writes++}}, {action:'backupRehearsal',source:'current'},'admin');assert.equal(result.source,'current');assert.equal(reads,2);assert.equal(writes,0);assert.equal(result.checks.providerAccounts,'not_verified');assert.equal(result.sourceRecordChecksums.notRecorded,2)});
 test('file manifest corruption fails with a validation error rather than a missing-property exception',async()=>{const recovery=require('../server/complete-backup.cjs'),bundle=await recovery.buildRecoveryBundle({readAttachmentBytes:async()=>({data:png})},fixture());const wrong=structuredClone(bundle);wrong.files[0].key='33333333-3333-4333-8333-333333333333';await assert.rejects(recovery.verifyRecoveryBundle(wrong),e=>e.status===409);const missing=structuredClone(bundle);delete missing.manifest.files;await assert.rejects(recovery.verifyRecoveryBundle(missing),e=>e.status===409)});
 test('browser recovery downloads roundtrip both a single file and split parts, including archived reports',async()=>{const recovery=require('../server/complete-backup.cjs'),browser=require('../public/clinic-backup.js'),bundle=await recovery.buildRecoveryBundle({readAttachmentBytes:async()=>({data:png})},fixture());const full=await browser.recoveryDownloadFiles(bundle);assert.equal(full.length,1);assert.equal((await browser.joinRecoveryDownloadFiles(full)).files.length,2);const split=await browser.recoveryDownloadFiles(bundle,250);assert.equal(split[0].value.format,'clinic-recovery-index');assert.ok(split.length>=4);const joined=await browser.joinRecoveryDownloadFiles(JSON.parse(JSON.stringify(split)));assert.equal(joined.manifest.stateChecksum,bundle.manifest.stateChecksum);assert.equal(joined.files.length,2);assert.equal((await browser.verifyRecoveryTransport(joined)).status,'passed');await assert.rejects(browser.joinRecoveryDownloadFiles(split.slice(0,-1)));const wrong=structuredClone(split);wrong.at(-1).value.files[0].data=Buffer.from('not a report').toString('base64');await assert.rejects(browser.joinRecoveryDownloadFiles(wrong));});
+
+for(const runtime of ['Node','Edge'])test(runtime+': malformed defined internal identities fail recovery before it can report an operational success',async()=>{
+ const recovery=runtime==='Node'?require('../server/complete-backup.cjs'):await import('../supabase/functions/clinic-api/complete-backup.js');
+ for(const corrupt of [
+  s=>{s.patients[phone].patientId='invalid-id'},
+  s=>{s.bookings['2026-10-01'].visit.patientId='invalid-id'},
+  s=>{s.followupPlans.plan.patientId='invalid-id'},
+  s=>{s.patientPhoneIndex={[phone]:'invalid-id'};s.patientIdentities={'invalid-id':{id:'invalid-id',phone}}},
+  s=>{s.patientIdentities={[patientId]:null}},
+  s=>{s.bookings['2026-10-01'].visit.patientId='pat_'+'f'.repeat(32)},
+ ]){const state=fixture();corrupt(state);await assert.rejects(recovery.manifestFor(state),{status:409});}
+});
+
+for(const runtime of ['Node','Edge'])test(runtime+': legacy ID-less patients remain recoverable with or without generated identity indexes',async()=>{
+ const recovery=runtime==='Node'?require('../server/complete-backup.cjs'):await import('../supabase/functions/clinic-api/complete-backup.js');
+ const serviceModule=runtime==='Node'?require('../server/service.cjs'):await import('../supabase/functions/clinic-api/service.js');
+ for(const indexed of [false,true]){
+  let state=fixture();delete state.patients[phone].patientId;delete state.bookings['2026-10-01'].visit.patientId;
+  if(indexed)require('../server/patient-identity.cjs').ensure(state);
+  const original=structuredClone(state),bundle=await recovery.buildRecoveryBundle({readAttachmentBytes:async()=>({data:png})},state);
+  assert.equal((await recovery.verifyRecoveryBundle(bundle)).imagesVerified,true);assert.deepEqual(state,original);
+  state=structuredClone(bundle.manifest.state);
+  const service=serviceModule.createService({read:async()=>structuredClone(state),mutate:async fn=>{state=fn(structuredClone(state))}});
+  await service({action:'trashRestore',id:'trash'},'admin');
+  assert.equal(state.attachments[phone][archivedId].key,archivedId);
+  assert.equal(state.patientPhoneIndex[phone],patientId);
+  assert.equal(state.patientIdentities[patientId].phone,phone);
+ }
+});
+
+for(const runtime of ['Node','Edge'])test(runtime+': a malformed identity graph that blocks a restored service operation is rejected by the recovery verifier',async()=>{
+ const recovery=runtime==='Node'?require('../server/complete-backup.cjs'):await import('../supabase/functions/clinic-api/complete-backup.js');
+ const serviceModule=runtime==='Node'?require('../server/service.cjs'):await import('../supabase/functions/clinic-api/service.js');
+ let state=fixture();const invalid='patient-fixed-1';state.patients[phone].patientId=invalid;state.bookings['2026-10-01'].visit.patientId=invalid;
+ state.patientPhoneIndex={[phone]:invalid};state.patientIdentities={[invalid]:{id:invalid,phone}};
+ const service=serviceModule.createService({read:async()=>structuredClone(state),mutate:async fn=>{state=fn(structuredClone(state))}});
+ const before=structuredClone(state);await assert.rejects(service({action:'trashRestore',id:'trash'},'admin'),{status:409});assert.deepEqual(state,before);
+ await assert.rejects(recovery.manifestFor(state),{status:409});
+});
