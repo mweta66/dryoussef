@@ -1,5 +1,5 @@
 {
-  "release": "2026.11.03.1",
+  "release": "2026.11.04.1",
   "repository": "mweta66/dryoussef",
   "branch": "codex/patient-delete-action-audit",
   "supabaseProjectRef": "matkxrnobjdewhptybpj",
@@ -7,14 +7,15 @@
   "verifyJwt": false,
   "dashboardBundle": "deployment/clinic-api.js",
   "newSqlMigrationForThisRelease": false,
-  "priorVersionUserConfirmed": "2026.11.01.3",
+  "priorVersionUserConfirmed": "2026.11.03.1",
   "deploymentPerformed": false,
   "strategy": "Pinned immutable HTTPS import of bundled gateway in dashboard index.js; source is embedded and has no fixture dependency.",
   "steps": [
-    "Deploy new gateway bundle to clinic-api preserving hosted secrets and verify_jwt=false.",
-    "Verify protected admin systemVersion reports2026.11.03.1.",
-    "Only after gateway verification update main and linked Vercel frontend.",
-    "Verify frontend and service2026.11.03.1, then real admin session->queue screen advancement."
+    "Deploy the pinned new gateway bundle as clinic-api dashboard index.js, preserving hosted secrets and verify_jwt=false. No SQL migration needed.",
+    "Verify admin systemVersion reports2026.11.04.1 and patientPaymentMethods capability.",
+    "Only then publish main frontend and verify both versions2026.11.04.1.",
+    "Doctor/admin opens account settings -> payment settings; supplies actual wallet, InstaPay URL, and editable fee/proof message, then enables section.",
+    "Verify public card, wallet reveal, InstaPay destination and clinic WhatsApp proof link."
   ],
-  "report": "docs/final-audit-2026-11-03-ar.md"
+  "report": "docs/patient-payments-ar.md"
 }

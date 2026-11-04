@@ -316,3 +316,7 @@ input:focus,select:focus,textarea:focus{outline:3px solid var(--pri);outline-off
 .clinic-save-state[data-status="verifying"]{border-inline-start:4px solid var(--amb)}
 .clinic-save-state[data-status="not_saved"]{border-inline-start:4px solid var(--bad)}
 .clinic-save-state[data-status="saved"]{border-inline-start:4px solid var(--ok)}
+
+.patient-payment-methods{display:flex;flex-wrap:wrap;gap:12px;align-items:flex-start}.patient-payment-wallet,.patient-payment-link{flex:1 1 180px;border:1px solid currentColor;border-radius:14px;padding:16px;color:inherit;background:transparent;min-width:0}.patient-payment-wallet summary,.patient-payment-link{display:flex;align-items:center;justify-content:center;gap:12px;font-weight:700;cursor:pointer;text-decoration:none;min-height:48px}.patient-payment-wallet summary{list-style:none}.patient-payment-wallet summary::-webkit-details-marker{display:none}.patient-wallet-number{display:flex;flex-direction:column;gap:8px;text-align:center;padding-top:16px}.patient-wallet-number strong{font-size:1.4rem;user-select:all;overflow-wrap:anywhere}.patient-payment-card[hidden]{display:none}
+
+.patient-payment-message{white-space:pre-wrap;overflow-wrap:anywhere;line-height:1.9}.patient-payment-proof{display:flex;justify-content:center;text-align:center;margin-top:16px;white-space:normal}

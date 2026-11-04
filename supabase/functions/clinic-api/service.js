@@ -1,3 +1,4 @@
+import * as payments from './payments.js';
 import * as secretaryAccess from './secretary-access.js';
 import * as consultation from './consultation.js';
 import * as followupPlans from './followup-plans.js';
@@ -49,10 +50,11 @@ function createService(baseAdapter) {
   const adapter={...baseAdapter,mutate:fn=>baseAdapter.mutate(original=>{
    const before=structuredClone(original);
    if(options.receipt&&!baseAdapter.mutationReceipt){const prior=original.mutationReceipts?.[uid+'_'+options.receipt.key];if(prior?.status==='saved'){if(prior.action!==options.receipt.action||prior.requestHash!==options.receipt.requestHash)core.fail('معرف العملية مستخدم لطلب مختلف',409);const e=new Error('حُفظت العملية بالفعل');e.code='MUTATION_ALREADY_COMMITTED';e.receipt=prior;throw e;}}
-   let next=fn(original);patientIdentity.ensure(next);next=followupPlans.guardWindow(before,scheduleTransfers.reconcile(before,next));next=history.record(before,next,input,uid);
+   let next=payments.guard(before,fn(original),uid);patientIdentity.ensure(next);next=followupPlans.guardWindow(before,scheduleTransfers.reconcile(before,next));next=history.record(before,next,input,uid);
    if(options.receipt&&!baseAdapter.mutationReceipt){next.mutationReceipts||={};next.mutationReceipts[uid+'_'+options.receipt.key]={...options.receipt,status:'saved',committedAt:new Date().toISOString()};}
    return next;
   },options)};
+  if(action==='paymentSettingsSave')return payments.save(adapter,input,uid);
   if(action===secretaryAccess.action)return secretaryAccess.handle(adapter,input,uid);
   if(consultation.actions.includes(action))return consultation.handle(adapter,input,uid);
   if(followupPlans.actions.includes(action))return followupPlans.handle(adapter,input,uid);

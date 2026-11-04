@@ -1,0 +1,16 @@
+{
+  "release": "2026.11.04.1",
+  "unit": {
+    "passed": 537,
+    "failed": 0,
+    "skipped": 0
+  },
+  "browserChecks": 11,
+  "browser": "Chromium",
+  "generatedDataOnly": true,
+  "productionDeployed": false,
+  "syntaxFiles": 269,
+  "vercelFilteredUpload": "passed",
+  "externalTransfersPerformed": false,
+  "outgoingMessagesSent": false
+}
