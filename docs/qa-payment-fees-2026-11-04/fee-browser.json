@@ -1,0 +1,17 @@
+{
+  "scope": "Generated isolated data, Chromium; no actual money transfer or messages",
+  "checks": [
+    "doctor configures named exam/emergency/followup prices and adds a custom item",
+    "patient sees configured choices and chooses before payment methods become visible",
+    "each patient selection shows its own exact amount, including zero and fractional prices",
+    "selected fee retains wallet, configured InstaPay destination and clinic proof link",
+    "patient fee selector and amount fit four viewport widths",
+    "admin renames/reprices/hides/deletes items; live refresh invalidates the old selected price",
+    "invalid price does not change saved fees or lock cancel",
+    "dynamic fee editor fits mobile/tablet/desktop widths",
+    "hiding all configured fees does not expose payment methods without a priced selection",
+    "secretary cannot access price or destination editor",
+    "no uncaught JavaScript errors"
+  ],
+  "errors": []
+}

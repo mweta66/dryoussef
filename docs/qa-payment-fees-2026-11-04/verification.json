@@ -1,0 +1,21 @@
+{
+  "release": "2026.11.04.3",
+  "unit": {
+    "passed": 547,
+    "failed": 0,
+    "skipped": 0
+  },
+  "postgres": 64,
+  "browser": {
+    "fees": 11,
+    "paymentMethods": 11,
+    "reliability": 18,
+    "engine": "Chromium",
+    "production": false
+  },
+  "syntaxFiles": 271,
+  "vercelFilteredUpload": "passed",
+  "noActualTransfersOrMessages": true,
+  "gatewayDeploymentPending": true,
+  "frontendDeploymentPending": true
+}

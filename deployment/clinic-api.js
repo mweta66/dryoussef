@@ -1,4 +1,4 @@
-// CLINIC_API_BUNDLE_START 2026.11.04.2
+// CLINIC_API_BUNDLE_START 2026.11.04.3
 var __defProp = Object.defineProperty;
 var __export = (target, all) => {
   for (var name in all)
@@ -371,10 +371,10 @@ function availability(registry, schedules, date2) {
   return result;
 }
 function choose(registry, schedules, date2, time2) {
-  const items = availability(registry, schedules, date2).scheduled;
-  if (items.length === 1) return items[0].id;
-  if (time2 && items.every((item) => !item.dayOnly)) {
-    const active = items.filter((item) => item.slots.some((slot) => slot.f <= time2 && time2 < slot.t));
+  const items2 = availability(registry, schedules, date2).scheduled;
+  if (items2.length === 1) return items2[0].id;
+  if (time2 && items2.every((item) => !item.dayOnly)) {
+    const active = items2.filter((item) => item.slots.some((slot) => slot.f <= time2 && time2 < slot.t));
     if (active.length === 1) return active[0].id;
   }
   return null;
@@ -1084,7 +1084,28 @@ function lookup(state, p, now = today(), clock = Date.now()) {
 }
 
 // supabase/functions/clinic-api/payments.js
-var fields = ["enabled", "walletEnabled", "instapayEnabled", "walletNumber", "instapayUrl", "message"];
+var fields = ["enabled", "walletEnabled", "instapayEnabled", "walletNumber", "instapayUrl", "message", "items"];
+function price(value) {
+  if (typeof value !== "string") fail3("\u0623\u062F\u062E\u0644 \u0633\u0639\u0631 \u0627\u0644\u0628\u0646\u062F \u0628\u0627\u0644\u0623\u0631\u0642\u0627\u0645");
+  const s = value.trim().replace(/[٠-٩۰-۹]/g, (d) => String(d.charCodeAt(0) > 1775 ? d.charCodeAt(0) - 1776 : d.charCodeAt(0) - 1632)).replace(/[٫,]/g, ".");
+  if (!/^\d{1,7}(?:\.\d{1,2})?$/.test(s)) fail3("\u0627\u0644\u0633\u0639\u0631 \u0631\u0642\u0645 \u0645\u0648\u062C\u0628 \u0623\u0648 \u0635\u0641\u0631\u060C \u0628\u062D\u062F \u0623\u0642\u0635\u0649 \u0645\u0646\u0632\u0644\u062A\u064A\u0646 \u0639\u0634\u0631\u064A\u062A\u064A\u0646");
+  const [whole, fraction = ""] = s.split(".");
+  return String(Number(whole)) + "." + fraction.padEnd(2, "0");
+}
+function items(value) {
+  if (value === void 0) return [];
+  if (!Array.isArray(value) || value.length > 20) fail3("\u064A\u0645\u0643\u0646 \u0625\u0636\u0627\u0641\u0629 \u0662\u0660 \u0628\u0646\u062F \u062F\u0641\u0639 \u0643\u062D\u062F \u0623\u0642\u0635\u0649");
+  const ids2 = /* @__PURE__ */ new Set();
+  return value.map((row) => {
+    if (!row || typeof row !== "object" || Array.isArray(row) || Object.keys(row).some((k) => !["id", "label", "amount", "enabled"].includes(k))) fail3("\u0628\u064A\u0627\u0646\u0627\u062A \u0628\u0646\u062F \u0627\u0644\u062F\u0641\u0639 \u063A\u064A\u0631 \u0635\u062D\u064A\u062D\u0629");
+    if (typeof row.id !== "string" || !/^[A-Za-z0-9_-]{1,64}$/.test(row.id) || ids2.has(row.id)) fail3("\u0645\u0639\u0631\u0641 \u0628\u0646\u062F \u0627\u0644\u062F\u0641\u0639 \u063A\u064A\u0631 \u0635\u062D\u064A\u062D \u0623\u0648 \u0645\u0643\u0631\u0631");
+    ids2.add(row.id);
+    if (typeof row.label !== "string" || !row.label.trim() || row.label.length > 80 || /[\u0000-\u001f]/.test(row.label)) fail3("\u0627\u0643\u062A\u0628 \u0627\u0633\u0645 \u0628\u0646\u062F \u0627\u0644\u062F\u0641\u0639 \u062D\u062A\u0649 \u0668\u0660 \u062D\u0631\u0641\u064B\u0627");
+    if (typeof row.enabled !== "boolean") fail3("\u0631\u0627\u062C\u0639 \u0625\u0638\u0647\u0627\u0631 \u0628\u0646\u062F \u0627\u0644\u062F\u0641\u0639");
+    const amount = !row.enabled && row.amount === "" ? "" : price(row.amount);
+    return { id: row.id, label: row.label.trim(), amount, enabled: row.enabled };
+  });
+}
 function authorize(state, uid) {
   if (!["admin", "doctor"].includes(role(state, uid).r)) fail3("\u0625\u0639\u062F\u0627\u062F \u0648\u0633\u0627\u0626\u0644 \u0627\u0644\u062F\u0641\u0639 \u0645\u062A\u0627\u062D \u0644\u0644\u0637\u0628\u064A\u0628 \u0648\u0627\u0644\u0623\u062F\u0645\u0646 \u0641\u0642\u0637", 403);
 }
@@ -1114,6 +1135,7 @@ function normalize2(value) {
   if (out.walletEnabled && !out.walletNumber) fail3("\u0623\u062F\u062E\u0644 \u0631\u0642\u0645 \u0627\u0644\u0645\u062D\u0641\u0638\u0629 \u0642\u0628\u0644 \u062A\u0641\u0639\u064A\u0644\u0647\u0627");
   if (out.instapayEnabled && !out.instapayUrl) fail3("\u0623\u062F\u062E\u0644 \u0631\u0627\u0628\u0637 \u0625\u0646\u0633\u062A\u0627 \u0628\u0627\u064A \u0642\u0628\u0644 \u062A\u0641\u0639\u064A\u0644\u0647");
   if (out.enabled && !out.walletEnabled && !out.instapayEnabled) fail3("\u0641\u0639\u0651\u0644 \u0648\u0633\u064A\u0644\u0629 \u062F\u0641\u0639 \u0648\u0627\u062D\u062F\u0629 \u0639\u0644\u0649 \u0627\u0644\u0623\u0642\u0644 \u0623\u0648 \u0623\u062E\u0641\u0650 \u0642\u0633\u0645 \u0627\u0644\u062F\u0641\u0639");
+  out.items = items(value.items);
   return out;
 }
 function guard(before, next, uid) {
@@ -1129,7 +1151,8 @@ async function save2(adapter2, input, uid) {
   await adapter2.mutate((original) => {
     authorize(original, uid);
     if (!Number.isSafeInteger(input.revision) || input.revision !== (original.settings?.paymentsRev || 0)) fail3("\u062A\u063A\u064A\u0651\u0631\u062A \u0628\u064A\u0627\u0646\u0627\u062A \u0627\u0644\u062F\u0641\u0639\u061B \u062D\u062F\u0651\u062B \u0627\u0644\u0635\u0641\u062D\u0629 \u0648\u0627\u0641\u062A\u062D \u0627\u0644\u0625\u0639\u062F\u0627\u062F\u0627\u062A \u0645\u0646 \u062C\u062F\u064A\u062F", 409);
-    const config = normalize2(input.config), s = structuredClone(original);
+    const incoming = input.config;
+    const config = normalize2(incoming && typeof incoming === "object" && !Array.isArray(incoming) && !Object.hasOwn(incoming, "items") ? { ...incoming, items: original.settings?.payments?.items || [] } : incoming), s = structuredClone(original);
     s.settings ||= {};
     s.settings.payments = config;
     s.settings.paymentsRev = (original.settings?.paymentsRev || 0) + 1;
@@ -1689,10 +1712,10 @@ function protectedEntry(s, item) {
 }
 function inspect(s, uid) {
   authorize2(s, uid);
-  const items = entries(s), keep = new Set(items.filter((x) => protectedEntry(s, x)).map((x) => x.key)), phones = new Set(items.filter((x) => keep.has(x.key)).map((x) => x.phone).filter(Boolean)), bookingIds = new Set(items.filter((x) => keep.has(x.key) && x.path[0] === "bookings").map((x) => x.row.id));
-  for (const item of items) if (item.path[0] === "patients" && phones.has(item.phone) || item.path[0] === "checkins" && bookingIds.has(item.path[1])) keep.add(item.key);
-  const remove = items.filter((x) => !keep.has(x.key)), deleted = {}, retained = {};
-  for (const item of items) {
+  const items2 = entries(s), keep = new Set(items2.filter((x) => protectedEntry(s, x)).map((x) => x.key)), phones = new Set(items2.filter((x) => keep.has(x.key)).map((x) => x.phone).filter(Boolean)), bookingIds = new Set(items2.filter((x) => keep.has(x.key) && x.path[0] === "bookings").map((x) => x.row.id));
+  for (const item of items2) if (item.path[0] === "patients" && phones.has(item.phone) || item.path[0] === "checkins" && bookingIds.has(item.path[1])) keep.add(item.key);
+  const remove = items2.filter((x) => !keep.has(x.key)), deleted = {}, retained = {};
+  for (const item of items2) {
     const target = keep.has(item.key) ? retained : deleted;
     target[item.path[0]] = (target[item.path[0]] || 0) + 1;
   }
@@ -2061,9 +2084,9 @@ function validate2(d) {
 }
 
 // supabase/functions/clinic-api/storage-cleanup.js
-function enqueue(state, items) {
+function enqueue(state, items2) {
   state.attachmentGarbage ||= {};
-  for (const item of Object.values(items || {})) if (/^[0-9a-f-]{36}$/.test(item?.key)) state.attachmentGarbage[item.key] = { queuedAt: (/* @__PURE__ */ new Date()).toISOString() };
+  for (const item of Object.values(items2 || {})) if (/^[0-9a-f-]{36}$/.test(item?.key)) state.attachmentGarbage[item.key] = { queuedAt: (/* @__PURE__ */ new Date()).toISOString() };
 }
 async function drain(adapter2) {
   const snapshot = await adapter2.read(), keys2 = Object.keys(snapshot.attachmentGarbage || {});
@@ -2344,7 +2367,7 @@ function mutate(original, uid, input, core) {
     requirePermission(r, "data.delete");
     if (input.confirmation !== "DELETE_CLINIC_DATA") core.fail("\u062A\u0623\u0643\u064A\u062F \u0627\u0644\u062D\u0630\u0641 \u0645\u0637\u0644\u0648\u0628");
     ensure(s);
-    for (const items of Object.values(s.attachments || {})) enqueue(s, items);
+    for (const items2 of Object.values(s.attachments || {})) enqueue(s, items2);
     for (const kind of ["bookings", "patients", "files", "complaints", "inbox", "track", "deletedBookings", "sessions", "followups", "attachments", "complaintSequences", "clinicalVisits", "followupPlans", "urgentReviews", "bookingContacts", "checkins", "appointmentRequests", "waitingList", "tasks", "slotOpenings", "dayClosures", "scheduleTransferPending", "editingPresence"]) s[kind] = {};
     for (const drafts of Object.values(s.drafts || {})) for (const [id2, x] of Object.entries(drafts || {})) if (["booking", "complaint", "medical", "patient", "task"].includes(x?.kind)) delete drafts[id2];
     for (const batch of Object.values(s.settings?.trainingYearBatches || {})) if (batch && batch.status !== "purged") Object.assign(batch, { status: "purged", purgedAt: (/* @__PURE__ */ new Date()).toISOString(), purgedBy: uid });
@@ -2478,7 +2501,7 @@ async function handle6(adapter2, input, uid) {
 }
 
 // supabase/functions/clinic-api/release.js
-var release_default = { "version": "2026.11.04.2", "apiContract": 1, "capabilities": ["pdfReports", "splitBackup", "phoneChangeLookup", "patientRequestAlerts", "globalThemePresets", "patientNotificationCenter", "yearEndTrainingData", "novemberManualDataProtection", "sessionReadback", "emptySessionRecovery", "focusedConsultation", "followupPlans", "nextVisitBooking", "receptionArrival", "visitDurations", "requestAssignment", "bookingConfirmations", "appointmentCalendar", "patientIdentity", "patientPagination", "mutationReceipts", "operationalDeltaWrites", "completeRecoveryBundle", "trainingMetricsSeparation", "safePatientDeletion", "deleteReadback", "legacyArchiveTolerance", "staleRequestRejection", "secretaryClinicalRead", "queueDisplaySync", "patientPaymentMethods"] };
+var release_default = { "version": "2026.11.04.3", "apiContract": 1, "capabilities": ["pdfReports", "splitBackup", "phoneChangeLookup", "patientRequestAlerts", "globalThemePresets", "patientNotificationCenter", "yearEndTrainingData", "novemberManualDataProtection", "sessionReadback", "emptySessionRecovery", "focusedConsultation", "followupPlans", "nextVisitBooking", "receptionArrival", "visitDurations", "requestAssignment", "bookingConfirmations", "appointmentCalendar", "patientIdentity", "patientPagination", "mutationReceipts", "operationalDeltaWrites", "completeRecoveryBundle", "trainingMetricsSeparation", "safePatientDeletion", "deleteReadback", "legacyArchiveTolerance", "staleRequestRejection", "secretaryClinicalRead", "queueDisplaySync", "patientPaymentMethods", "patientPaymentFees"] };
 
 // supabase/functions/clinic-api/request-notifications.js
 import { createHash as createHash4 } from "node:crypto";
@@ -2632,9 +2655,9 @@ async function handleAttachments(adapter2, input, uid) {
         authorize4(original, uid, phone3, true);
         const s = structuredClone(original);
         s.attachments ||= {};
-        const items = s.attachments[phone3] ||= {};
-        if (Object.keys(items).length >= MAX_FILES) fail3("\u0627\u0644\u062D\u062F \u0627\u0644\u0623\u0642\u0635\u0649 20 \u0635\u0648\u0631\u0629 \u0644\u0643\u0644 \u062D\u0627\u0644\u0629");
-        items[id2] = record2;
+        const items2 = s.attachments[phone3] ||= {};
+        if (Object.keys(items2).length >= MAX_FILES) fail3("\u0627\u0644\u062D\u062F \u0627\u0644\u0623\u0642\u0635\u0649 20 \u0635\u0648\u0631\u0629 \u0644\u0643\u0644 \u062D\u0627\u0644\u0629");
+        items2[id2] = record2;
         return s;
       });
     } catch (error) {
@@ -3031,7 +3054,7 @@ function get(state, path) {
   for (const k of path) x = x?.[k];
   return x;
 }
-function referencesRetiredMerge(state, items) {
+function referencesRetiredMerge(state, items2) {
   const retired = Object.values(state.patientIdentities || {}).filter((row) => row?.deletedAt && row.mergedInto);
   if (!retired.length) return false;
   const phones = /* @__PURE__ */ new Set(), ids2 = /* @__PURE__ */ new Set(), bound = /* @__PURE__ */ new Map(), validPhone2 = (value) => /^01[0125]\d{8}$/.test(value || "");
@@ -3052,7 +3075,7 @@ function referencesRetiredMerge(state, items) {
     if (validPhone2(value.entity)) bind(value.entity, null);
     for (const [key, child] of Object.entries(value)) visit(child, validPhone2(key) ? key : hint);
   };
-  for (const item of items) {
+  for (const item of items2) {
     const [root, key] = item.path;
     const hint = ["patients", "files", "complaints", "attachments", "followups", "patientPhoneIndex"].includes(root) && validPhone2(key) ? key : null;
     if (hint) bind(hint, root === "patientPhoneIndex" ? item.before : null);
@@ -3114,7 +3137,7 @@ function list3(state, uid, input) {
   admin(state, uid);
   const page = Math.max(0, Math.floor(Number(input.page) || 0)), size = 30;
   let rows = Object.values(state.recycleBin || {}).filter((x) => x && !x.restoredAt && Array.isArray(x.items) && !["patientMergeApply", "patientMergeUndo"].includes(x.action)).sort((a, b) => String(b.at || "").localeCompare(String(a.at || "")));
-  return { total: rows.length, page, rows: rows.slice(page * size, (page + 1) * size).map(({ items, ...entry }) => ({ ...entry, count: items.length, paths: items.filter((x) => Array.isArray(x?.path)).map((x) => x.path.join("/")) })) };
+  return { total: rows.length, page, rows: rows.slice(page * size, (page + 1) * size).map(({ items: items2, ...entry }) => ({ ...entry, count: items2.length, paths: items2.filter((x) => Array.isArray(x?.path)).map((x) => x.path.join("/")) })) };
 }
 
 // supabase/functions/clinic-api/workflow.js
@@ -3438,7 +3461,7 @@ async function handle10(adapter2, input, uid) {
         groups.get(key).push({ phone: p, name: x.n, branch: x.br });
       }
     }
-    for (const [key, items] of groups) if (items.length > 1) result.push({ reason: key.startsWith("spouse:") ? "\u0645\u0648\u0628\u0627\u064A\u0644 \u0632\u0648\u062C \u0645\u062A\u0637\u0627\u0628\u0642" : "\u0627\u0633\u0645 \u0645\u062A\u0634\u0627\u0628\u0647", patients: items });
+    for (const [key, items2] of groups) if (items2.length > 1) result.push({ reason: key.startsWith("spouse:") ? "\u0645\u0648\u0628\u0627\u064A\u0644 \u0632\u0648\u062C \u0645\u062A\u0637\u0627\u0628\u0642" : "\u0627\u0633\u0645 \u0645\u062A\u0634\u0627\u0628\u0647", patients: items2 });
     return result.slice(0, 100);
   }
   if (action2 === "patientMergePreview") return mergePlan(await adapter2.read(), uid, input);
@@ -5032,4 +5055,4 @@ Deno.serve((req) => {
     }
   });
 });
-// CLINIC_API_BUNDLE_END 2026.11.04.2
+// CLINIC_API_BUNDLE_END 2026.11.04.3

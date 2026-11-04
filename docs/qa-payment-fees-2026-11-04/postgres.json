@@ -1,0 +1,15 @@
+{
+  "passed": 64,
+  "postgres": "17.6",
+  "projectionTriggerTested": true,
+  "migrationsReapplied": true,
+  "deploymentBundleTested": true,
+  "adapterRoundtripWithLostResponse": true,
+  "patientDeletionAndRestoreThroughGateway": true,
+  "deletionProjectionReadback": true,
+  "lostDeleteResponseWithoutReplay": true,
+  "secretaryClinicalReadGrantVerified": true,
+  "paymentDeltaReceiptVerified": true,
+  "paymentItemPricesVerified": true,
+  "scope": "isolated real PostgreSQL, not Supabase production"
+}

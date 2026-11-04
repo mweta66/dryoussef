@@ -1,5 +1,5 @@
 {
-  "version": "2026.11.04.2",
+  "version": "2026.11.04.3",
   "apiContract": 1,
   "capabilities": [
     "pdfReports",
@@ -32,6 +32,7 @@
     "staleRequestRejection",
     "secretaryClinicalRead",
     "queueDisplaySync",
-    "patientPaymentMethods"
+    "patientPaymentMethods",
+    "patientPaymentFees"
   ]
 }
