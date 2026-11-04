@@ -1,0 +1,29 @@
+{
+  "scope": "Generated local fixtures on baseline6a89ab0, with transport delays or controlled draft cleanup failure; no production patient data",
+  "medicalCleanup": {
+    "actor": "doctor",
+    "filePersistedBeforeFailure": true,
+    "expectedSavedConfirmationMissing": true,
+    "cause": "draftDelete rejection reached the clinical save catch"
+  },
+  "lateTimeline": {
+    "actor": "alex-sec",
+    "loggedOut": true,
+    "privateModalReopenedAfterResponse": true
+  },
+  "openMedicalAtLogout": {
+    "loggedOut": true,
+    "privateDialogStillVisible": true,
+    "text": "QA unsaved private note"
+  },
+  "startupEditor": {
+    "scope": "Generated isolated Chromium fixture; deliberately delayed final automatic login upgrade",
+    "results": [
+      {
+        "name": "startup editor race",
+        "pass": false,
+        "error": "Late automatic login redraw discarded the admin input\n+ actual - expected\n\n+ 'عيادة الاختبار المعزولة'\n- 'QA admin typing during login upgrade'\n"
+      }
+    ]
+  }
+}

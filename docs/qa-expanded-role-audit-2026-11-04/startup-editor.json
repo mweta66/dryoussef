@@ -1,0 +1,13 @@
+{
+  "scope": "Generated isolated Chromium fixture; deliberately delayed final automatic login upgrade",
+  "results": [
+    {
+      "name": "delayed login upgrade cannot erase an active admin form",
+      "pass": true
+    },
+    {
+      "name": "preserved text saves and survives a real state read",
+      "pass": true
+    }
+  ]
+}

@@ -1,0 +1,462 @@
+{
+  "scope": "Generated isolated state; real Chromium forms; local auth emulator, not Supabase Auth; share clipboard adapter stub; no external communication",
+  "checks": [
+    {
+      "user": "admin",
+      "name": "own password validates short input then saves; new password signs in and old password is rejected",
+      "pass": true
+    },
+    {
+      "user": "admin",
+      "name": "patient directory paginates when available and finds Arabic-digit phone without cross-branch results",
+      "pass": true
+    },
+    {
+      "user": "admin",
+      "name": "visible patient timeline respects medical-note permission",
+      "pass": true
+    },
+    {
+      "user": "admin",
+      "name": "appointment popup shows correct date and share button uses operational details only",
+      "pass": true
+    },
+    {
+      "user": "admin",
+      "name": "appointment confirmation list exposes only authorized branch contacts or remains unavailable",
+      "pass": true
+    },
+    {
+      "user": "admin",
+      "name": "private booking draft closes, resumes from account settings and saves one real booking",
+      "pass": true
+    },
+    {
+      "user": "admin",
+      "name": "about-page private draft resumes for review and publishes only after explicit save",
+      "pass": true
+    },
+    {
+      "user": "admin",
+      "name": "report preview, CSV download and PDF popup reflect range without private notes by default",
+      "pass": true,
+      "detail": {
+        "pdfBytes": 144144
+      }
+    },
+    {
+      "user": "admin",
+      "name": "confirmed medical save still reports success if deleting its private draft fails",
+      "pass": true
+    },
+    {
+      "user": "admin",
+      "name": "logout blocks a protected request from the browser",
+      "pass": true
+    },
+    {
+      "user": "doctor",
+      "name": "own password validates short input then saves; new password signs in and old password is rejected",
+      "pass": true
+    },
+    {
+      "user": "doctor",
+      "name": "patient directory paginates when available and finds Arabic-digit phone without cross-branch results",
+      "pass": true
+    },
+    {
+      "user": "doctor",
+      "name": "visible patient timeline respects medical-note permission",
+      "pass": true
+    },
+    {
+      "user": "doctor",
+      "name": "appointment popup shows correct date and share button uses operational details only",
+      "pass": true
+    },
+    {
+      "user": "doctor",
+      "name": "appointment confirmation list exposes only authorized branch contacts or remains unavailable",
+      "pass": true
+    },
+    {
+      "user": "doctor",
+      "name": "private booking draft closes, resumes from account settings and saves one real booking",
+      "pass": true
+    },
+    {
+      "user": "doctor",
+      "name": "report preview, CSV download and PDF popup reflect range without private notes by default",
+      "pass": true,
+      "detail": {
+        "pdfBytes": 143993
+      }
+    },
+    {
+      "user": "doctor",
+      "name": "confirmed medical save still reports success if deleting its private draft fails",
+      "pass": true
+    },
+    {
+      "user": "doctor",
+      "name": "account cannot change system users, payment destinations or branch configuration",
+      "pass": true
+    },
+    {
+      "user": "doctor",
+      "name": "delayed private draft preview cannot cross logout or reopen a patient form",
+      "pass": true
+    },
+    {
+      "user": "doctor",
+      "name": "logout removes an already-open dirty medical dialog without leaving private text behind",
+      "pass": true
+    },
+    {
+      "user": "doctor",
+      "name": "delayed contact-details response cannot open patient contact data after logout",
+      "pass": true
+    },
+    {
+      "user": "doctor",
+      "name": "delayed private report does not start a CSV download after logout",
+      "pass": true
+    },
+    {
+      "user": "doctor",
+      "name": "delayed patient timeline response cannot open private data after logout",
+      "pass": true
+    },
+    {
+      "user": "doctor",
+      "name": "logout blocks a protected request from the browser",
+      "pass": true
+    },
+    {
+      "user": "nurse",
+      "name": "own password validates short input then saves; new password signs in and old password is rejected",
+      "pass": true
+    },
+    {
+      "user": "nurse",
+      "name": "patient directory paginates when available and finds Arabic-digit phone without cross-branch results",
+      "pass": true
+    },
+    {
+      "user": "nurse",
+      "name": "visible patient timeline respects medical-note permission",
+      "pass": true
+    },
+    {
+      "user": "nurse",
+      "name": "appointment popup shows correct date and share button uses operational details only",
+      "pass": true
+    },
+    {
+      "user": "nurse",
+      "name": "appointment confirmation list exposes only authorized branch contacts or remains unavailable",
+      "pass": true
+    },
+    {
+      "user": "nurse",
+      "name": "private booking draft closes, resumes from account settings and saves one real booking",
+      "pass": true
+    },
+    {
+      "user": "nurse",
+      "name": "account cannot change system users, payment destinations or branch configuration",
+      "pass": true
+    },
+    {
+      "user": "nurse",
+      "name": "delayed private draft preview cannot cross logout or reopen a patient form",
+      "pass": true
+    },
+    {
+      "user": "nurse",
+      "name": "delayed patient timeline response cannot open private data after logout",
+      "pass": true
+    },
+    {
+      "user": "nurse",
+      "name": "logout blocks a protected request from the browser",
+      "pass": true
+    },
+    {
+      "user": "alex-sec",
+      "name": "own password validates short input then saves; new password signs in and old password is rejected",
+      "pass": true
+    },
+    {
+      "user": "alex-sec",
+      "name": "patient directory paginates when available and finds Arabic-digit phone without cross-branch results",
+      "pass": true
+    },
+    {
+      "user": "alex-sec",
+      "name": "visible patient timeline respects medical-note permission",
+      "pass": true
+    },
+    {
+      "user": "alex-sec",
+      "name": "appointment popup shows correct date and share button uses operational details only",
+      "pass": true
+    },
+    {
+      "user": "alex-sec",
+      "name": "appointment confirmation list exposes only authorized branch contacts or remains unavailable",
+      "pass": true
+    },
+    {
+      "user": "alex-sec",
+      "name": "private booking draft closes, resumes from account settings and saves one real booking",
+      "pass": true
+    },
+    {
+      "user": "alex-sec",
+      "name": "account cannot change system users, payment destinations or branch configuration",
+      "pass": true
+    },
+    {
+      "user": "alex-sec",
+      "name": "delayed private draft preview cannot cross logout or reopen a patient form",
+      "pass": true
+    },
+    {
+      "user": "alex-sec",
+      "name": "delayed contact-details response cannot open patient contact data after logout",
+      "pass": true
+    },
+    {
+      "user": "alex-sec",
+      "name": "delayed patient timeline response cannot open private data after logout",
+      "pass": true
+    },
+    {
+      "user": "alex-sec",
+      "name": "logout blocks a protected request from the browser",
+      "pass": true
+    },
+    {
+      "user": "matrouh-sec",
+      "name": "own password validates short input then saves; new password signs in and old password is rejected",
+      "pass": true
+    },
+    {
+      "user": "matrouh-sec",
+      "name": "patient directory paginates when available and finds Arabic-digit phone without cross-branch results",
+      "pass": true
+    },
+    {
+      "user": "matrouh-sec",
+      "name": "visible patient timeline respects medical-note permission",
+      "pass": true
+    },
+    {
+      "user": "matrouh-sec",
+      "name": "appointment popup shows correct date and share button uses operational details only",
+      "pass": true
+    },
+    {
+      "user": "matrouh-sec",
+      "name": "appointment confirmation list exposes only authorized branch contacts or remains unavailable",
+      "pass": true
+    },
+    {
+      "user": "matrouh-sec",
+      "name": "private booking draft closes, resumes from account settings and saves one real booking",
+      "pass": true
+    },
+    {
+      "user": "matrouh-sec",
+      "name": "account cannot change system users, payment destinations or branch configuration",
+      "pass": true
+    },
+    {
+      "user": "matrouh-sec",
+      "name": "delayed private draft preview cannot cross logout or reopen a patient form",
+      "pass": true
+    },
+    {
+      "user": "matrouh-sec",
+      "name": "delayed contact-details response cannot open patient contact data after logout",
+      "pass": true
+    },
+    {
+      "user": "matrouh-sec",
+      "name": "delayed patient timeline response cannot open private data after logout",
+      "pass": true
+    },
+    {
+      "user": "matrouh-sec",
+      "name": "logout blocks a protected request from the browser",
+      "pass": true
+    },
+    {
+      "user": "dmn-sec",
+      "name": "own password validates short input then saves; new password signs in and old password is rejected",
+      "pass": true
+    },
+    {
+      "user": "dmn-sec",
+      "name": "patient directory paginates when available and finds Arabic-digit phone without cross-branch results",
+      "pass": true
+    },
+    {
+      "user": "dmn-sec",
+      "name": "visible patient timeline respects medical-note permission",
+      "pass": true
+    },
+    {
+      "user": "dmn-sec",
+      "name": "appointment popup shows correct date and share button uses operational details only",
+      "pass": true
+    },
+    {
+      "user": "dmn-sec",
+      "name": "appointment confirmation list exposes only authorized branch contacts or remains unavailable",
+      "pass": true
+    },
+    {
+      "user": "dmn-sec",
+      "name": "private booking draft closes, resumes from account settings and saves one real booking",
+      "pass": true
+    },
+    {
+      "user": "dmn-sec",
+      "name": "account cannot change system users, payment destinations or branch configuration",
+      "pass": true
+    },
+    {
+      "user": "dmn-sec",
+      "name": "delayed private draft preview cannot cross logout or reopen a patient form",
+      "pass": true
+    },
+    {
+      "user": "dmn-sec",
+      "name": "delayed contact-details response cannot open patient contact data after logout",
+      "pass": true
+    },
+    {
+      "user": "dmn-sec",
+      "name": "delayed patient timeline response cannot open private data after logout",
+      "pass": true
+    },
+    {
+      "user": "dmn-sec",
+      "name": "logout blocks a protected request from the browser",
+      "pass": true
+    },
+    {
+      "user": "libya-sec",
+      "name": "own password validates short input then saves; new password signs in and old password is rejected",
+      "pass": true
+    },
+    {
+      "user": "libya-sec",
+      "name": "patient directory paginates when available and finds Arabic-digit phone without cross-branch results",
+      "pass": true
+    },
+    {
+      "user": "libya-sec",
+      "name": "visible patient timeline respects medical-note permission",
+      "pass": true
+    },
+    {
+      "user": "libya-sec",
+      "name": "appointment popup shows correct date and share button uses operational details only",
+      "pass": true
+    },
+    {
+      "user": "libya-sec",
+      "name": "appointment confirmation list exposes only authorized branch contacts or remains unavailable",
+      "pass": true
+    },
+    {
+      "user": "libya-sec",
+      "name": "private booking draft closes, resumes from account settings and saves one real booking",
+      "pass": true
+    },
+    {
+      "user": "libya-sec",
+      "name": "account cannot change system users, payment destinations or branch configuration",
+      "pass": true
+    },
+    {
+      "user": "libya-sec",
+      "name": "delayed private draft preview cannot cross logout or reopen a patient form",
+      "pass": true
+    },
+    {
+      "user": "libya-sec",
+      "name": "delayed contact-details response cannot open patient contact data after logout",
+      "pass": true
+    },
+    {
+      "user": "libya-sec",
+      "name": "delayed patient timeline response cannot open private data after logout",
+      "pass": true
+    },
+    {
+      "user": "libya-sec",
+      "name": "logout blocks a protected request from the browser",
+      "pass": true
+    },
+    {
+      "user": "data-entry",
+      "name": "own password validates short input then saves; new password signs in and old password is rejected",
+      "pass": true
+    },
+    {
+      "user": "data-entry",
+      "name": "patient directory paginates when available and finds Arabic-digit phone without cross-branch results",
+      "pass": true
+    },
+    {
+      "user": "data-entry",
+      "name": "visible patient timeline respects medical-note permission",
+      "pass": true
+    },
+    {
+      "user": "data-entry",
+      "name": "appointment popup shows correct date and share button uses operational details only",
+      "pass": true
+    },
+    {
+      "user": "data-entry",
+      "name": "appointment confirmation list exposes only authorized branch contacts or remains unavailable",
+      "pass": true
+    },
+    {
+      "user": "data-entry",
+      "name": "private booking draft closes, resumes from account settings and saves one real booking",
+      "pass": true
+    },
+    {
+      "user": "data-entry",
+      "name": "account cannot change system users, payment destinations or branch configuration",
+      "pass": true
+    },
+    {
+      "user": "data-entry",
+      "name": "delayed private draft preview cannot cross logout or reopen a patient form",
+      "pass": true
+    },
+    {
+      "user": "data-entry",
+      "name": "delayed patient timeline response cannot open private data after logout",
+      "pass": true
+    },
+    {
+      "user": "data-entry",
+      "name": "logout blocks a protected request from the browser",
+      "pass": true
+    },
+    {
+      "user": "all",
+      "name": "no uncaught JavaScript errors",
+      "pass": true
+    }
+  ],
+  "errors": []
+}

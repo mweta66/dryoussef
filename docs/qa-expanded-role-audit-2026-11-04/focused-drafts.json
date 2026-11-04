@@ -1,0 +1,60 @@
+{
+  "scope": "Generated isolated state and real Chromium forms; deliberately delayed autosave requests",
+  "results": [
+    {
+      "name": "older held autosave cannot overtake newer typed notes",
+      "pass": true,
+      "detail": {
+        "requests": 2,
+        "newestDraftPersisted": true,
+        "medicalFileUntouched": true
+      }
+    },
+    {
+      "name": "recovered draft stays available across a confirmed clinical refresh",
+      "pass": true,
+      "detail": {
+        "bannerRetained": true,
+        "restoredForReviewOnly": true
+      }
+    },
+    {
+      "name": "completion drains old autosave then deletes it without touching next patient draft",
+      "pass": true,
+      "detail": {
+        "completed": "qa_booking_36",
+        "next": "qa_booking_33",
+        "oldDraftRemoved": true,
+        "nextDraftIntact": true
+      }
+    },
+    {
+      "name": "pause and resume then returning to focused care refreshes the booking revision before completion",
+      "pass": true,
+      "detail": {
+        "completed": "qa_booking_33",
+        "next": "qa_booking_34",
+        "confirmedRevision": 3,
+        "ticketPreserved": true
+      }
+    },
+    {
+      "name": "logout discards queued old-account requests and ignores a delayed draft response",
+      "pass": true,
+      "detail": {
+        "onlyPreviouslySentRequest": 1,
+        "newAccountUnaffected": true
+      }
+    },
+    {
+      "name": "no uncaught JavaScript errors",
+      "pass": true
+    }
+  ],
+  "errors": [],
+  "notCovered": [
+    "Production Supabase Auth/Storage",
+    "Real Safari/iPhone or other browser engines",
+    "Concurrent edits from distinct browser tabs"
+  ]
+}

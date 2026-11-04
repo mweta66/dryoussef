@@ -1,0 +1,39 @@
+{
+  "frontendRelease": "2026.11.04.5",
+  "compatibleDeployedGateway": "2026.11.04.4",
+  "baseCommit": "6a89ab0f43f608b8a67cf2327031f7b1c584afe6",
+  "unit": {
+    "passed": 574,
+    "failed": 0,
+    "skipped": 0
+  },
+  "browser": {
+    "checks": 298,
+    "failed": 0,
+    "accounts": 8,
+    "engine": "Chromium",
+    "groups": {
+      "extended-roles.json": 90,
+      "staff-actions.json": 90,
+      "reception.json": 58,
+      "admin-actions.json": 15,
+      "public-roundtrip.json": 8,
+      "request-decisions.json": 5,
+      "payment-reliability.json": 18,
+      "focused-drafts.json": 6,
+      "merge-recovery.json": 6,
+      "startup-editor.json": 2
+    }
+  },
+  "syntaxFiles": 276,
+  "vercelFilteredUpload": "passed",
+  "backendBehaviorChanged": false,
+  "sqlMigrationRequired": false,
+  "gatewayUpdateRequired": false,
+  "gatewayBundleDifference": "release version metadata only",
+  "previousAudit": "docs/reception-and-role-audit-2026-11-04-ar.md",
+  "productionAccess": "blocked by restricted executor network; no configured provider credentials",
+  "authTestScope": "local isolated auth emulator; real Supabase Auth not exercised",
+  "shareTestScope": "actual share button with clipboard adapter stub; no external communication",
+  "nativeSafari": "not tested"
+}

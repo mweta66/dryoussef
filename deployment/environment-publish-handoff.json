@@ -1,5 +1,5 @@
 {
-  "release": "2026.11.04.4",
+  "release": "2026.11.04.5",
   "repository": "mweta66/dryoussef",
   "branch": "codex/patient-delete-action-audit",
   "supabaseProjectRef": "matkxrnobjdewhptybpj",
@@ -7,17 +7,20 @@
   "verifyJwt": false,
   "dashboardBundle": "deployment/clinic-api.js",
   "newSqlMigrationForThisRelease": false,
-  "priorVersionUserConfirmed": "2026.11.04.3",
+  "priorVersionUserConfirmed": "2026.11.04.4",
   "deploymentPerformed": false,
-  "strategy": "Pinned immutable HTTPS import of bundled gateway in dashboard index.js; source is embedded and has no fixture dependency.",
+  "strategy": "Frontend-only fixes, compatible with the deployed2026.11.04.4 API. The regenerated gateway bundle changes release metadata only and does not require deployment.",
   "steps": [
-    "Publish frontend2026.11.04.4; it uses the same commit/checkinSet API and remains compatible with gateway2026.11.04.3.",
-    "Deploy the pinned clinic-api2026.11.04.4 bundle preserving existing secrets and verify_jwt=false; no SQL required.",
-    "Verify protected systemVersion2026.11.04.4 and refresh the website.",
-    "Secretary changes one test booking status and records/undoes arrival; reload and check the result.",
-    "If production still reports a failure, collect its exact request reference and Edge Function logs; local success does not prove production health."
+    "Publish frontend2026.11.04.5 on main after checks.",
+    "Refresh the website to obtain updated app, workflow, private-draft, editor-guard and startup script URLs.",
+    "No SQL or Supabase update is needed for this frontend fix. Gateway2026.11.04.4 remains compatible; version diagnostics may report different release versions with the same contract and capabilities.",
+    "Production account verification remains pending because this executor cannot reach the hosted site or provider logs."
   ],
-  "report": "docs/reception-and-role-audit-2026-11-04-ar.md",
+  "report": "docs/expanded-role-audit-2026-11-04-ar.md",
   "frontendBackwardCompatible": true,
-  "priorGatewayDeployment": "User reported completion of the pinned2026.11.04.3 gateway update; protected version not independently observed."
+  "priorGatewayDeployment": "User reported completion of pinned2026.11.04.4 gateway update; protected version not independently observed.",
+  "frontendRelease": "2026.11.04.5",
+  "minimumGatewayRelease": "2026.11.04.4",
+  "gatewayUpdateRequired": false,
+  "backendBehaviorChanged": false
 }
