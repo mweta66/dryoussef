@@ -1,0 +1,46 @@
+{
+  "scope": "Generated isolated state; Chromium mobile viewport; real public forms and secretary UI decisions; local state reads are assertions, not production access",
+  "results": [
+    {
+      "name": "public four-step form submits pending consultation without creating a confirmed booking",
+      "pass": true
+    },
+    {
+      "name": "secretary approves the actual public request through mobile UI; one consultation and request association persist",
+      "pass": true,
+      "detail": {
+        "bookings": 1,
+        "visitType": "cons"
+      }
+    },
+    {
+      "name": "public phone lookup reads the approved booking and calendar remains free of phone and patient name",
+      "pass": true
+    },
+    {
+      "name": "public reschedule form leaves the existing booking intact until secretary approval",
+      "pass": true
+    },
+    {
+      "name": "secretary approves actual public reschedule; new date survives public reload with stable booking identity",
+      "pass": true
+    },
+    {
+      "name": "public cancellation form leaves moved booking waiting until secretary approval",
+      "pass": true
+    },
+    {
+      "name": "secretary approves actual public cancellation; patient reads cancellation after refresh without a duplicate booking",
+      "pass": true
+    },
+    {
+      "name": "roundtrip browser JavaScript errors",
+      "pass": true
+    }
+  ],
+  "errors": [],
+  "notCovered": [
+    "Real Supabase Auth/Storage or Vercel deployment",
+    "Physical iPhone/Safari, Android or other browser engines"
+  ]
+}

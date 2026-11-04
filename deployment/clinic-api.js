@@ -1,4 +1,4 @@
-// CLINIC_API_BUNDLE_START 2026.11.04.3
+// CLINIC_API_BUNDLE_START 2026.11.04.4
 var __defProp = Object.defineProperty;
 var __export = (target, all) => {
   for (var name in all)
@@ -892,8 +892,10 @@ function commit(state, uid, puts, dels, now = today()) {
   };
   dels.forEach((x) => remove(x, true));
   for (const p of puts) {
-    const n = booking(p.n, state);
-    if (p.n.patientId) {
+    const live = p.o && state.bookings?.[p.o.date]?.[p.o.id];
+    const statusOnly = live && p.n && p.n.id === live.id && STATES.includes(p.n.s) && p.n.s !== live.s && !Object.hasOwn(p, "patient") && ["name", "phone", "v", "date", "b"].every((k) => p.n[k] === live[k]) && (!can(r, "notes.edit") || String(p.n.nt || "") === String(live.nt || "")) && (!p.n.patientId || p.n.patientId === live.patientId);
+    const n = statusOnly ? { ...structuredClone(live), s: p.n.s } : booking(p.n, state);
+    if (!statusOnly && p.n.patientId) {
       const identity2 = resolve(state, { phone: n.phone, patientId: p.n.patientId });
       n.patientId = identity2.patientId;
     }
@@ -2501,7 +2503,7 @@ async function handle6(adapter2, input, uid) {
 }
 
 // supabase/functions/clinic-api/release.js
-var release_default = { "version": "2026.11.04.3", "apiContract": 1, "capabilities": ["pdfReports", "splitBackup", "phoneChangeLookup", "patientRequestAlerts", "globalThemePresets", "patientNotificationCenter", "yearEndTrainingData", "novemberManualDataProtection", "sessionReadback", "emptySessionRecovery", "focusedConsultation", "followupPlans", "nextVisitBooking", "receptionArrival", "visitDurations", "requestAssignment", "bookingConfirmations", "appointmentCalendar", "patientIdentity", "patientPagination", "mutationReceipts", "operationalDeltaWrites", "completeRecoveryBundle", "trainingMetricsSeparation", "safePatientDeletion", "deleteReadback", "legacyArchiveTolerance", "staleRequestRejection", "secretaryClinicalRead", "queueDisplaySync", "patientPaymentMethods", "patientPaymentFees"] };
+var release_default = { "version": "2026.11.04.4", "apiContract": 1, "capabilities": ["pdfReports", "splitBackup", "phoneChangeLookup", "patientRequestAlerts", "globalThemePresets", "patientNotificationCenter", "yearEndTrainingData", "novemberManualDataProtection", "sessionReadback", "emptySessionRecovery", "focusedConsultation", "followupPlans", "nextVisitBooking", "receptionArrival", "visitDurations", "requestAssignment", "bookingConfirmations", "appointmentCalendar", "patientIdentity", "patientPagination", "mutationReceipts", "operationalDeltaWrites", "completeRecoveryBundle", "trainingMetricsSeparation", "safePatientDeletion", "deleteReadback", "legacyArchiveTolerance", "staleRequestRejection", "secretaryClinicalRead", "queueDisplaySync", "patientPaymentMethods", "patientPaymentFees"] };
 
 // supabase/functions/clinic-api/request-notifications.js
 import { createHash as createHash4 } from "node:crypto";
@@ -5055,4 +5057,4 @@ Deno.serve((req) => {
     }
   });
 });
-// CLINIC_API_BUNDLE_END 2026.11.04.3
+// CLINIC_API_BUNDLE_END 2026.11.04.4

@@ -1,0 +1,49 @@
+{
+  "scope": "Generated isolated state; real Chromium forms and persisted readback, not production",
+  "results": [
+    {
+      "name": "legacy internal identity survives single-patient delete and trash restoration including original report bytes",
+      "pass": true,
+      "detail": {
+        "patientId": "pat_289283c242805cf45ebb46e94bff9b67",
+        "restoredTicket": 5,
+        "oldTicket": 1,
+        "reportBytes": 69
+      }
+    },
+    {
+      "name": "explicit internal identity survives single-patient delete and trash restoration including original report bytes",
+      "pass": true,
+      "detail": {
+        "patientId": "pat_01000070034777777777777777777777",
+        "restoredTicket": 5,
+        "oldTicket": 2,
+        "reportBytes": 69
+      }
+    },
+    {
+      "name": "restore conflict is rejected atomically and preserves the newer patient file",
+      "pass": true,
+      "detail": {
+        "atomic": true,
+        "newerPatientPreserved": true
+      }
+    },
+    {
+      "name": "branch-scoped delegated deleter cannot delete a shared foreign-branch patient through the visible control",
+      "pass": true,
+      "detail": {
+        "foreignBranchProtected": true
+      }
+    },
+    {
+      "name": "no uncaught JavaScript errors in the exercised patient recovery paths",
+      "pass": true
+    }
+  ],
+  "errors": [],
+  "notCovered": [
+    "Real Supabase authentication/storage",
+    "Native Safari/iPhone and physical printers"
+  ]
+}

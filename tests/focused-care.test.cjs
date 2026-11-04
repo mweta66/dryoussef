@@ -113,3 +113,33 @@ test('refreshing the same medical file retains its recoverable private draft ban
  assert.equal(c.CARE.draftCandidate.id,'recoverable-draft');assert.equal(c.CARE.draftId,'recoverable-draft');
  assert.match(c.carePrivateDraftMarkup(),/مراجعة واستعادة المسودة/);
 });
+
+test('reception status ignores an old poll and displays acknowledgement before a stalled refresh',async()=>{
+ const {c}=harness();seed(c);c.tab='reception';c.CARE.view='reception';const pending=[];let writes=0;
+ c.gateway=async action=>{if(action==='commit'){writes++;return {ok:true}}if(action==='bookingContactList')return {rows:[]};return new Promise(resolve=>pending.push(resolve));};
+ const oldPoll=c.careLoad(true);const oldRows=structuredClone(c.CARE.rows);
+ await c.careSetStatus('a','done');assert.equal(writes,1);assert.equal(c.CARE.rows[0].s,'done');assert.equal(c.CARE.receptionSaving,false);assert.equal(pending.length,2,'fresh confirmed-state read replaces old poll');
+ pending[0]({bookings:oldRows,checkins:{}});await oldPoll;assert.equal(c.CARE.rows[0].s,'done','old result cannot undo acknowledgement');
+ pending[1]({bookings:[{...row('a','done'),rev:3},row('b','exam')],checkins:{}});await c.CARE.loading;assert.equal(c.CARE.rows[0].s,'done');
+});
+test('reception acknowledged arrival remains visible and controls unlock when refresh fails',async()=>{
+ const messages=[],{c}=harness({notify:x=>messages.push(x)});seed(c);c.tab='reception';c.CARE.view='reception';
+ c.gateway=async action=>{if(action==='checkinSet')return {ok:true};throw Object.assign(Error('تعذر الاتصال'),{status:503});};
+ await c.careArrival('a','arrived');if(c.CARE.loading)await c.CARE.loading;await Promise.resolve();
+ assert.equal(c.CARE.checkins.a.status,'arrived');assert.equal(c.CARE.receptionSaving,false);assert.ok(messages.some(x=>x.includes('حُفظ تسجيل الحضور')));assert.ok(!messages.some(x=>x.startsWith('لم تُحفظ')));
+});
+test('reception lost reply is checked against the exact revision without replaying mutation',async()=>{
+ const {c}=harness();seed(c);c.tab='reception';c.CARE.view='reception';let writes=0;
+ c.gateway=async action=>{if(action==='commit'){writes++;throw Object.assign(Error('network lost'),{status:503})}return {bookings:[{...row('a','done'),rev:3}],checkins:{}};};
+ await c.careSetStatus('a','done');if(c.CARE.loading)await c.CARE.loading;assert.equal(writes,1);assert.equal(c.CARE.rows[0].s,'done');assert.equal(c.CARE.receptionSaving,false);
+});
+test('reception prevents duplicate submission while mutation is pending',async()=>{
+ const {c}=harness();seed(c);c.tab='reception';c.CARE.view='reception';let writes=0,release;
+ c.gateway=async action=>{if(action==='commit'){writes++;return new Promise(r=>{release=r})}return {bookings:[{...row('a','done'),rev:3}],checkins:{}};};
+ const saving=c.careSetStatus('a','done');await c.careSetStatus('a','no');assert.equal(writes,1);release({ok:true});await saving;assert.equal(c.CARE.receptionSaving,false);
+});
+test('reception denied mutation keeps the old status and reports the actual permission error',async()=>{
+ const messages=[],{c}=harness({notify:x=>messages.push(x)});seed(c);c.tab='reception';c.CARE.view='reception';
+ c.gateway=async action=>{if(action==='commit')throw Object.assign(Error('ليس لديك صلاحية لهذه العملية'),{status:403});return {bookings:c.CARE.rows,checkins:{}};};
+ await c.careSetStatus('a','done');assert.equal(c.CARE.rows[0].s,'exam');assert.equal(c.CARE.receptionSaving,false);assert.ok(messages.some(x=>x.includes('صلاحية')));
+});

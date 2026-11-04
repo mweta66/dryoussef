@@ -81,7 +81,7 @@ async function careLoad(force){careResetOwner();if(!['consultation','reception']
 function carePage(view){careResetOwner();var changing=CARE.view!==view||!document.getElementById('care-board');if(changing){CARE.request++;CARE.loading=null;CARE.view=view;CARE.date=today();CARE.branch=careDefaultBranch();clearTimeout(CARE.draftTimer);CARE.selected=null;CARE.selectedId='';CARE.historyLoading=false;CARE.draft=null;CARE.draftCandidate=null;CARE.draftId=null;CARE.draftChecked='';CARE.loadedAt=0;CARE.error='';CARE.contacts={};}if(view==='consultation')CARE.date=today();setTimeout(()=>careLoad(changing),0);return careNavigation()+'<section class="care-page"><h2>'+esc(view==='consultation'?'الكشف المركّز':'الاستقبال والحضور')+'</h2><p class="hint">'+(view==='consultation'?'كشف اليوم فقط. اختر الحالة للمراجعة؛ الحفظ وإنهاء الكشف عمليتان واضحتان.':'الحضور متاح لحجوزات اليوم. يمكن مراجعة حجوزات الماضي والمستقبل دون تغيير تاريخ إدخالها.')+'</p>'+careControls(view)+'<div id="care-board" role="region" aria-label="ملف الحالة وطابور اليوم">جارٍ تحميل بيانات الفرع…</div></section>';}
 async function careSelect(id){if(CARE.saving||id===CARE.selectedId)return;if(!careConfirmDiscard())return;var row=CARE.rows.find(x=>x.id===id);if(!row)return;clearTimeout(CARE.draftTimer);CARE.selectedId=id;CARE.selected=null;CARE.historyLoading=false;CARE.draft=null;CARE.draftCandidate=null;CARE.draftChecked='';CARE.draftId=null;CARE.loadedAt=0;CARE.request++;CARE.loading=null;await careLoad(true);}
 function careDraftMatches(file,draft){return Number(file?.rev)>Number(draft.rev)&&['n','allergies','chronic','diagnosis','treatment'].every(k=>String(file?.[k]||'')===String(draft[k]||''));}
-function careLockInputs(){return Array.from(document.querySelectorAll('[data-care-medical],[data-care-control],[data-care-action]')).map(node=>{var old=node.disabled;node.disabled=true;return {node,disabled:old}});}
+function careLockInputs(){return Array.from(document.querySelectorAll('[data-care-medical],[data-care-control],[data-care-action],[data-care-status]')).map(node=>{var old=node.disabled;node.disabled=true;return {node,disabled:old}});}
 function careUnlockInputs(locks){for(const item of locks)if(item.node.isConnected)item.node.disabled=item.disabled;}
 async function careSave(complete){
  var row=careActive(),owner=AUTH;if(!row||!CARE.selected||!can('notes.edit')||CARE.saving)return;
@@ -108,19 +108,52 @@ async function careSave(complete){
  }catch(e){if(AUTH===owner)notify('لم نؤكد الحفظ؛ الملاحظات ما زالت أمامك. '+errMsg(e));}
  finally{if(AUTH===owner){CARE.saving=false;careUnlockInputs(locks);careDrawBoard();if(CARE.dirty){clearTimeout(CARE.draftTimer);CARE.draftTimer=setTimeout(careSavePrivateDraft,1500);}}}
 }
-async function careArrival(id,status){var row=CARE.rows.find(x=>x.id===id);if(!row)return;await act(async()=>{await gateway('checkinSet',{id,date:row.date,status},true);CARE.loadedAt=0;await careLoad(true)},'حُفظ تسجيل الحضور مع بقاء رقم التذكرة');}
-async function careSetStatus(id,status){var row=CARE.rows.find(x=>x.id===id);if(!row||!can('bookings.status')||!['wait','done','no','cx'].includes(status))return;if(['done','cx'].includes(status)&&!confirm(status==='done'?'تسجيل هذه الزيارة تم الكشف؟':'إلغاء هذا الحجز؟'))return;await act(async()=>{await commit([{o:row,n:{...row,s:status}}],[]);CARE.loadedAt=0;await careLoad(true)},'حُفظت حالة الحجز');}
+async function careReceptionWrite(row,action,payload,status){
+ var care=CARE,owner=AUTH,date=care.date,branch=care.branch,view=care.view;
+ if(care.receptionSaving){notify('انتظر تأكيد تغيير الحالة الجاري');return;}
+ care.receptionSaving=true;care.request++;care.loading=null;var locks=careLockInputs(),saved=false,readback=null;
+ function current(){return CARE===care&&AUTH===owner&&tab===view&&care.date===date&&care.branch===branch;}
+ var message=action==='commit'?'حُفظت حالة الحجز':'حُفظ تسجيل الحضور مع بقاء رقم التذكرة';
+ try{
+  try{
+   var result=await gateway(action,payload,true);
+   if(!result||result.ok===false||['verifying','not_saved'].includes(result.writeStatus))throw Object.assign(Error('تعذر تأكيد الحفظ'),{status:503});
+  }catch(error){
+   if(![500,502,503,504].includes(error.status)&&!error.requiresVerification&&!/fetch|network|timeout|abort|اتصال/i.test(error.message))throw error;
+   // A lost reply is ambiguous. Read the exact booking; never replay the write.
+   try{readback=await gateway('consultationView',{date:row.date,branch:row.b},true);}catch{throw error;}
+   var confirmed=action==='commit'?(Array.isArray(readback.bookings)?readback.bookings:Object.values(readback.bookings||{})).find(x=>x.id===row.id):readback.checkins?.[row.id];
+   if(action==='commit'?confirmed?.s!==status||Number(confirmed.rev||0)<=Number(row.rev||0):confirmed?.status!==status||confirmed.status===care.checkins[row.id]?.status)throw error;
+   if(error.operationId&&typeof ClinicSaveStatus!=='undefined')ClinicSaveStatus.confirmReadVerification(action,error.operationId);
+  }
+  saved=true;if(AUTH!==owner)return;
+  if(action==='commit'){
+   var confirmedRow=readback&&(Array.isArray(readback.bookings)?readback.bookings:Object.values(readback.bookings||{})).find(x=>x.id===row.id);
+   for(var list of [care.rows,S.bk]){var item=list.find(x=>x.id===row.id&&x.date===row.date);if(item&&Number(item.rev||0)<=Number(row.rev||0))Object.assign(item,confirmedRow||{s:status,rev:Number(row.rev||0)+1});}
+  }else care.checkins[row.id]=readback?.checkins?.[row.id]||{...care.checkins[row.id],status};
+  if(current()){care.error='';care.request++;care.loading=null;care.loadedAt=0;careDrawBoard();notify(message);}
+ }catch(e){if(current())notify((e.requiresVerification?'لم نؤكد نتيجة الحفظ؛ تحقّق من الحجز قبل تكرار العملية. ':'لم تُحفظ الحالة. ')+errMsg(e));}
+ finally{care.receptionSaving=false;careUnlockInputs(locks);}
+ if(current()){
+  // Show an acknowledged change immediately. A slow/failed display refresh must
+  // neither hold the controls nor turn a successful save into a connection error.
+  var refresh=careLoad(true),sequence=care.request;
+  Promise.resolve(refresh).then(function(){if(saved&&current()&&sequence===care.request&&care.error)notify(message+'. تعذر تحديث بقية العرض؛ اضغط تحديث البيانات دون إعادة الحفظ.');});
+ }
+}
+async function careArrival(id,status){var row=CARE.rows.find(x=>x.id===id);if(!row||!can('bookings.status'))return;await careReceptionWrite({...row},'checkinSet',{id,date:row.date,status},status);}
+async function careSetStatus(id,status){var row=CARE.rows.find(x=>x.id===id);if(!row||!can('bookings.status')||!['wait','done','no','cx'].includes(status)||row.s===status)return;if(['done','cx'].includes(status)&&!confirm(status==='done'?'تسجيل هذه الزيارة تم الكشف؟':'إلغاء هذا الحجز؟'))return;await careReceptionWrite({...row},'commit',{puts:[{o:row,n:{...row,s:status}}],dels:[]},status);}
 function careUrgent(id){var row=CARE.rows.find(x=>x.id===id);if(!row)return;openForm('طلب مراجعة عاجلة — لا يغيّر الدور تلقائيًا',[{k:'reason',l:'سبب طلب المراجعة للطاقم الطبي',t:'area'}],async values=>{if(!values.reason.trim()||values.reason.length>500)return 'اكتب سببًا واضحًا حتى ٥٠٠ حرف';await gateway('consultationUrgentReview',{bookingId:row.id,date:row.date,reason:values.reason,revision:row.rev},true);CARE.loadedAt=0;setTimeout(()=>careLoad(true),0);return {successMessage:'حُفظ طلب المراجعة؛ ترتيب الدور لم يتغير'};});}
 function careResolveReview(id,decision){var review=CARE.reviews.find(x=>x.id===id);if(!review)return;openForm('نتيجة المراجعة الطبية',[{k:'note',l:'ملاحظة المراجعة (بدون بيانات غير لازمة للاستقبال)',t:'area'}],async values=>{await gateway('consultationUrgentResolve',{id,revision:review.rev??review.revision,decision,note:values.note},true);CARE.loadedAt=0;setTimeout(()=>careLoad(true),0);return {successMessage:decision==='priority'?'حُفظ قرار الأولوية الطبية':'حُفظ قرار استمرار الدور العادي'};});}
 var careTabsPrevious=workspaceTabs;workspaceTabs=function(){var list=careTabsPrevious();if(careClinicalAllowed())list.push(['consultation','الكشف المركّز','notes.read']);if(careReceptionAllowed())list.push(['reception','الاستقبال والحضور','bookings.read']);return list;};
 var careDoctorPrevious=doctor;doctor=function(){if(tab==='consultation'){if(!careClinicalAllowed()){tab='dash';return careDoctorPrevious();}return carePage('consultation');}if(tab==='reception'){if(!careReceptionAllowed()){tab='set';return careDoctorPrevious();}return carePage('reception');}return careDoctorPrevious();};
 var careRenderPrevious=render;render=function(){if(typeof document!=='undefined'&&document.body?.classList)document.body.classList.toggle('clinic-care-screen',!!me&&['consultation','reception'].includes(tab));careResetOwner();if(CARE.owner===AUTH&&CARE.saving&&tab!==CARE.view){tab=CARE.view;notify('جارٍ حفظ الكشف؛ انتظر تأكيد النتيجة');return;}if(CARE.owner===AUTH&&CARE.dirty&&tab!=='consultation'&&!careConfirmDiscard()){tab='consultation';return;}return careRenderPrevious();};
-var careBusyPrevious=busy;busy=function(){return CARE.owner===AUTH&&(CARE.dirty||CARE.saving)||careBusyPrevious();};
+var careBusyPrevious=busy;busy=function(){return CARE.owner===AUTH&&(CARE.dirty||CARE.saving||CARE.receptionSaving)||careBusyPrevious();};
 document.addEventListener('input',function(e){var key=e.target.dataset?.careMedical;if(!key||!CARE.selected||!can('notes.edit'))return;CARE.draft||=careMedicalDraft(CARE.selected.file);CARE.draft[key]=e.target.value;CARE.dirty=true;var node=document.getElementById('care-save-status');if(node)node.textContent='توجد تعديلات لم تُحفظ';clearTimeout(CARE.draftTimer);CARE.draftTimer=setTimeout(careSavePrivateDraft,1500);});
 document.addEventListener('change',function(e){if(e.target.dataset?.careControl){if(!careConfirmDiscard()){e.target.value=e.target.dataset.careControl==='date'?CARE.date:CARE.branch;return;}if(e.target.dataset.careControl==='date')CARE.date=e.target.value;else CARE.branch=e.target.value;clearTimeout(CARE.draftTimer);CARE.selected=null;CARE.selectedId='';CARE.historyLoading=false;CARE.draft=null;CARE.draftCandidate=null;CARE.draftId=null;CARE.draftChecked='';CARE.loadedAt=0;CARE.request++;CARE.loading=null;careLoad(true);}if(e.target.dataset?.careStatus){var value=e.target.value;e.target.value='';if(value)careSetStatus(e.target.dataset.careStatus,value);}});
 document.addEventListener('click',function(e){var button=e.target.closest?.('[data-care-action]');if(!button||button.disabled)return;var action=button.dataset.careAction,id=button.dataset.bookingId,row=id?CARE.rows.find(x=>x.id===id):careActive();if(action==='refresh'){if(careConfirmDiscard()){CARE.loadedAt=0;careLoad(true);}return;}if(action==='select'){careSelect(id);return;}if(action==='more-history'){careLoadOlderHistory('complaint');return;}if(action==='more-visits'){careLoadOlderHistory('medical');return;}if(action==='restore-draft'){careRestorePrivateDraft();return;}if(action==='start'){if(!careConfirmDiscard())return;(async()=>{await changeSession(CARE.branch,'running');CARE.loadedAt=0;await careLoad(true)})();return;}if(action==='save'||action==='complete'){careSave(action==='complete');return;}if(action==='arrival'){careArrival(id,button.dataset.status);return;}if(action==='urgent'){careUrgent(id);return;}if(action==='review'){careResolveReview(button.dataset.reviewId,button.dataset.decision);return;}if(!row)return;if(['plan','next','file','timeline'].includes(action)&&!careConfirmDiscard())return;if(action==='plan'&&typeof openFollowupPlan==='function')openFollowupPlan(row.phone,row.id);if(action==='next'&&typeof bookNextVisit==='function')bookNextVisit(row.phone,row.id);if(action==='file')openCase(row.phone);if(action==='timeline')showPatientTimeline(row.phone);if(action==='contact'&&typeof bookingContactEditor==='function')bookingContactEditor(row.id,row.date);if(action==='appointment'&&typeof appointmentCard==='function')appointmentCard(row.id,row.date);});
 window.addEventListener('beforeunload',function(e){if(CARE.owner===AUTH&&CARE.dirty){e.preventDefault();e.returnValue='';}});
-setInterval(function(){if(!document.hidden&&AUTH&&me&&['consultation','reception'].includes(tab)&&!CARE.saving&&!modalOpen())careLoad(true);},12000);
+setInterval(function(){if(!document.hidden&&AUTH&&me&&['consultation','reception'].includes(tab)&&!CARE.saving&&!CARE.receptionSaving&&!modalOpen())careLoad(true);},12000);
 
 var careLogoutPrevious=logout;logout=function(){if(CARE.owner===AUTH&&CARE.dirty&&!CARE.saving&&!careConfirmDiscard())return;if(CARE.draftTimer)clearTimeout(CARE.draftTimer);CARE.owner=null;CARE.privateDrafts?.clear();CARE.rows=[];CARE.selected=null;CARE.selectedId='';CARE.draft=null;CARE.draftId=null;CARE.draftCandidate=null;CARE.draftChecked='';CARE.contacts={};CARE.dirty=false;return careLogoutPrevious();};
 

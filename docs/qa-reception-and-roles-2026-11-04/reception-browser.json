@@ -1,0 +1,436 @@
+{
+  "scope": "Isolated generated data; actual Chromium controls and persisted-state readback. No production mutation.",
+  "checks": [
+    {
+      "user": "admin",
+      "name": "reception done persists on legacy booking and survives reload",
+      "pass": true,
+      "detail": {
+        "ticket": 1,
+        "revision": 2
+      }
+    },
+    {
+      "user": "admin",
+      "name": "reception wait persists on legacy booking and survives reload",
+      "pass": true,
+      "detail": {
+        "ticket": 1,
+        "revision": 3
+      }
+    },
+    {
+      "user": "admin",
+      "name": "reception no persists on legacy booking and survives reload",
+      "pass": true,
+      "detail": {
+        "ticket": 1,
+        "revision": 4
+      }
+    },
+    {
+      "user": "admin",
+      "name": "reception cx persists on legacy booking and survives reload",
+      "pass": true,
+      "detail": {
+        "ticket": 1,
+        "revision": 5
+      }
+    },
+    {
+      "user": "admin",
+      "name": "reception wait persists on legacy booking and survives reload",
+      "pass": true,
+      "detail": {
+        "ticket": 1,
+        "revision": 6
+      }
+    },
+    {
+      "user": "admin",
+      "name": "arrival and undo arrival persist without changing booking status or ticket",
+      "pass": true
+    },
+    {
+      "user": "admin",
+      "name": "urgent review submits once and ticket remains stable; review decision restricted to medical team",
+      "pass": true
+    },
+    {
+      "user": "doctor",
+      "name": "reception done persists on legacy booking and survives reload",
+      "pass": true,
+      "detail": {
+        "ticket": 1,
+        "revision": 2
+      }
+    },
+    {
+      "user": "doctor",
+      "name": "reception wait persists on legacy booking and survives reload",
+      "pass": true,
+      "detail": {
+        "ticket": 1,
+        "revision": 3
+      }
+    },
+    {
+      "user": "doctor",
+      "name": "reception no persists on legacy booking and survives reload",
+      "pass": true,
+      "detail": {
+        "ticket": 1,
+        "revision": 4
+      }
+    },
+    {
+      "user": "doctor",
+      "name": "reception cx persists on legacy booking and survives reload",
+      "pass": true,
+      "detail": {
+        "ticket": 1,
+        "revision": 5
+      }
+    },
+    {
+      "user": "doctor",
+      "name": "reception wait persists on legacy booking and survives reload",
+      "pass": true,
+      "detail": {
+        "ticket": 1,
+        "revision": 6
+      }
+    },
+    {
+      "user": "doctor",
+      "name": "arrival and undo arrival persist without changing booking status or ticket",
+      "pass": true
+    },
+    {
+      "user": "doctor",
+      "name": "urgent review submits once and ticket remains stable; review decision restricted to medical team",
+      "pass": true
+    },
+    {
+      "user": "nurse",
+      "name": "reception done persists on legacy booking and survives reload",
+      "pass": true,
+      "detail": {
+        "ticket": 1,
+        "revision": 2
+      }
+    },
+    {
+      "user": "nurse",
+      "name": "reception wait persists on legacy booking and survives reload",
+      "pass": true,
+      "detail": {
+        "ticket": 1,
+        "revision": 3
+      }
+    },
+    {
+      "user": "nurse",
+      "name": "reception no persists on legacy booking and survives reload",
+      "pass": true,
+      "detail": {
+        "ticket": 1,
+        "revision": 4
+      }
+    },
+    {
+      "user": "nurse",
+      "name": "reception cx persists on legacy booking and survives reload",
+      "pass": true,
+      "detail": {
+        "ticket": 1,
+        "revision": 5
+      }
+    },
+    {
+      "user": "nurse",
+      "name": "reception wait persists on legacy booking and survives reload",
+      "pass": true,
+      "detail": {
+        "ticket": 1,
+        "revision": 6
+      }
+    },
+    {
+      "user": "nurse",
+      "name": "arrival and undo arrival persist without changing booking status or ticket",
+      "pass": true
+    },
+    {
+      "user": "nurse",
+      "name": "urgent review submits once and ticket remains stable; review decision restricted to medical team",
+      "pass": true
+    },
+    {
+      "user": "matrouh-sec",
+      "name": "reception done persists on legacy booking and survives reload",
+      "pass": true,
+      "detail": {
+        "ticket": 1,
+        "revision": 2
+      }
+    },
+    {
+      "user": "matrouh-sec",
+      "name": "reception wait persists on legacy booking and survives reload",
+      "pass": true,
+      "detail": {
+        "ticket": 1,
+        "revision": 3
+      }
+    },
+    {
+      "user": "matrouh-sec",
+      "name": "reception no persists on legacy booking and survives reload",
+      "pass": true,
+      "detail": {
+        "ticket": 1,
+        "revision": 4
+      }
+    },
+    {
+      "user": "matrouh-sec",
+      "name": "reception cx persists on legacy booking and survives reload",
+      "pass": true,
+      "detail": {
+        "ticket": 1,
+        "revision": 5
+      }
+    },
+    {
+      "user": "matrouh-sec",
+      "name": "reception wait persists on legacy booking and survives reload",
+      "pass": true,
+      "detail": {
+        "ticket": 1,
+        "revision": 6
+      }
+    },
+    {
+      "user": "matrouh-sec",
+      "name": "arrival and undo arrival persist without changing booking status or ticket",
+      "pass": true
+    },
+    {
+      "user": "matrouh-sec",
+      "name": "urgent review submits once and ticket remains stable; review decision restricted to medical team",
+      "pass": true
+    },
+    {
+      "user": "dmn-sec",
+      "name": "reception done persists on legacy booking and survives reload",
+      "pass": true,
+      "detail": {
+        "ticket": 1,
+        "revision": 2
+      }
+    },
+    {
+      "user": "dmn-sec",
+      "name": "reception wait persists on legacy booking and survives reload",
+      "pass": true,
+      "detail": {
+        "ticket": 1,
+        "revision": 3
+      }
+    },
+    {
+      "user": "dmn-sec",
+      "name": "reception no persists on legacy booking and survives reload",
+      "pass": true,
+      "detail": {
+        "ticket": 1,
+        "revision": 4
+      }
+    },
+    {
+      "user": "dmn-sec",
+      "name": "reception cx persists on legacy booking and survives reload",
+      "pass": true,
+      "detail": {
+        "ticket": 1,
+        "revision": 5
+      }
+    },
+    {
+      "user": "dmn-sec",
+      "name": "reception wait persists on legacy booking and survives reload",
+      "pass": true,
+      "detail": {
+        "ticket": 1,
+        "revision": 6
+      }
+    },
+    {
+      "user": "dmn-sec",
+      "name": "arrival and undo arrival persist without changing booking status or ticket",
+      "pass": true
+    },
+    {
+      "user": "dmn-sec",
+      "name": "urgent review submits once and ticket remains stable; review decision restricted to medical team",
+      "pass": true
+    },
+    {
+      "user": "libya-sec",
+      "name": "reception done persists on legacy booking and survives reload",
+      "pass": true,
+      "detail": {
+        "ticket": 1,
+        "revision": 2
+      }
+    },
+    {
+      "user": "libya-sec",
+      "name": "reception wait persists on legacy booking and survives reload",
+      "pass": true,
+      "detail": {
+        "ticket": 1,
+        "revision": 3
+      }
+    },
+    {
+      "user": "libya-sec",
+      "name": "reception no persists on legacy booking and survives reload",
+      "pass": true,
+      "detail": {
+        "ticket": 1,
+        "revision": 4
+      }
+    },
+    {
+      "user": "libya-sec",
+      "name": "reception cx persists on legacy booking and survives reload",
+      "pass": true,
+      "detail": {
+        "ticket": 1,
+        "revision": 5
+      }
+    },
+    {
+      "user": "libya-sec",
+      "name": "reception wait persists on legacy booking and survives reload",
+      "pass": true,
+      "detail": {
+        "ticket": 1,
+        "revision": 6
+      }
+    },
+    {
+      "user": "libya-sec",
+      "name": "arrival and undo arrival persist without changing booking status or ticket",
+      "pass": true
+    },
+    {
+      "user": "libya-sec",
+      "name": "urgent review submits once and ticket remains stable; review decision restricted to medical team",
+      "pass": true
+    },
+    {
+      "user": "data-entry",
+      "name": "status and arrival controls absent; API cannot elevate booking-status permission",
+      "pass": true
+    },
+    {
+      "user": "alex-sec",
+      "name": "reception done persists on legacy booking and survives reload",
+      "pass": true,
+      "detail": {
+        "ticket": 1,
+        "revision": 2
+      }
+    },
+    {
+      "user": "alex-sec",
+      "name": "reception wait persists on legacy booking and survives reload",
+      "pass": true,
+      "detail": {
+        "ticket": 1,
+        "revision": 3
+      }
+    },
+    {
+      "user": "alex-sec",
+      "name": "reception no persists on legacy booking and survives reload",
+      "pass": true,
+      "detail": {
+        "ticket": 1,
+        "revision": 4
+      }
+    },
+    {
+      "user": "alex-sec",
+      "name": "reception cx persists on legacy booking and survives reload",
+      "pass": true,
+      "detail": {
+        "ticket": 1,
+        "revision": 5
+      }
+    },
+    {
+      "user": "alex-sec",
+      "name": "reception wait persists on legacy booking and survives reload",
+      "pass": true,
+      "detail": {
+        "ticket": 1,
+        "revision": 6
+      }
+    },
+    {
+      "user": "alex-sec",
+      "name": "arrival and undo arrival persist without changing booking status or ticket",
+      "pass": true
+    },
+    {
+      "user": "alex-sec",
+      "name": "urgent review submits once and ticket remains stable; review decision restricted to medical team",
+      "pass": true
+    },
+    {
+      "user": "alex-sec",
+      "name": "pre-save delayed poll cannot replace acknowledged status with its old result",
+      "pass": true
+    },
+    {
+      "user": "alex-sec",
+      "name": "successful save with unavailable refresh stays visible and controls remain usable",
+      "pass": true
+    },
+    {
+      "user": "alex-sec",
+      "name": "delayed acknowledgement locks duplicate controls without freezing the application",
+      "pass": true
+    },
+    {
+      "user": "alex-sec",
+      "name": "lost write response recovered by receipt without replay",
+      "pass": true
+    },
+    {
+      "user": "alex-sec",
+      "name": "lost write response recovered by exact booking readback without replay",
+      "pass": true
+    },
+    {
+      "user": "alex-sec",
+      "name": "offline status write cannot show false success or modify the booking",
+      "pass": true
+    },
+    {
+      "user": "alex-sec",
+      "name": "stale revision cannot overwrite a newer status; refreshed list shows the newer server value",
+      "pass": true
+    },
+    {
+      "user": "all",
+      "name": "no uncaught JavaScript errors",
+      "pass": true
+    }
+  ],
+  "errors": []
+}

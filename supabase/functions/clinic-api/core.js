@@ -80,7 +80,11 @@ function commit(state, uid, puts, dels, now=today()) {
  };
  dels.forEach(x=>remove(x,true));
  for(const p of puts){
-  const n=booking(p.n,state);if(p.n.patientId){const identity=patientIdentity.resolve(state,{phone:n.phone,patientId:p.n.patientId});n.patientId=identity.patientId;}allowed(r,n.b);if(!branchIds(state,true).includes(n.b)&&(!p.o||p.o.b!==n.b||p.o.date!==n.date))fail("الفرع متوقف عن استقبال حجوزات جديدة");
+  // A status change must not normalize an old name or replace hidden notes and
+  // visit metadata. In particular, reception staff need no demographic edit grant.
+  const live=p.o&&state.bookings?.[p.o.date]?.[p.o.id];
+  const statusOnly=live&&p.n&&p.n.id===live.id&&STATES.includes(p.n.s)&&p.n.s!==live.s&&!Object.hasOwn(p,'patient')&&['name','phone','v','date','b'].every(k=>p.n[k]===live[k])&&(!perms.can(r,'notes.edit')||String(p.n.nt||'')===String(live.nt||''))&&(!p.n.patientId||p.n.patientId===live.patientId);
+  const n=statusOnly?{...structuredClone(live),s:p.n.s}:booking(p.n,state);if(!statusOnly&&p.n.patientId){const identity=patientIdentity.resolve(state,{phone:n.phone,patientId:p.n.patientId});n.patientId=identity.patientId;}allowed(r,n.b);if(!branchIds(state,true).includes(n.b)&&(!p.o||p.o.b!==n.b||p.o.date!==n.date))fail("الفرع متوقف عن استقبال حجوزات جديدة");
   const old=p.o?remove(p.o,false):null;
   if(!perms.can(r,'notes.edit'))n.nt=old?.nt||'';
   if(!old)perms.requirePermission(r,'bookings.create');

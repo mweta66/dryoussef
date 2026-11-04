@@ -1,0 +1,81 @@
+{
+  "scope": "isolated generated data; Chromium, not production",
+  "results": [
+    {
+      "name": "save clinic content and WhatsApp, verify persisted state and public reload",
+      "pass": true
+    },
+    {
+      "name": "save independent header dimensions/colors/text and confirm after reload",
+      "pass": true
+    },
+    {
+      "name": "save about text/frame/neon and confirm public DOM after reload",
+      "pass": true
+    },
+    {
+      "name": "save global theme dark default, colors and dimensions, preserve medical and header content",
+      "pass": true
+    },
+    {
+      "name": "save display fixed branch/date and emergency frame, verify separate public display",
+      "pass": true,
+      "detail": {
+        "date": "2026-12-09"
+      }
+    },
+    {
+      "name": "update branch details, hide/show branch with persistent patient data",
+      "pass": true
+    },
+    {
+      "name": "move scheduled weekday between branches; future waiting visits transfer without changing completed history",
+      "pass": true,
+      "detail": {
+        "date": "2026-12-09",
+        "transferred": 4
+      }
+    },
+    {
+      "name": "grant and revoke explicit staff permission; changed login works and old login fails",
+      "pass": true
+    },
+    {
+      "name": "archive and restore account through UI; archive blocks protected reads",
+      "pass": true
+    },
+    {
+      "name": "download basic-data export with reports through UI and validate its documented contents",
+      "pass": true,
+      "detail": {
+        "scope": "legacy basic-data export; full recovery has a separate action",
+        "patients": 80,
+        "reports": 0
+      }
+    },
+    {
+      "name": "audit detail opens successful mutation and displays exact before/after changes",
+      "pass": true
+    },
+    {
+      "name": "mobile navigation, appearance forms and controls remain inside viewport",
+      "pass": true
+    },
+    {
+      "name": "cleanup old data through preview and confirmation preserves newly entered manual patient",
+      "pass": true,
+      "detail": {
+        "retainedManualPatient": true,
+        "remainingPatients": 1
+      }
+    },
+    {
+      "name": "restore cleanup operation through trash UI restores patient files, complaints and bookings",
+      "pass": true
+    },
+    {
+      "name": "no JavaScript exceptions in exercised administrator mutation paths",
+      "pass": true
+    }
+  ]
+}

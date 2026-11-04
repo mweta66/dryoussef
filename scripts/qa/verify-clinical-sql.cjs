@@ -61,7 +61,7 @@ async function patientDeletionRoundtrip(){
  require(repo+'/server/patient-identity.cjs').ensure(initial);
  const phone='01011111111',patientId=initial.patientPhoneIndex[phone];
  sql(`update public.clinic_state set payload=${j(initial)},version=10 where id=true;`);
- let writes=0;
+ let writes=0,loseReceptionReply=false,receptionDeltaWrites=0;
  const adapter=supabaseAdapter('https://fixture.invalid','local-only',async(url,options)=>{
   const target=new URL(url),name=target.pathname.split('/').at(-1),body=JSON.parse(options.body||'{}');let result;
   if(name==='clinic_state')result=[JSON.parse(sql('set role service_role;select jsonb_build_object(\'version\',version,\'payload\',payload) from public.clinic_state where id=true;'))];
@@ -69,7 +69,7 @@ async function patientDeletionRoundtrip(){
    writes++;result=sql(`set role service_role;select public.clinic_compare_and_swap(${Number(body.expected_version)},${j(body.next_payload)});`)==='t';
    if(writes===1)throw new TypeError('simulated lost delete response after actual SQL commit');
   }else if(name==='clinic_operational_snapshot')result=val('public.clinic_operational_snapshot()');
-  else if(name==='clinic_compare_and_swap_delta')result=val(`public.clinic_compare_and_swap_delta(${Number(body.expected_version)},${j(body.changes)},${j(body.archive_delta)},${j(body.receipt)})`);
+  else if(name==='clinic_compare_and_swap_delta'){result=val(`public.clinic_compare_and_swap_delta(${Number(body.expected_version)},${j(body.changes)},${j(body.archive_delta)},${j(body.receipt)})`);if(loseReceptionReply){receptionDeltaWrites++;loseReceptionReply=false;throw new TypeError('lost secretary status response after SQL commit');}}
   else if(name==='clinic_read_slice')result=val(`public.clinic_read_slice(array[${body.fields.map(quote).join(',')}]::text[],${body.selected_day==null?'null':quote(body.selected_day)+'::date'},${body.entity==null?'null':quote(body.entity)})`);
   else if(name==='clinic_patient_search_page')result=val(`public.clinic_patient_search_page(${quote(body.actor_uid)},${quote(body.search_query||'')},${body.selected_branch==null?'null':quote(body.selected_branch)},${Number(body.selected_page||0)},${Number(body.page_size||20)})`);
   else if(name==='clinic_patient_history_page')result=val(`public.clinic_patient_history_page(${quote(body.actor_uid)},${body.patient_phone==null?'null':quote(body.patient_phone)},${body.patient_id==null?'null':quote(body.patient_id)},${quote(body.entry_kind||'all')},${Number(body.selected_page||0)},${Number(body.page_size||20)})`);
@@ -91,6 +91,20 @@ async function patientDeletionRoundtrip(){
  const clinical=await handle({action:'patientHistoryPage',phone,kind:'medical'},'sec');assert.ok(clinical.rows.some(x=>x.id==='visit1'));assert.ok(clinical.rows.some(x=>x.id==='medical-current'));assert.equal((await handle({action:'get',path:'files/'+phone},'sec')).n,initial.files[phone].n);checks++;
  await assert.rejects(handle({action:'patch',updates:{['files/'+phone]:{n:'not allowed',rev:1}}},'sec'),e=>e.status===403);checks++;
  await handle({action:'userSave',uid:'sec',role:{...secretary,permissions:{...secretary.permissions,'notes.read':false}}},'admin');assert.equal((await handle({action:'secretaryClinicalAccessUpgrade'},'admin')).changed,false);await assert.rejects(handle({action:'get',path:'files/'+phone},'sec'),e=>e.status===403);assert.equal((await handle({action:'patientHistoryPage',phone,kind:'medical'},'sec')).rows.length,0);checks++;
+ // Real reception controls use this same read slice -> status-only commit path.
+ const receptionDate=require(repo+'/server/core.cjs').today(),receptionRow={id:'sql_reception_legacy',date:receptionDate,b:'alex',no:17,name:'  حالة استقبال قديمة  ',phone,v:'exam',s:'wait',rev:1,nt:'ملاحظة الطبيب المخفية',sourceRecord:{legacy:true}};
+ sql(`update public.clinic_state set payload=jsonb_set(payload,array['bookings',${quote(receptionDate)}],${j({[receptionRow.id]:receptionRow})},true) where id=true;`);
+ for(const [index,status]of ['done','wait','no','cx','wait'].entries()){
+  const view=await handle({action:'consultationView',date:receptionDate,branch:'alex'},'sec'),row=view.bookings.find(x=>x.id===receptionRow.id);assert.ok(row);assert.equal(row.nt,'');
+  const input={action:'commit',operationId:'reception-sql-status-'+index,puts:[{o:row,n:{...row,s:status}}],dels:[]};
+  if(index===0)loseReceptionReply=true;const result=await handle(input,'sec');assert.equal(result.ok,true);
+  const stored=JSON.parse(sql(`select payload->'bookings'->${quote(receptionDate)}->${quote(row.id)} from public.clinic_state;`));assert.equal(stored.s,status);assert.equal(stored.no,17);assert.equal(stored.name,receptionRow.name);assert.equal(stored.nt,receptionRow.nt);assert.deepEqual(stored.sourceRecord,receptionRow.sourceRecord);
+  assert.equal(sql(`select status from public.clinic_bookings where id=${quote(row.id)};`),status);checks++;
+  const beforeReplay=sql('select version from public.clinic_state;');assert.equal((await handle(input,'sec')).reconciled,true);assert.equal(sql('select version from public.clinic_state;'),beforeReplay);checks++;
+ }
+ assert.equal(receptionDeltaWrites,1);checks++;
+ await handle({action:'checkinSet',operationId:'reception-sql-arrival-123',id:receptionRow.id,date:receptionDate,status:'arrived'},'sec');const arrival=await handle({action:'consultationView',date:receptionDate,branch:'alex'},'sec');assert.equal(arrival.checkins[receptionRow.id].status,'arrived');assert.equal(arrival.bookings.find(x=>x.id===receptionRow.id).no,17);checks++;
+ await assert.rejects(handle({action:'commit',operationId:'reception-sql-foreign-123',puts:[{o:fixture.bookings['2026-11-01'].b,n:{...fixture.bookings['2026-11-01'].b,s:'done'}}],dels:[]},'sec'),e=>e.status===403);checks++;
  const paymentInput={action:'paymentSettingsSave',operationId:'payment-sql-qa-12345678',revision:0,config:{enabled:true,walletEnabled:true,walletNumber:'01012345678',instapayEnabled:true,instapayUrl:'https://ipn.eg/S/isolated-qa',message:'Isolated payment instructions',items:[{id:'exam',label:'كشف',amount:'500',enabled:true},{id:'follow',label:'متابعة',amount:'0',enabled:true}]}};
  const paymentSaved=await handle(paymentInput,'admin');assert.equal(paymentSaved.revision,1);assert.equal(paymentSaved.payments.walletNumber,'01012345678');assert.equal(JSON.parse(sql("select payload->'settings'->'payments' from public.clinic_state;")).instapayUrl,paymentInput.config.instapayUrl);checks++;
  const versionBeforeReplay=sql('select version from public.clinic_state;');assert.equal((await handle(paymentInput,'admin')).reconciled,true);assert.equal(sql('select version from public.clinic_state;'),versionBeforeReplay);assert.equal(JSON.parse(sql("set role service_role;select public.clinic_mutation_receipt('admin','payment-sql-qa-12345678');")).action,'paymentSettingsSave');checks++;
@@ -105,7 +119,7 @@ async function patientDeletionRoundtrip(){
   const startedResult=docker(['run','--rm','-d','--network','none','--name',container,'-e','POSTGRES_HOST_AUTH_METHOD=trust','postgres:17.6-alpine']);assert.equal(startedResult.status,0,startedResult.stderr);started=true;
   let ready=false;for(let i=0;i<40;i++){if(docker(['exec',container,'pg_isready','-h','127.0.0.1','-U','postgres']).status===0){ready=true;break}await new Promise(resolve=>setTimeout(resolve,100));}assert.ok(ready,'Isolated PostgreSQL did not become ready');
   const created=docker(['exec',container,'createdb','-U','postgres',db]);assert.equal(created.status,0,created.stderr);
-  run();await adapterRoundtrip();await patientDeletionRoundtrip();const result={passed:checks,postgres:sql('show server_version;'),projectionTriggerTested:true,migrationsReapplied:true,deploymentBundleTested:process.argv.includes('--deployment-bundle'),adapterRoundtripWithLostResponse:true,patientDeletionAndRestoreThroughGateway:true,deletionProjectionReadback:true,lostDeleteResponseWithoutReplay:true,secretaryClinicalReadGrantVerified:true,paymentDeltaReceiptVerified:true,paymentItemPricesVerified:true,scope:'isolated real PostgreSQL, not Supabase production'};
+  run();await adapterRoundtrip();await patientDeletionRoundtrip();const result={passed:checks,postgres:sql('show server_version;'),projectionTriggerTested:true,migrationsReapplied:true,deploymentBundleTested:process.argv.includes('--deployment-bundle'),adapterRoundtripWithLostResponse:true,patientDeletionAndRestoreThroughGateway:true,deletionProjectionReadback:true,lostDeleteResponseWithoutReplay:true,secretaryClinicalReadGrantVerified:true,paymentDeltaReceiptVerified:true,paymentItemPricesVerified:true,receptionStatusAndProjectionVerified:true,legacyStatusMetadataPreserved:true,lostReceptionReplyRecoveredWithoutReplay:true,scope:'isolated real PostgreSQL, not Supabase production'};
   const outputIndex=process.argv.indexOf('--output');if(outputIndex>=0){const output=process.argv[outputIndex+1];assert.ok(output,'--output needs a file path');fs.mkdirSync(path.dirname(path.resolve(output)),{recursive:true});fs.writeFileSync(output,JSON.stringify(result,null,2)+'\n');}
   console.log(JSON.stringify(result));
  }finally{if(started)docker(['rm','-f',container]);}

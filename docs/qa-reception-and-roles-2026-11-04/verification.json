@@ -1,0 +1,48 @@
+{
+  "release": "2026.11.04.4",
+  "baseCommit": "15ea61aa9262a01a27a179299c10673d3eabdcac",
+  "unit": {
+    "passed": 554,
+    "failed": 0,
+    "skipped": 0
+  },
+  "postgres": 77,
+  "diskRecovery": 19,
+  "browser": {
+    "functionalChecks": 260,
+    "accounts": 8,
+    "reception": 58,
+    "staff": 90,
+    "admin": 15,
+    "patient": 15,
+    "requestDecisions": 5,
+    "publicRoundtrip": 8,
+    "secretaryClinicalRead": 19,
+    "patientRecovery": 5,
+    "queueDoctor": 8,
+    "queueAdmin": 8,
+    "paymentFees": 11,
+    "paymentReliability": 18,
+    "navigationChecks": 107,
+    "responsiveViews": 696,
+    "actualFontChecks": 24,
+    "engine": "Chromium",
+    "production": false
+  },
+  "baselineReproductions": [
+    {
+      "case": "status-only update of legacy whitespace name from secretary",
+      "observed": "403 missing demographic edit permission"
+    },
+    {
+      "case": "pre-existing reception poll when acknowledged status changes",
+      "observed": "visible exam instead of done; zero fresh reads"
+    }
+  ],
+  "syntaxFiles": 272,
+  "vercelFilteredUpload": "passed",
+  "sqlMigrationRequired": false,
+  "frontendBackwardCompatible": true,
+  "liveGatewayVerification": "pending",
+  "safariPhysicalDevice": "not tested"
+}

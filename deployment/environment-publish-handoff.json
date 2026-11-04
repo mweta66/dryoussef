@@ -1,5 +1,5 @@
 {
-  "release": "2026.11.04.3",
+  "release": "2026.11.04.4",
   "repository": "mweta66/dryoussef",
   "branch": "codex/patient-delete-action-audit",
   "supabaseProjectRef": "matkxrnobjdewhptybpj",
@@ -7,17 +7,17 @@
   "verifyJwt": false,
   "dashboardBundle": "deployment/clinic-api.js",
   "newSqlMigrationForThisRelease": false,
-  "priorVersionUserConfirmed": "2026.11.03.1",
+  "priorVersionUserConfirmed": "2026.11.04.3",
   "deploymentPerformed": false,
   "strategy": "Pinned immutable HTTPS import of bundled gateway in dashboard index.js; source is embedded and has no fixture dependency.",
   "steps": [
-    "Deploy pinned clinic-api bundle2026.11.04.3 preserving hosted secrets and verify_jwt=false; no SQL required. This bundle includes the payment-save lockup fix.",
-    "Verify protected admin systemVersion2026.11.04.3 and patientPaymentFees capability.",
-    "Only after gateway verification publish matching main frontend.",
-    "Doctor/admin opens account settings -> payment settings -> named fee rows; enter actual prices and enable intended rows.",
-    "Verify patient choice -> correct amount -> wallet/InstaPay and clinic proof link; refresh after price change invalidates earlier selection."
+    "Publish frontend2026.11.04.4; it uses the same commit/checkinSet API and remains compatible with gateway2026.11.04.3.",
+    "Deploy the pinned clinic-api2026.11.04.4 bundle preserving existing secrets and verify_jwt=false; no SQL required.",
+    "Verify protected systemVersion2026.11.04.4 and refresh the website.",
+    "Secretary changes one test booking status and records/undoes arrival; reload and check the result.",
+    "If production still reports a failure, collect its exact request reference and Edge Function logs; local success does not prove production health."
   ],
-  "report": "docs/payment-fees-ar.md",
-  "frontendBackwardCompatible": false,
-  "priorGatewayDeployment": "User reported completion of2026.11.04.1 deployment; protected version not independently observed."
+  "report": "docs/reception-and-role-audit-2026-11-04-ar.md",
+  "frontendBackwardCompatible": true,
+  "priorGatewayDeployment": "User reported completion of the pinned2026.11.04.3 gateway update; protected version not independently observed."
 }
