@@ -1,5 +1,5 @@
 {
-  "release": "2026.11.04.1",
+  "release": "2026.11.04.2",
   "repository": "mweta66/dryoussef",
   "branch": "codex/patient-delete-action-audit",
   "supabaseProjectRef": "matkxrnobjdewhptybpj",
@@ -11,11 +11,11 @@
   "deploymentPerformed": false,
   "strategy": "Pinned immutable HTTPS import of bundled gateway in dashboard index.js; source is embedded and has no fixture dependency.",
   "steps": [
-    "Deploy the pinned new gateway bundle as clinic-api dashboard index.js, preserving hosted secrets and verify_jwt=false. No SQL migration needed.",
-    "Verify admin systemVersion reports2026.11.04.1 and patientPaymentMethods capability.",
-    "Only then publish main frontend and verify both versions2026.11.04.1.",
-    "Doctor/admin opens account settings -> payment settings; supplies actual wallet, InstaPay URL, and editable fee/proof message, then enables section.",
-    "Verify public card, wallet reveal, InstaPay destination and clinic WhatsApp proof link."
+    "Publish compatible frontend hotfix; old service acknowledgement and failed post-save reads are tested.",
+    "Update clinic-api pinned bundle to2026.11.04.2 preserving hosted secrets and verify_jwt=false; no SQL required.",
+    "Verify frontend and service versions2026.11.04.2, reload staff/admin page, then test save/cancel/hide/show and wallet/InstaPay changes."
   ],
-  "report": "docs/patient-payments-ar.md"
+  "report": "docs/payment-save-fix-ar.md",
+  "frontendBackwardCompatible": true,
+  "priorGatewayDeployment": "User reported completion of2026.11.04.1 deployment; protected version not independently observed."
 }

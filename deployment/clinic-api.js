@@ -1,4 +1,4 @@
-// CLINIC_API_BUNDLE_START 2026.11.04.1
+// CLINIC_API_BUNDLE_START 2026.11.04.2
 var __defProp = Object.defineProperty;
 var __export = (target, all) => {
   for (var name in all)
@@ -1125,6 +1125,7 @@ function guard(before, next, uid) {
   return next;
 }
 async function save2(adapter2, input, uid) {
+  let saved;
   await adapter2.mutate((original) => {
     authorize(original, uid);
     if (!Number.isSafeInteger(input.revision) || input.revision !== (original.settings?.paymentsRev || 0)) fail3("\u062A\u063A\u064A\u0651\u0631\u062A \u0628\u064A\u0627\u0646\u0627\u062A \u0627\u0644\u062F\u0641\u0639\u061B \u062D\u062F\u0651\u062B \u0627\u0644\u0635\u0641\u062D\u0629 \u0648\u0627\u0641\u062A\u062D \u0627\u0644\u0625\u0639\u062F\u0627\u062F\u0627\u062A \u0645\u0646 \u062C\u062F\u064A\u062F", 409);
@@ -1132,9 +1133,10 @@ async function save2(adapter2, input, uid) {
     s.settings ||= {};
     s.settings.payments = config;
     s.settings.paymentsRev = (original.settings?.paymentsRev || 0) + 1;
+    saved = { payments: config, revision: s.settings.paymentsRev };
     return s;
   });
-  return { ok: true };
+  return { ok: true, ...saved };
 }
 
 // supabase/functions/clinic-api/secretary-access.js
@@ -1656,8 +1658,8 @@ function stamp(before, next, input, uid, at) {
 
 // supabase/functions/clinic-api/mutation-contract.js
 import { createHash as createHash3 } from "node:crypto";
-var operationalActions = /* @__PURE__ */ new Set(["commit", "patch", "sessionSet", "presenceSet", "checkinSet", "consultationComplete", "consultationUrgentReview", "consultationUrgentResolve", "followupPlanSave", "followupPlanBook", "bookingContactSet", "requestAssign", "requestDecide"]);
-var receiptActions = /* @__PURE__ */ new Set(["commit", "patch", "sessionSet", "presenceSet", "checkinSet", "consultationComplete", "consultationUrgentReview", "consultationUrgentResolve", "bookingContactSet", "requestAssign", "requestDecide"]);
+var operationalActions = /* @__PURE__ */ new Set(["paymentSettingsSave", "commit", "patch", "sessionSet", "presenceSet", "checkinSet", "consultationComplete", "consultationUrgentReview", "consultationUrgentResolve", "followupPlanSave", "followupPlanBook", "bookingContactSet", "requestAssign", "requestDecide"]);
+var receiptActions = /* @__PURE__ */ new Set(["paymentSettingsSave", "commit", "patch", "sessionSet", "presenceSet", "checkinSet", "consultationComplete", "consultationUrgentReview", "consultationUrgentResolve", "bookingContactSet", "requestAssign", "requestDecide"]);
 function canonical(x) {
   if (Array.isArray(x)) return x.map(canonical);
   if (x && typeof x === "object") return Object.fromEntries(Object.keys(x).sort().filter((k) => k !== "operationId").map((k) => [k, canonical(x[k])]));
@@ -2476,7 +2478,7 @@ async function handle6(adapter2, input, uid) {
 }
 
 // supabase/functions/clinic-api/release.js
-var release_default = { "version": "2026.11.04.1", "apiContract": 1, "capabilities": ["pdfReports", "splitBackup", "phoneChangeLookup", "patientRequestAlerts", "globalThemePresets", "patientNotificationCenter", "yearEndTrainingData", "novemberManualDataProtection", "sessionReadback", "emptySessionRecovery", "focusedConsultation", "followupPlans", "nextVisitBooking", "receptionArrival", "visitDurations", "requestAssignment", "bookingConfirmations", "appointmentCalendar", "patientIdentity", "patientPagination", "mutationReceipts", "operationalDeltaWrites", "completeRecoveryBundle", "trainingMetricsSeparation", "safePatientDeletion", "deleteReadback", "legacyArchiveTolerance", "staleRequestRejection", "secretaryClinicalRead", "queueDisplaySync", "patientPaymentMethods"] };
+var release_default = { "version": "2026.11.04.2", "apiContract": 1, "capabilities": ["pdfReports", "splitBackup", "phoneChangeLookup", "patientRequestAlerts", "globalThemePresets", "patientNotificationCenter", "yearEndTrainingData", "novemberManualDataProtection", "sessionReadback", "emptySessionRecovery", "focusedConsultation", "followupPlans", "nextVisitBooking", "receptionArrival", "visitDurations", "requestAssignment", "bookingConfirmations", "appointmentCalendar", "patientIdentity", "patientPagination", "mutationReceipts", "operationalDeltaWrites", "completeRecoveryBundle", "trainingMetricsSeparation", "safePatientDeletion", "deleteReadback", "legacyArchiveTolerance", "staleRequestRejection", "secretaryClinicalRead", "queueDisplaySync", "patientPaymentMethods"] };
 
 // supabase/functions/clinic-api/request-notifications.js
 import { createHash as createHash4 } from "node:crypto";
@@ -5030,4 +5032,4 @@ Deno.serve((req) => {
     }
   });
 });
-// CLINIC_API_BUNDLE_END 2026.11.04.1
+// CLINIC_API_BUNDLE_END 2026.11.04.2

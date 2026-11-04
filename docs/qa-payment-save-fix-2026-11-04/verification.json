@@ -1,0 +1,16 @@
+{
+  "release": "2026.11.04.2",
+  "unit": {
+    "passed": 541,
+    "failed": 0,
+    "skipped": 0
+  },
+  "postgres": 63,
+  "reliabilityBrowser": 18,
+  "paymentFunctionsBrowser": 11,
+  "syntaxFiles": 270,
+  "vercelFilteredUpload": "passed",
+  "generatedDataOnly": true,
+  "productionChecked": false,
+  "frontendBackwardCompatibleAcknowledgementTested": true
+}

@@ -1,6 +1,6 @@
 import {createHash} from 'node:crypto';
-const operationalActions=new Set(['commit','patch','sessionSet','presenceSet','checkinSet','consultationComplete','consultationUrgentReview','consultationUrgentResolve','followupPlanSave','followupPlanBook','bookingContactSet','requestAssign','requestDecide']);
-const receiptActions=new Set(['commit','patch','sessionSet','presenceSet','checkinSet','consultationComplete','consultationUrgentReview','consultationUrgentResolve','bookingContactSet','requestAssign','requestDecide']);
+const operationalActions=new Set(['paymentSettingsSave','commit','patch','sessionSet','presenceSet','checkinSet','consultationComplete','consultationUrgentReview','consultationUrgentResolve','followupPlanSave','followupPlanBook','bookingContactSet','requestAssign','requestDecide']);
+const receiptActions=new Set(['paymentSettingsSave','commit','patch','sessionSet','presenceSet','checkinSet','consultationComplete','consultationUrgentReview','consultationUrgentResolve','bookingContactSet','requestAssign','requestDecide']);
 function canonical(x){if(Array.isArray(x))return x.map(canonical);if(x&&typeof x==='object')return Object.fromEntries(Object.keys(x).sort().filter(k=>k!=='operationId').map(k=>[k,canonical(x[k])]));return x;}
 function mutationOptions(input,uid){
  const operational=operationalActions.has(input?.action);let receipt=null;

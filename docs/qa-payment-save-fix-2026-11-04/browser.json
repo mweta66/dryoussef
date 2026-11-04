@@ -1,0 +1,94 @@
+{
+  "scope": "Generated isolated state, Chromium, no production or external payment",
+  "checks": [
+    {
+      "user": "doctor",
+      "name": "cancel before save closes editor and preserves settings",
+      "pass": true
+    },
+    {
+      "user": "doctor",
+      "name": "saved visibility change closes immediately without a second settings read, even if that read would fail",
+      "pass": true
+    },
+    {
+      "user": "doctor",
+      "name": "validation error preserves input and leaves save/cancel usable",
+      "pass": true
+    },
+    {
+      "user": "doctor",
+      "name": "slow write can be closed; late success keeps unrelated modal intact and commits once",
+      "pass": true
+    },
+    {
+      "user": "doctor",
+      "name": "new editor immediately uses normalized acknowledged wallet, link and revision",
+      "pass": true
+    },
+    {
+      "user": "doctor",
+      "name": "lost successful reply is verified by receipt without duplicate write",
+      "pass": true
+    },
+    {
+      "user": "doctor",
+      "name": "transport error unlocks controls, preserves text and does not claim an unconfirmed save",
+      "pass": true
+    },
+    {
+      "user": "doctor",
+      "name": "older acknowledgement without settings still closes editor while refresh errors remain nonblocking",
+      "pass": true
+    },
+    {
+      "user": "admin",
+      "name": "cancel before save closes editor and preserves settings",
+      "pass": true
+    },
+    {
+      "user": "admin",
+      "name": "saved visibility change closes immediately without a second settings read, even if that read would fail",
+      "pass": true
+    },
+    {
+      "user": "admin",
+      "name": "validation error preserves input and leaves save/cancel usable",
+      "pass": true
+    },
+    {
+      "user": "admin",
+      "name": "slow write can be closed; late success keeps unrelated modal intact and commits once",
+      "pass": true
+    },
+    {
+      "user": "admin",
+      "name": "new editor immediately uses normalized acknowledged wallet, link and revision",
+      "pass": true
+    },
+    {
+      "user": "admin",
+      "name": "lost successful reply is verified by receipt without duplicate write",
+      "pass": true
+    },
+    {
+      "user": "admin",
+      "name": "transport error unlocks controls, preserves text and does not claim an unconfirmed save",
+      "pass": true
+    },
+    {
+      "user": "admin",
+      "name": "older acknowledgement without settings still closes editor while refresh errors remain nonblocking",
+      "pass": true
+    },
+    {
+      "name": "concurrent stale editor rejects overwrite and keeps cancel and edited text usable",
+      "pass": true
+    },
+    {
+      "name": "no uncaught JavaScript errors",
+      "pass": true
+    }
+  ],
+  "errors": []
+}

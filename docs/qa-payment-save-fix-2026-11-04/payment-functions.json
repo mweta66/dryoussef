@@ -1,0 +1,17 @@
+{
+  "scope": "Generated isolated data, Chromium; no real payments or production",
+  "checks": [
+    "doctor saves destinations through real settings form",
+    "doctor-written fee and proof instructions render with line breaks",
+    "proof button uses clinic WhatsApp number, not wallet number",
+    "patient wallet icon reveals configured number",
+    "InstaPay icon opens exactly configured destination; external request intercepted",
+    "payment section fits four mobile and desktop widths",
+    "secretary has no payment editor",
+    "admin updates message and markup stays harmless literal text",
+    "admin replaces destinations and patient sees saved values after refresh",
+    "admin can hide payment section without deleting saved destinations",
+    "no uncaught browser errors"
+  ],
+  "errors": []
+}
